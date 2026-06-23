@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: propertyos-backend-staging
+    restart: unless-stopped
+    ports:
+      - '3001:3000'
+    environment:
+      NODE_ENV: staging
+      DATABASE_URL: postgresql://propertyos:propertyos@postgres:5432/propertyos_staging
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-staging-dev-secret-change-me}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-staging-dev-secret-change-me}
+      JWT_ACCESS_EXPIRY: 15m
+      JWT_REFRESH_EXPIRY: 7d
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      APP_ENV: staging
+      APP_PORT: 3000
+      APP_URL: http://localhost:3001
+      APP_FRONTEND_URL: http://localhost:3000
+      CORS_ORIGIN: http://localhost:3000
+      THROTTLE_TTL: 60000
+      THROTTLE_LIMIT: 120
+      LOG_LEVEL: debug
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - propertyos-staging
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: propertyos-postgres-staging
+    restart: unless-stopped
+    ports:
+      - '5433:5432'
+    environment:
+      POSTGRES_USER: propertyos
+      POSTGRES_PASSWORD: propertyos
+      POSTGRES_DB: propertyos_staging
+    volumes:
+      - postgres_staging_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U propertyos -d propertyos_staging']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - propertyos-staging
+
+  redis:
+    image: redis:7-alpine
+    container_name: propertyos-redis-staging
+    restart: unless-stopped
+    ports:
+      - '6380:6379'
+    volumes:
+      - redis_staging_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - propertyos-staging
+
+  minio:
+    image: minio/minio:latest
+    container_name: propertyos-minio-staging
+    restart: unless-stopped
+    ports:
+      - '9002:9001'
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_staging_data:/data
+    command: server /data --console-address ':9001'
+    networks:
+      - propertyos-staging
+
+volumes:
+  postgres_staging_data:
+  redis_staging_data:
+  minio_staging_data:
+
+networks:
+  propertyos-staging:
+    driver: bridge

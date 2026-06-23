@@ -1,0 +1,1084 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearchPostgres"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Users & Auth ───────────────────────────────────────────────
+
+// ─── Multi-Tenancy ──────────────────────────────────────────
+
+model Organization {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique
+  slug      String   @unique
+  status    String   @default("active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users      User[]
+  buildings  Building[]
+  clients    Client[]
+  deals      Deal[]
+  tasks      Task[]
+  siteVisits SiteVisit[]
+  proposals  Proposal[]
+
+  @@map("organizations")
+}
+
+// ─── Core User Model ───────────────────────────────────────
+
+model User {
+  id                String     @id @default(uuid()) @db.Uuid
+  fullName          String     @map("full_name")
+  email             String     @unique
+  mobileNumber      String?    @map("mobile_number")
+  passwordHash      String     @map("password_hash")
+  role              UserRole   @default(WORKER)
+  status            UserStatus @default(active)
+  organizationId    String?    @map("organization_id") @db.Uuid
+  emailVerifiedAt   DateTime?  @map("email_verified_at")
+  mobileVerifiedAt  DateTime?  @map("mobile_verified_at")
+  lastLoginAt       DateTime?  @map("last_login_at")
+  createdAt         DateTime   @default(now()) @map("created_at")
+  updatedAt         DateTime   @updatedAt @map("updated_at")
+  deactivatedAt     DateTime?  @map("deactivated_at")
+
+  organization      Organization? @relation(fields: [organizationId], references: [id])
+
+  refreshTokens              RefreshToken[]
+  geographicAssignments      WorkerGeographicAssignment[]
+  createdBuildings           Building[]                     @relation("BuildingCreator")
+  updatedBuildings           Building[]                     @relation("BuildingUpdater")
+  createdFloors              Floor[]                        @relation("FloorCreator")
+  updatedFloors              Floor[]                        @relation("FloorUpdater")
+  createdUnits               Unit[]                         @relation("UnitCreator")
+  updatedUnits               Unit[]                         @relation("UnitUpdater")
+  createdContacts            Contact[]                      @relation("ContactCreator")
+  uploadedMedia              Media[]
+  requestedChangeRequests    ChangeRequest[]                @relation("ChangeRequestRequester")
+  reviewedChangeRequests     ChangeRequest[]                @relation("ChangeRequestReviewer")
+  auditEvents                AuditEvent[]
+  versionSnapshots           VersionSnapshot[]
+  assignedUnits              Unit[]                         @relation("UnitAssignedWorker")
+  createdTasks               Task[]                         @relation("TaskCreator")
+  assignedTasks              Task[]                         @relation("TaskAssignee")
+  createdClients             Client[]                       @relation("ClientCreator")
+  createdDeals               Deal[]                         @relation("DealCreator")
+  assignedDeals              Deal[]                         @relation("DealAssignee")
+  createdSiteVisits          SiteVisit[]                    @relation("SiteVisitCreator")
+  assignedSiteVisits         SiteVisit[]                    @relation("SiteVisitAssignee")
+  createdFollowUps           FollowUp[]                     @relation("FollowUpCreator")
+  createdRequirements        Requirement[]                  @relation("RequirementCreator")
+  createdImports             Import[]                       @relation("ImportCreator")
+  processedImports           Import[]                       @relation("ImportProcessor")
+  otpRecords                 OtpRecord[]
+  createdProposals           Proposal[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  token     String
+  userId    String   @map("user_id") @db.Uuid
+  family    String
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+  expiresAt DateTime @map("expires_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// ─── Geographic Assignments ─────────────────────────────────────
+
+model WorkerGeographicAssignment {
+  id             String         @id @default(uuid()) @db.Uuid
+  userId         String         @map("user_id") @db.Uuid
+  assignmentType AssignmentType @map("assignment_type")
+  stateId        String?        @map("state_id") @db.Uuid
+  cityId         String?        @map("city_id") @db.Uuid
+  localityId     String?        @map("locality_id") @db.Uuid
+  assignedBy     String?        @map("assigned_by") @db.Uuid
+  assignedAt     DateTime       @default(now()) @map("assigned_at")
+  active         Boolean        @default(true)
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  state State? @relation(fields: [stateId], references: [id])
+  city  City?  @relation(fields: [cityId], references: [id])
+
+  @@index([userId])
+  @@index([stateId])
+  @@index([cityId])
+  @@index([localityId])
+  @@map("worker_geographic_assignments")
+}
+
+// ─── Reference Data: Geography ──────────────────────────────────
+
+model State {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  code      String?  @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  cities                      City[]
+  buildings                   Building[]
+  workerGeographicAssignments WorkerGeographicAssignment[]
+
+  @@map("states")
+}
+
+model City {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  code      String?
+  stateId   String   @map("state_id") @db.Uuid
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  state                        State  @relation(fields: [stateId], references: [id])
+  zones                        Zone[]
+  localities                   Locality[]
+  buildings                    Building[]
+  workerGeographicAssignments WorkerGeographicAssignment[]
+
+  @@index([stateId])
+  @@map("cities")
+}
+
+model Zone {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  code      String?
+  cityId    String   @map("city_id") @db.Uuid
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  city      City      @relation(fields: [cityId], references: [id])
+  buildings Building[]
+
+  @@index([cityId])
+  @@map("zones")
+}
+
+model Locality {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  code        String?
+  cityId      String   @map("city_id") @db.Uuid
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  city         City         @relation(fields: [cityId], references: [id])
+  microMarkets MicroMarket[]
+  buildings    Building[]
+
+  @@index([cityId])
+  @@map("localities")
+}
+
+model MicroMarket {
+  id         String   @id @default(uuid()) @db.Uuid
+  name       String
+  code       String?
+  localityId String   @map("locality_id") @db.Uuid
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  locality  Locality  @relation(fields: [localityId], references: [id])
+  buildings Building[]
+
+  @@index([localityId])
+  @@map("micro_markets")
+}
+
+// ─── Reference Data: Configurable ───────────────────────────────
+
+model PropertyType {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  buildings Building[]
+  units     Unit[]
+
+  @@map("property_types")
+}
+
+model FurnishingStatus {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  units Unit[]
+
+  @@map("furnishing_statuses")
+}
+
+model AvailabilityStatus {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  buildings Building[]
+  floors    Floor[]
+  units     Unit[]
+
+  @@map("availability_statuses")
+}
+
+model VerificationStatus {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  buildings Building[]
+  contacts Contact[]
+
+  @@map("verification_statuses")
+}
+
+model ContactRole {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  contacts Contact[]
+
+  @@map("contact_roles")
+}
+
+model DocumentCategory {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  media Media[]
+
+  @@map("document_categories")
+}
+
+model Source {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  buildings Building[]
+
+  @@map("sources")
+}
+
+// ─── Core Entities ──────────────────────────────────────────────
+
+model Building {
+  id                       String              @id @default(uuid()) @db.Uuid
+  buildingCode             String              @unique @map("building_code")
+  name                     String
+  organizationId           String?             @map("organization_id") @db.Uuid
+  propertyTypeId           String?             @map("property_type_id") @db.Uuid
+  stateId                  String?             @map("state_id") @db.Uuid
+  cityId                   String?             @map("city_id") @db.Uuid
+  zoneId                   String?             @map("zone_id") @db.Uuid
+  localityId               String?             @map("locality_id") @db.Uuid
+  microMarketId            String?             @map("micro_market_id") @db.Uuid
+  fullAddress              String?             @map("full_address")
+  landmark                 String?
+  pincode                  String?
+  googleMapsUrl            String?             @map("google_maps_url")
+  latitude                 Float?
+  longitude                Float?
+  gpsAccuracyMeters        Float?              @map("gps_accuracy_meters")
+  gpsCapturedBy            String?             @map("gps_captured_by")
+  gpsCapturedAt            DateTime?           @map("gps_captured_at")
+  totalFloors              Int?                @map("total_floors")
+  totalUnits               Int?                @map("total_units")
+  totalBuildingArea        Float?              @map("total_building_area")
+  availabilityStatusId     String?             @map("availability_status_id") @db.Uuid
+  verificationStatusId     String?             @map("verification_status_id") @db.Uuid
+  sourceId                 String?             @map("source_id") @db.Uuid
+  parkingDetails           Json?               @map("parking_details")
+  liftDetails              Json?               @map("lift_details")
+  powerBackupDetails       Json?               @map("power_backup_details")
+  fireSafetyDetails        Json?               @map("fire_safety_details")
+  waterAvailabilityDetails Json?               @map("water_availability_details")
+  roadWidth                Float?              @map("road_width")
+  frontage                 Float?
+  nearbyTransportDetails   Json?               @map("nearby_transport_details")
+  notes                    String?
+  createdBy                String?             @map("created_by") @db.Uuid
+  updatedBy                String?             @map("updated_by") @db.Uuid
+  createdAt                DateTime            @default(now()) @map("created_at")
+  updatedAt                DateTime            @updatedAt @map("updated_at")
+  deletedAt                DateTime?           @map("deleted_at")
+
+  propertyType       PropertyType?       @relation(fields: [propertyTypeId], references: [id])
+  organization       Organization?       @relation(fields: [organizationId], references: [id])
+  state              State?              @relation(fields: [stateId], references: [id])
+  city               City?               @relation(fields: [cityId], references: [id])
+  zone               Zone?               @relation(fields: [zoneId], references: [id])
+  locality           Locality?           @relation(fields: [localityId], references: [id])
+  microMarket        MicroMarket?        @relation(fields: [microMarketId], references: [id])
+  availabilityStatus AvailabilityStatus? @relation(fields: [availabilityStatusId], references: [id])
+  verificationStatus VerificationStatus? @relation(fields: [verificationStatusId], references: [id])
+  source             Source?             @relation(fields: [sourceId], references: [id])
+  creator            User?               @relation("BuildingCreator", fields: [createdBy], references: [id])
+  updater            User?               @relation("BuildingUpdater", fields: [updatedBy], references: [id])
+
+  floors    Floor[]
+  units     Unit[]
+  contacts  Contact[]
+  media     Media[]
+  tasks     Task[]
+  siteVisits SiteVisit[]
+  deals     Deal[]
+
+  @@index([stateId])
+  @@index([cityId])
+  @@index([localityId])
+  @@index([propertyTypeId])
+  @@index([availabilityStatusId])
+  @@index([verificationStatusId])
+  @@index([createdBy])
+  @@index([organizationId])
+  @@index([deletedAt])
+  @@map("buildings")
+}
+
+model Floor {
+  id                   String              @id @default(uuid()) @db.Uuid
+  floorCode            String              @unique @map("floor_code")
+  buildingId           String              @map("building_id") @db.Uuid
+  floorName            String?             @map("floor_name")
+  floorNumber          Int                 @map("floor_number")
+  totalArea            Float?              @map("total_area")
+  availableArea        Float?              @map("available_area")
+  availabilityStatusId String?             @map("availability_status_id") @db.Uuid
+  notes                String?
+  createdBy            String?             @map("created_by") @db.Uuid
+  updatedBy            String?             @map("updated_by") @db.Uuid
+  createdAt            DateTime            @default(now()) @map("created_at")
+  updatedAt            DateTime            @updatedAt @map("updated_at")
+  deletedAt            DateTime?           @map("deleted_at")
+
+  building           Building            @relation(fields: [buildingId], references: [id])
+  availabilityStatus AvailabilityStatus? @relation(fields: [availabilityStatusId], references: [id])
+  creator            User?               @relation("FloorCreator", fields: [createdBy], references: [id])
+  updater            User?               @relation("FloorUpdater", fields: [updatedBy], references: [id])
+
+  units    Unit[]
+  contacts Contact[]
+  media    Media[]
+
+  @@index([buildingId])
+  @@index([deletedAt])
+  @@map("floors")
+}
+
+model Unit {
+  id                     String              @id @default(uuid()) @db.Uuid
+  unitCode               String              @unique @map("unit_code")
+  buildingId             String              @map("building_id") @db.Uuid
+  floorId                String?             @map("floor_id") @db.Uuid
+  unitNumber             String              @map("unit_number")
+  propertyTypeId         String?             @map("property_type_id") @db.Uuid
+  furnishingStatusId     String?             @map("furnishing_status_id") @db.Uuid
+  availabilityStatusId   String?             @map("availability_status_id") @db.Uuid
+  carpetArea             Float?              @map("carpet_area")
+  builtUpArea            Float?              @map("built_up_area")
+  superBuiltUpArea       Float?              @map("super_built_up_area")
+  chargeableArea         Float?              @map("chargeable_area")
+  monthlyRent            Float?              @map("monthly_rent")
+  rentPerSqftMonth       Float?              @map("rent_per_sqft_month")
+  camChargesPerSqftMonth Float?              @map("cam_charges_per_sqft_month")
+  maintenanceCharges     Float?              @map("maintenance_charges")
+  securityDeposit        Float?              @map("security_deposit")
+  lockInPeriodMonths     Int?                @map("lock_in_period_months")
+  leaseTermMonths        Int?                @map("lease_term_months")
+  escalationPercentage   Float?              @map("escalation_percentage")
+  escalationFrequency    String?             @map("escalation_frequency")
+  parkingCharges         Float?              @map("parking_charges")
+  powerBackupCharges     Float?              @map("power_backup_charges")
+  gstApplicable          Boolean             @default(false) @map("gst_applicable")
+  brokerageCommission    Float?              @map("brokerage_commission")
+  availabilityDate       DateTime?           @map("availability_date")
+  possessionDate         DateTime?           @map("possession_date")
+  negotiable             Boolean             @default(false)
+  assignedWorkerId       String?             @map("assigned_worker_id") @db.Uuid
+  notes                  String?
+  createdBy              String?             @map("created_by") @db.Uuid
+  updatedBy              String?             @map("updated_by") @db.Uuid
+  createdAt              DateTime            @default(now()) @map("created_at")
+  updatedAt              DateTime            @updatedAt @map("updated_at")
+  deletedAt              DateTime?           @map("deleted_at")
+
+  building           Building            @relation(fields: [buildingId], references: [id])
+  floor              Floor?              @relation(fields: [floorId], references: [id])
+  propertyType       PropertyType?       @relation(fields: [propertyTypeId], references: [id])
+  furnishingStatus   FurnishingStatus?   @relation(fields: [furnishingStatusId], references: [id])
+  availabilityStatus AvailabilityStatus? @relation(fields: [availabilityStatusId], references: [id])
+  assignedWorker     User?               @relation("UnitAssignedWorker", fields: [assignedWorkerId], references: [id])
+  creator            User?               @relation("UnitCreator", fields: [createdBy], references: [id])
+  updater            User?               @relation("UnitUpdater", fields: [updatedBy], references: [id])
+
+  contacts Contact[]
+  media    Media[]
+  deals    Deal[]
+
+  @@index([buildingId])
+  @@index([floorId])
+  @@index([propertyTypeId])
+  @@index([availabilityStatusId])
+  @@index([assignedWorkerId])
+  @@index([deletedAt])
+  @@map("units")
+}
+
+model Contact {
+  id                           String              @id @default(uuid()) @db.Uuid
+  buildingId                   String?             @map("building_id") @db.Uuid
+  floorId                      String?             @map("floor_id") @db.Uuid
+  unitId                       String?             @map("unit_id") @db.Uuid
+  contactRoleId                String?             @map("contact_role_id") @db.Uuid
+  fullName                     String              @map("full_name")
+  mobileNumber                 String?             @map("mobile_number")
+  alternateMobileNumber        String?             @map("alternate_mobile_number")
+  whatsappNumber               String?             @map("whatsapp_number")
+  email                        String?
+  preferredCommunicationMethod String?             @map("preferred_communication_method")
+  availabilityHours            String?             @map("availability_hours")
+  verificationStatusId         String?             @map("verification_status_id") @db.Uuid
+  notes                        String?
+  createdBy                    String?             @map("created_by") @db.Uuid
+  createdAt                    DateTime            @default(now()) @map("created_at")
+  updatedAt                    DateTime            @updatedAt @map("updated_at")
+  deletedAt                    DateTime?           @map("deleted_at")
+
+  building           Building?           @relation(fields: [buildingId], references: [id])
+  floor              Floor?              @relation(fields: [floorId], references: [id])
+  unit               Unit?               @relation(fields: [unitId], references: [id])
+  contactRole        ContactRole?        @relation(fields: [contactRoleId], references: [id])
+  verificationStatus VerificationStatus? @relation(fields: [verificationStatusId], references: [id])
+  creator            User?               @relation("ContactCreator", fields: [createdBy], references: [id])
+
+  @@index([buildingId])
+  @@index([floorId])
+  @@index([unitId])
+  @@index([contactRoleId])
+  @@index([deletedAt])
+  @@map("contacts")
+}
+
+model Media {
+  id                  String       @id @default(uuid()) @db.Uuid
+  buildingId          String?      @map("building_id") @db.Uuid
+  floorId             String?      @map("floor_id") @db.Uuid
+  unitId              String?      @map("unit_id") @db.Uuid
+  fileName            String       @map("file_name")
+  originalFileName    String       @map("original_file_name")
+  fileType            FileType     @map("file_type")
+  mimeType            String       @map("mime_type")
+  fileSizeBytes       BigInt       @map("file_size_bytes")
+  storageKey          String       @map("storage_key")
+  thumbnailStorageKey String?      @map("thumbnail_storage_key")
+  optimizedStorageKey String?      @map("optimized_storage_key")
+  documentCategoryId  String?      @map("document_category_id") @db.Uuid
+  uploadStatus        UploadStatus @default(pending) @map("upload_status")
+  uploadedBy          String?      @map("uploaded_by") @db.Uuid
+  uploadedAt          DateTime?    @map("uploaded_at")
+  deletedAt           DateTime?    @map("deleted_at")
+  deletionScheduledAt DateTime?    @map("deletion_scheduled_at")
+  createdAt           DateTime     @default(now()) @map("created_at")
+
+  building         Building?         @relation(fields: [buildingId], references: [id])
+  floor            Floor?            @relation(fields: [floorId], references: [id])
+  unit             Unit?             @relation(fields: [unitId], references: [id])
+  documentCategory DocumentCategory? @relation(fields: [documentCategoryId], references: [id])
+  uploader         User?             @relation(fields: [uploadedBy], references: [id])
+
+  @@index([buildingId])
+  @@index([floorId])
+  @@index([unitId])
+  @@index([deletedAt])
+  @@map("media")
+}
+
+// ─── Change Requests ────────────────────────────────────────────
+
+model ChangeRequest {
+  id              String              @id @default(uuid()) @db.Uuid
+  entityType      EntityType          @map("entity_type")
+  entityId        String              @map("entity_id") @db.Uuid
+  requestedBy     String              @map("requested_by") @db.Uuid
+  requestedAt     DateTime            @default(now()) @map("requested_at")
+  status          ChangeRequestStatus @default(pending)
+  priority        Priority            @default(Medium)
+  workerNote      String?             @map("worker_note")
+  adminNote       String?             @map("admin_note")
+  reviewedBy      String?             @map("reviewed_by") @db.Uuid
+  reviewedAt      DateTime?           @map("reviewed_at")
+  closedAt        DateTime?           @map("closed_at")
+
+  requestedByUser User   @relation("ChangeRequestRequester", fields: [requestedBy], references: [id])
+  reviewedByUser  User?  @relation("ChangeRequestReviewer", fields: [reviewedBy], references: [id])
+  changeItems     ChangeItem[]
+
+  @@index([entityType, entityId])
+  @@index([requestedBy])
+  @@index([status])
+  @@index([requestedAt])
+  @@map("change_requests")
+}
+
+model ChangeItem {
+  id                String           @id @default(uuid()) @db.Uuid
+  changeRequestId   String           @map("change_request_id") @db.Uuid
+  fieldName         String           @map("field_name")
+  oldValueJson      Json?            @map("old_value_json")
+  proposedValueJson Json?            @map("proposed_value_json")
+  finalValueJson    Json?            @map("final_value_json")
+  status            ChangeItemStatus @default(pending)
+  conflictGroupId   String?          @map("conflict_group_id")
+  adminComment      String?          @map("admin_comment")
+  reviewedBy        String?          @map("reviewed_by") @db.Uuid
+  reviewedAt        DateTime?        @map("reviewed_at")
+
+  changeRequest ChangeRequest @relation(fields: [changeRequestId], references: [id], onDelete: Cascade)
+
+  @@index([changeRequestId])
+  @@index([status])
+  @@map("change_items")
+}
+
+// ─── Versioning & Audit ─────────────────────────────────────────
+
+model VersionSnapshot {
+  id            String         @id @default(uuid()) @db.Uuid
+  entityType    String         @map("entity_type")
+  entityId      String         @map("entity_id") @db.Uuid
+  versionNumber Int            @map("version_number")
+  snapshotJson  Json           @map("snapshot_json")
+  createdBy     String?        @map("created_by") @db.Uuid
+  createdAt     DateTime       @default(now()) @map("created_at")
+  source        SnapshotSource
+
+  creator User? @relation(fields: [createdBy], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("version_snapshots")
+}
+
+model AuditEvent {
+  id           String   @id @default(uuid()) @db.Uuid
+  actorUserId  String?  @map("actor_user_id") @db.Uuid
+  eventType    String   @map("event_type")
+  entityType   String   @map("entity_type")
+  entityId     String?  @map("entity_id") @db.Uuid
+  metadataJson Json?    @map("metadata_json")
+  ipAddress    String?  @map("ip_address")
+  userAgent    String?  @map("user_agent")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  actor User? @relation(fields: [actorUserId], references: [id])
+
+  @@index([actorUserId])
+  @@index([eventType])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_events")
+}
+
+// ─── V2: Clients & Requirements ─────────────────────────────────
+
+model Client {
+  id             String    @id @default(uuid()) @db.Uuid
+  name           String
+  organizationId String?   @map("organization_id") @db.Uuid
+  company        String?
+  email        String?
+  mobileNumber String?   @map("mobile_number")
+  notes        String?
+  createdBy    String?   @map("created_by") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  creator      User?            @relation("ClientCreator", fields: [createdBy], references: [id])
+  organization Organization?    @relation(fields: [organizationId], references: [id])
+  contacts     ClientContact[]
+  requirements Requirement[]
+  deals        Deal[]
+  siteVisits   SiteVisit[]
+  tasks        Task[]
+  proposals    Proposal[]
+
+  @@index([deletedAt])
+  @@index([organizationId])
+  @@index([createdBy])
+  @@map("clients")
+}
+
+model ClientContact {
+  id           String   @id @default(uuid()) @db.Uuid
+  clientId     String   @map("client_id") @db.Uuid
+  fullName     String   @map("full_name")
+  mobileNumber String?  @map("mobile_number")
+  email        String?
+  role         String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@map("client_contacts")
+}
+
+model Requirement {
+  id                 String             @id @default(uuid()) @db.Uuid
+  clientId           String             @map("client_id") @db.Uuid
+  title              String
+  description        String?
+  minArea            Float?             @map("min_area")
+  maxArea            Float?             @map("max_area")
+  minBudget          Float?             @map("min_budget")
+  maxBudget          Float?             @map("max_budget")
+  preferredLocations Json?              @map("preferred_locations")
+  status             RequirementStatus  @default(active)
+  createdBy          String?            @map("created_by") @db.Uuid
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  client     Client      @relation(fields: [clientId], references: [id])
+  creator    User?       @relation("RequirementCreator", fields: [createdBy], references: [id])
+  shortlists Shortlist[]
+
+  @@index([clientId])
+  @@index([status])
+  @@map("requirements")
+}
+
+model Shortlist {
+  id            String          @id @default(uuid()) @db.Uuid
+  requirementId String          @map("requirement_id") @db.Uuid
+  unitId        String?         @map("unit_id") @db.Uuid
+  buildingId    String?         @map("building_id") @db.Uuid
+  notes         String?
+  status        ShortlistStatus @default(pending)
+  createdAt     DateTime        @default(now()) @map("created_at")
+
+  requirement Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+
+  @@index([requirementId])
+  @@map("shortlists")
+}
+
+// ─── V2: Tasks & Follow-ups ─────────────────────────────────────
+
+model Task {
+  id             String     @id @default(uuid()) @db.Uuid
+  title          String
+  organizationId String?    @map("organization_id") @db.Uuid
+  description    String?
+  type        TaskType   @default(general)
+  status      TaskStatus @default(open)
+  priority    Priority   @default(Medium)
+  dueDate     DateTime?  @map("due_date")
+  assignedTo  String?    @map("assigned_to") @db.Uuid
+  buildingId  String?    @map("building_id") @db.Uuid
+  clientId    String?    @map("client_id") @db.Uuid
+  createdBy   String?    @map("created_by") @db.Uuid
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  deletedAt   DateTime?  @map("deleted_at")
+
+  assignee    User?     @relation("TaskAssignee", fields: [assignedTo], references: [id])
+  creator     User?     @relation("TaskCreator", fields: [createdBy], references: [id])
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  building    Building? @relation(fields: [buildingId], references: [id])
+  client   Client?   @relation(fields: [clientId], references: [id])
+
+  @@index([assignedTo])
+  @@index([status])
+  @@index([dueDate])
+  @@index([deletedAt])
+  @@index([organizationId])
+  @@index([buildingId])
+  @@index([clientId])
+  @@map("tasks")
+}
+
+model FollowUp {
+  id          String           @id @default(uuid()) @db.Uuid
+  taskId      String?          @map("task_id") @db.Uuid
+  title       String
+  description String?
+  dueDate     DateTime         @map("due_date")
+  status      FollowUpStatus   @default(pending)
+  createdBy   String?          @map("created_by") @db.Uuid
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  creator User? @relation("FollowUpCreator", fields: [createdBy], references: [id])
+
+  @@index([dueDate])
+  @@index([status])
+  @@map("follow_ups")
+}
+
+model SiteVisit {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String?          @map("organization_id") @db.Uuid
+  clientId       String?          @map("client_id") @db.Uuid
+  buildingId  String?          @map("building_id") @db.Uuid
+  unitId      String?          @map("unit_id") @db.Uuid
+  scheduledAt DateTime         @map("scheduled_at")
+  status      SiteVisitStatus  @default(scheduled)
+  notes       String?
+  assignedTo  String?          @map("assigned_to") @db.Uuid
+  createdBy   String?          @map("created_by") @db.Uuid
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+  deletedAt   DateTime?        @map("deleted_at")
+
+  assignee     User?      @relation("SiteVisitAssignee", fields: [assignedTo], references: [id])
+  creator      User?      @relation("SiteVisitCreator", fields: [createdBy], references: [id])
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  client       Client?    @relation(fields: [clientId], references: [id])
+  building Building?  @relation(fields: [buildingId], references: [id])
+
+  @@index([scheduledAt])
+  @@index([assignedTo])
+  @@index([deletedAt])
+  @@index([organizationId])
+  @@index([clientId])
+  @@index([buildingId])
+  @@map("site_visits")
+}
+
+// ─── V2: Deals ──────────────────────────────────────────────────
+
+model Deal {
+  id             String     @id @default(uuid()) @db.Uuid
+  organizationId String?    @map("organization_id") @db.Uuid
+  clientId       String?    @map("client_id") @db.Uuid
+  buildingId  String?    @map("building_id") @db.Uuid
+  unitId      String?    @map("unit_id") @db.Uuid
+  title       String
+  dealValue   Float?     @map("deal_value")
+  status      DealStatus @default(negotiation)
+  closedAt    DateTime?  @map("closed_at")
+  assignedTo  String?    @map("assigned_to") @db.Uuid
+  createdBy   String?    @map("created_by") @db.Uuid
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  deletedAt   DateTime?  @map("deleted_at")
+
+  assignee    User?        @relation("DealAssignee", fields: [assignedTo], references: [id])
+  creator     User?        @relation("DealCreator", fields: [createdBy], references: [id])
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  client      Client?      @relation(fields: [clientId], references: [id])
+  building    Building?    @relation(fields: [buildingId], references: [id])
+  unit        Unit?        @relation(fields: [unitId], references: [id])
+  commissions Commission[]
+  invoices    Invoice[]
+
+  @@index([status])
+  @@index([assignedTo])
+  @@index([deletedAt])
+  @@index([organizationId])
+  @@index([clientId])
+  @@index([buildingId])
+  @@index([unitId])
+  @@map("deals")
+}
+
+model Commission {
+  id        String   @id @default(uuid()) @db.Uuid
+  dealId    String   @map("deal_id") @db.Uuid
+  amount    Float
+  rate      Float?
+  status    String   @default("pending")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  deal Deal @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  @@index([dealId])
+  @@map("commissions")
+}
+
+model Invoice {
+  id        String    @id @default(uuid()) @db.Uuid
+  dealId    String    @map("deal_id") @db.Uuid
+  amount    Float
+  status    String    @default("pending")
+  dueDate   DateTime? @map("due_date")
+  paidAt    DateTime? @map("paid_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  deal Deal @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  @@index([dealId])
+  @@map("invoices")
+}
+
+// ─── V2: Imports & Exports ──────────────────────────────────────
+
+model Import {
+  id               String       @id @default(uuid()) @db.Uuid
+  fileName         String       @map("file_name")
+  fileType         String       @map("file_type")
+  entityType       String       @map("entity_type")
+  status           ImportStatus @default(uploaded)
+  columnMapping    Json?        @map("column_mapping")
+  validationErrors Json?        @map("validation_errors")
+  importStats      Json?        @map("import_stats")
+  createdBy        String?      @map("created_by") @db.Uuid
+  processedBy      String?      @map("processed_by") @db.Uuid
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+
+  creator   User?       @relation("ImportCreator", fields: [createdBy], references: [id])
+  processor User?       @relation("ImportProcessor", fields: [processedBy], references: [id])
+  rows      ImportRow[]
+
+  @@index([status])
+  @@index([createdBy])
+  @@map("imports")
+}
+
+model ImportRow {
+  id         String   @id @default(uuid()) @db.Uuid
+  importId   String   @map("import_id") @db.Uuid
+  rowNumber  Int      @map("row_number")
+  status     String   @default("pending")
+  sourceData Json     @map("source_data")
+  mappedData Json?    @map("mapped_data")
+  errors     Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  import Import @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  @@index([importId])
+  @@map("import_rows")
+}
+
+// ─── V2: Proposals ─────────────────────────────────────────────
+
+model Proposal {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String?  @map("organization_id") @db.Uuid
+  clientId       String   @map("client_id") @db.Uuid
+  requirementId String? @map("requirement_id") @db.Uuid
+  title        String?
+  notes        String?
+  unitIds      Json     @map("unit_ids")
+  pdfStorageKey String? @map("pdf_storage_key")
+  status       ProposalStatus @default(draft)
+  createdBy    String?  @map("created_by") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  client       Client  @relation(fields: [clientId], references: [id])
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  creator      User?   @relation(fields: [createdBy], references: [id])
+
+  @@index([clientId])
+  @@index([createdBy])
+  @@index([organizationId])
+  @@index([status])
+  @@map("proposals")
+}
+
+// ─── OTP Records ────────────────────────────────────────────────
+
+model OtpRecord {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  codeHash  String    @map("code_hash")
+  purpose   OtpPurpose
+  expiresAt DateTime  @map("expires_at")
+  attempts  Int       @default(0)
+  consumed  Boolean   @default(false)
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose])
+  @@map("otp_records")
+}
+
+enum OtpPurpose {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+  MOBILE_RECOVERY
+}
+
+// ─── Enums ──────────────────────────────────────────────────────
+
+enum UserRole {
+  ADMIN
+  WORKER
+}
+
+enum UserStatus {
+  active
+  inactive
+  suspended
+}
+
+enum AssignmentType {
+  state
+  city
+  locality
+}
+
+enum EntityType {
+  building
+  floor
+  unit
+  contact
+  document
+}
+
+enum ChangeRequestStatus {
+  pending
+  partially_approved
+  approved
+  rejected
+  withdrawn
+  conflict
+}
+
+enum ChangeItemStatus {
+  pending
+  approved
+  rejected
+  edited_by_admin
+  conflict
+  deferred
+}
+
+enum Priority {
+  Low
+  Medium
+  High
+  Urgent
+}
+
+enum SnapshotSource {
+  admin_update
+  worker_create
+  approval
+  import
+  restore
+}
+
+enum FileType {
+  image
+  video
+  document
+}
+
+enum UploadStatus {
+  pending
+  processing
+  completed
+  failed
+}
+
+enum RequirementStatus {
+  active
+  fulfilled
+  cancelled
+}
+
+enum ShortlistStatus {
+  pending
+  accepted
+  rejected
+}
+
+enum TaskType {
+  general
+  follow_up
+  site_visit
+  other
+}
+
+enum TaskStatus {
+  open
+  in_progress
+  completed
+  cancelled
+}
+
+enum FollowUpStatus {
+  pending
+  completed
+  overdue
+}
+
+enum SiteVisitStatus {
+  scheduled
+  confirmed
+  completed
+  cancelled
+  no_show
+}
+
+enum DealStatus {
+  requirement_received
+  shortlisted
+  site_visit_scheduled
+  site_visit_completed
+  negotiation
+  agreement_shared
+  closed
+  lost
+}
+
+enum ImportStatus {
+  uploaded
+  mapped
+  validated
+  processing
+  completed
+  failed
+}
+
+enum ProposalStatus {
+  draft
+  sent
+  accepted
+  rejected
+  expired
+}
