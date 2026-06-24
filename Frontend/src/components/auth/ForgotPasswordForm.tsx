@@ -57,7 +57,7 @@ export function ForgotPasswordForm() {
           </div>
           <CardTitle className="text-2xl">Check your email</CardTitle>
           <CardDescription>
-            We&apos;ve sent a password reset link to your email address.
+            We&apos;ve sent a password reset code to your email address.
           </CardDescription>
         </CardHeader>
         <CardContent className="text-center">
@@ -83,7 +83,7 @@ export function ForgotPasswordForm() {
         </div>
         <CardTitle className="text-2xl">Forgot password?</CardTitle>
         <CardDescription>
-          Enter your email and we&apos;ll send you a reset link
+          Enter your email and we&apos;ll send you a reset code
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -108,10 +108,10 @@ export function ForgotPasswordForm() {
             {isLoading ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Sending reset link...
+                Sending reset code...
               </>
             ) : (
-              "Send reset link"
+              "Send reset code"
             )}
           </Button>
 

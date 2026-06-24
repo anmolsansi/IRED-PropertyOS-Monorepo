@@ -5,6 +5,8 @@ import {
   diffFields,
 } from "../change-requests/change-request.helper";
 import { EntityType } from "@prisma/client";
+import { GeographicScope } from "../../shared/utils/geography-filter";
+import { verifyEntityGeography } from "../../shared/utils/verify-entity-geography";
 
 const EDITABLE_FIELDS = [
   "fullName",
@@ -23,8 +25,68 @@ const EDITABLE_FIELDS = [
 export class ContactsService {
   constructor(private prisma: PrismaService) {}
 
-  async findOne(id: string) {
-    return this.prisma.contact.findUnique({
+  async findAll(
+    query?: { page?: number; limit?: number; contactRoleId?: string },
+    geographicScope?: GeographicScope,
+  ) {
+    const { page = 1, limit = 20, contactRoleId } = query || {};
+    const skip = (page - 1) * limit;
+
+    const where: any = { deletedAt: null };
+    if (contactRoleId) where.contactRoleId = contactRoleId;
+
+    // Contacts are scoped through their building
+    if (geographicScope) {
+      if (geographicScope.denyAll) {
+        where.buildingId = "00000000-0000-0000-0000-000000000000";
+      }
+      const hasScope =
+        !geographicScope.denyAll &&
+        (geographicScope.stateIds.length > 0 ||
+          geographicScope.cityIds.length > 0 ||
+          geographicScope.localityIds.length > 0);
+      if (hasScope) {
+        const buildingFilter: any = {};
+        if (geographicScope.stateIds.length > 0)
+          buildingFilter.stateId = { in: geographicScope.stateIds };
+        if (geographicScope.cityIds.length > 0)
+          buildingFilter.cityId = { in: geographicScope.cityIds };
+        if (geographicScope.localityIds.length > 0)
+          buildingFilter.localityId = { in: geographicScope.localityIds };
+
+        const buildings = await this.prisma.building.findMany({
+          where: buildingFilter,
+          select: { id: true },
+        });
+        where.buildingId = { in: buildings.map((b) => b.id) };
+      }
+    }
+
+    const [data, total] = await Promise.all([
+      this.prisma.contact.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: "desc" },
+        include: {
+          building: { select: { id: true, name: true } },
+          floor: { select: { id: true, floorName: true } },
+          unit: { select: { id: true, unitNumber: true } },
+          contactRole: true,
+          verificationStatus: true,
+        },
+      }),
+      this.prisma.contact.count({ where }),
+    ]);
+
+    return {
+      data,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
+  async findOne(id: string, geographicScope?: GeographicScope) {
+    const contact = await this.prisma.contact.findUnique({
       where: { id },
       include: {
         building: true,
@@ -34,6 +96,17 @@ export class ContactsService {
         verificationStatus: true,
       },
     });
+    if (!contact) throw new NotFoundException("Contact not found");
+    // Contacts are scoped through their building
+    if (geographicScope && contact.building) {
+      await verifyEntityGeography(
+        this.prisma,
+        geographicScope,
+        contact.building,
+        "Contact",
+      );
+    }
+    return contact;
   }
 
   async create(data: any, userId: string) {

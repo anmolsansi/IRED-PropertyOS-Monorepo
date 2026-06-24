@@ -18,6 +18,7 @@ import {
 import { FloorsService } from "./floors.service";
 import { JwtAuthGuard } from "../../shared/guards/jwt-auth.guard";
 import { Roles, Role } from "../../shared/decorators/roles.decorator";
+import { GeographyScope } from "../../shared/decorators/geography-scope.decorator";
 import { CurrentUser } from "../../shared/decorators/current-user.decorator";
 import { ZodValidationPipe } from "../../shared/pipes/zod-validation.pipe";
 import {
@@ -35,6 +36,7 @@ export class FloorsController {
   constructor(private readonly floorsService: FloorsService) {}
 
   @Get()
+  @GeographyScope()
   @ApiOperation({ summary: "List floors for a building" })
   @ApiResponse({
     status: 200,
@@ -54,8 +56,11 @@ export class FloorsController {
       },
     },
   })
-  async findByBuilding(@Param("buildingId") buildingId: string) {
-    return this.floorsService.findByBuilding(buildingId);
+  async findByBuilding(
+    @Param("buildingId") buildingId: string,
+    @CurrentUser("geographicScope") scope: any,
+  ) {
+    return this.floorsService.findByBuilding(buildingId, scope);
   }
 
   @Post()
@@ -71,11 +76,15 @@ export class FloorsController {
   }
 
   @Get(":id")
+  @GeographyScope()
   @ApiOperation({ summary: "Get floor by ID" })
   @ApiResponse({ status: 200, description: "Floor details" })
   @ApiResponse({ status: 404, description: "Floor not found" })
-  async findOne(@Param("id") id: string) {
-    return this.floorsService.findOne(id);
+  async findOne(
+    @Param("id") id: string,
+    @CurrentUser("geographicScope") scope: any,
+  ) {
+    return this.floorsService.findOne(id, scope);
   }
 
   @Patch(":id")

@@ -6,6 +6,7 @@ import {
 import { PrismaService } from "../../prisma/prisma.service";
 import { DealStatus, SnapshotSource } from "@prisma/client";
 import { buildLinkedGeographyWhere, GeographicScope } from "../../shared/utils/geography-filter";
+import { verifyEntityGeography } from "../../shared/utils/verify-entity-geography";
 
 @Injectable()
 export class DealsService {
@@ -58,7 +59,7 @@ export class DealsService {
     };
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, geographicScope?: GeographicScope) {
     const deal = await this.prisma.deal.findUnique({
       where: { id },
       include: {
@@ -72,6 +73,7 @@ export class DealsService {
       },
     });
     if (!deal) throw new NotFoundException("Deal not found");
+    await verifyEntityGeography(this.prisma, geographicScope, deal, "Deal");
     return deal;
   }
 

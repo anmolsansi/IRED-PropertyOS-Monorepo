@@ -307,8 +307,10 @@ model Building {
   propertyTypeId           String?             @map("property_type_id") @db.Uuid
   stateId                  String?             @map("state_id") @db.Uuid
   cityId                   String?             @map("city_id") @db.Uuid
+  cityName                 String?             @map("city_name")
   zoneId                   String?             @map("zone_id") @db.Uuid
   localityId               String?             @map("locality_id") @db.Uuid
+  localityName             String?             @map("locality_name")
   microMarketId            String?             @map("micro_market_id") @db.Uuid
   fullAddress              String?             @map("full_address")
   landmark                 String?
@@ -333,6 +335,8 @@ model Building {
   roadWidth                Float?              @map("road_width")
   frontage                 Float?
   nearbyTransportDetails   Json?               @map("nearby_transport_details")
+  commercialTerms          Json?               @map("commercial_terms")
+  additionalFields         Json?               @map("additional_fields")
   notes                    String?
   createdBy                String?             @map("created_by") @db.Uuid
   updatedBy                String?             @map("updated_by") @db.Uuid
@@ -937,6 +941,7 @@ model OtpRecord {
 }
 
 enum OtpPurpose {
+  LOGIN_2FA
   EMAIL_VERIFICATION
   PASSWORD_RESET
   MOBILE_RECOVERY

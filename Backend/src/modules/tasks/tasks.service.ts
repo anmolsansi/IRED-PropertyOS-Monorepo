@@ -6,6 +6,7 @@ import {
 import { PrismaService } from "../../prisma/prisma.service";
 import { TaskStatus, TaskType, FollowUpStatus } from "@prisma/client";
 import { buildLinkedGeographyWhere, GeographicScope } from "../../shared/utils/geography-filter";
+import { verifyEntityGeography } from "../../shared/utils/verify-entity-geography";
 
 @Injectable()
 export class TasksService {
@@ -59,7 +60,7 @@ export class TasksService {
     };
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, geographicScope?: GeographicScope) {
     const task = await this.prisma.task.findUnique({
       where: { id },
       include: {
@@ -70,6 +71,7 @@ export class TasksService {
       },
     });
     if (!task) throw new NotFoundException("Task not found");
+    await verifyEntityGeography(this.prisma, geographicScope, task, "Task");
     return task;
   }
 

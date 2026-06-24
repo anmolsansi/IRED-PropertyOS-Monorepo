@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, type ReactNode } from "react";
+import "leaflet/dist/leaflet.css";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";

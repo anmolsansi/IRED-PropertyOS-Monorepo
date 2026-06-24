@@ -17,6 +17,7 @@ import {
 import { AuthService } from "./auth.service";
 import { JwtAuthGuard } from "../../shared/guards/jwt-auth.guard";
 import { CurrentUser } from "../../shared/decorators/current-user.decorator";
+import { Public } from "../../shared/decorators/public.decorator";
 import { ZodValidationPipe } from "../../shared/pipes/zod-validation.pipe";
 import {
   LoginSchema,
@@ -45,8 +46,11 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post("login")
+  @Public()
   @Throttle({ default: { limit: 10, ttl: 60000 } })
-  @ApiOperation({ summary: "Login with email and password" })
+  @ApiOperation({
+    summary: "Login with email and password, then send email OTP",
+  })
   @ApiResponse({
     status: 200,
     description: "OTP sent to email",
@@ -66,6 +70,7 @@ export class AuthController {
   }
 
   @Post("test-login")
+  @Public()
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: "Test login (non-production only)" })
   @ApiResponse({
@@ -84,15 +89,19 @@ export class AuthController {
       },
     },
   })
-  @ApiResponse({ status: 401, description: "Invalid credentials or production" })
+  @ApiResponse({
+    status: 401,
+    description: "Invalid credentials or production",
+  })
   @UsePipes(new ZodValidationPipe(LoginSchema))
   async testLogin(@Body() dto: LoginDto) {
     return this.authService.testLogin(dto.email, dto.password);
   }
 
   @Post("verify-email-otp")
+  @Public()
   @Throttle({ default: { limit: 10, ttl: 60000 } })
-  @ApiOperation({ summary: "Verify email OTP and get tokens" })
+  @ApiOperation({ summary: "Verify login email OTP and get tokens" })
   @ApiResponse({
     status: 200,
     description: "Tokens issued",
@@ -116,7 +125,8 @@ export class AuthController {
   }
 
   @Post("resend-email-otp")
-  @ApiOperation({ summary: "Resend email OTP" })
+  @Public()
+  @ApiOperation({ summary: "Resend login email OTP" })
   @ApiResponse({
     status: 200,
     description: "OTP resent",
@@ -128,6 +138,7 @@ export class AuthController {
   }
 
   @Post("refresh-token")
+  @Public()
   @ApiOperation({ summary: "Refresh access token" })
   @ApiResponse({
     status: 200,
@@ -154,6 +165,7 @@ export class AuthController {
   }
 
   @Post("forgot-password")
+  @Public()
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({ summary: "Request password reset OTP" })
   @ApiResponse({
@@ -167,6 +179,7 @@ export class AuthController {
   }
 
   @Post("reset-password")
+  @Public()
   @ApiOperation({ summary: "Reset password with OTP" })
   @ApiResponse({
     status: 200,
@@ -180,6 +193,7 @@ export class AuthController {
   }
 
   @Post("send-mobile-recovery-otp")
+  @Public()
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({ summary: "Send OTP to mobile for recovery" })
   @ApiResponse({
@@ -193,6 +207,7 @@ export class AuthController {
   }
 
   @Post("verify-mobile-recovery-otp")
+  @Public()
   @ApiOperation({ summary: "Verify mobile recovery OTP" })
   @ApiResponse({
     status: 200,
@@ -248,7 +263,10 @@ export class AuthController {
   })
   @ApiResponse({ status: 401, description: "Unauthorized" })
   @UsePipes(new ZodValidationPipe(UpdateProfileSchema))
-  async updateMe(@CurrentUser("id") userId: string, @Body() dto: UpdateProfileDto) {
+  async updateMe(
+    @CurrentUser("id") userId: string,
+    @Body() dto: UpdateProfileDto,
+  ) {
     return this.authService.updateMe(userId, dto);
   }
 }

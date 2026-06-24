@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { APP_GUARD, APP_INTERCEPTOR, APP_FILTER } from "@nestjs/core";
 import { ThrottlerGuard } from "@nestjs/throttler";
+import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 import { RolesGuard } from "./guards/roles.guard";
 import { OrgGuard } from "./guards/org.guard";
 import { GeographyGuard } from "./guards/geography.guard";
@@ -18,6 +19,10 @@ import { MonitoringModule } from "../modules/monitoring/monitoring.module";
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
     },
     {
       provide: APP_GUARD,

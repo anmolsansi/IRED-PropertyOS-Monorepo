@@ -1,20 +1,37 @@
-import { Injectable, OnModuleInit, Logger } from "@nestjs/common";
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  OnModuleInit,
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import * as nodemailer from "nodemailer";
+import { Resend } from "resend";
 
 @Injectable()
 export class MailService implements OnModuleInit {
   private readonly logger = new Logger(MailService.name);
   private transporter: nodemailer.Transporter | null = null;
+  private resend: Resend | null = null;
   private isConfigured = false;
+  private transport: "resend" | "smtp" | "console" = "console";
 
   constructor(private readonly config: ConfigService) {}
 
   onModuleInit() {
+    const resendApiKey = this.config.get<string>("app.resend.apiKey");
     const host = this.config.get<string>("app.smtp.host");
     const port = this.config.get<number>("app.smtp.port");
     const user = this.config.get<string>("app.smtp.user");
     const pass = this.config.get<string>("app.smtp.pass");
+
+    if (resendApiKey) {
+      this.resend = new Resend(resendApiKey);
+      this.isConfigured = true;
+      this.transport = "resend";
+      this.logger.log("Resend email transport configured");
+      return;
+    }
 
     if (host && user && pass) {
       this.transporter = nodemailer.createTransport({
@@ -24,11 +41,12 @@ export class MailService implements OnModuleInit {
         auth: { user, pass },
       });
       this.isConfigured = true;
+      this.transport = "smtp";
       this.logger.log("SMTP transport configured");
     } else {
       this.logger.warn(
-        "SMTP not configured — emails will be logged to console. " +
-          "Set SMTP_HOST, SMTP_USER, SMTP_PASS in .env to enable.",
+        "Email transport not configured - emails will be logged to console. " +
+          "Set RESEND_API_KEY and RESEND_FROM_EMAIL, or SMTP_HOST, SMTP_USER, SMTP_PASS in .env to enable delivery.",
       );
     }
   }
@@ -36,9 +54,14 @@ export class MailService implements OnModuleInit {
   async sendOtp(
     to: string,
     otp: string,
-    purpose: "EMAIL_VERIFICATION" | "PASSWORD_RESET" | "MOBILE_RECOVERY",
+    purpose:
+      | "LOGIN_2FA"
+      | "EMAIL_VERIFICATION"
+      | "PASSWORD_RESET"
+      | "MOBILE_RECOVERY",
   ): Promise<void> {
     const subjectMap = {
+      LOGIN_2FA: "Your login code - IRED PropertyOS",
       EMAIL_VERIFICATION: "Verify your email — IRED PropertyOS",
       PASSWORD_RESET: "Password Reset Code — IRED PropertyOS",
       MOBILE_RECOVERY: "Mobile Recovery Code — IRED PropertyOS",
@@ -46,21 +69,16 @@ export class MailService implements OnModuleInit {
 
     const html = this.buildOtpHtml(otp, purpose);
 
-    if (!this.isConfigured || !this.transporter) {
+    if (!this.isConfigured) {
       this.logger.log(`[DEV MODE] OTP for ${to} (${purpose}): ${otp}`);
       return;
     }
 
-    const from =
-      this.config.get<string>("app.smtp.from") || "noreply@propertyos.in";
-
-    await this.transporter.sendMail({
-      from,
+    await this.deliver({
       to,
       subject: subjectMap[purpose],
       html,
     });
-
     this.logger.log(`OTP email sent to ${to} (${purpose})`);
   }
 
@@ -70,30 +88,80 @@ export class MailService implements OnModuleInit {
     subject: string;
     html: string;
   }): Promise<void> {
-    if (!this.isConfigured || !this.transporter) {
+    if (!this.isConfigured) {
       this.logger.log(`[DEV MODE] Email to ${options.to}: ${options.subject}`);
       return;
     }
 
-    const from =
-      options.from ||
-      this.config.get<string>("app.smtp.from") ||
-      "noreply@propertyos.in";
-    await this.transporter.sendMail({ ...options, from });
+    await this.deliver(options);
     this.logger.log(`Email sent to ${options.to}: ${options.subject}`);
+  }
+
+  private async deliver(options: {
+    from?: string;
+    to: string;
+    subject: string;
+    html: string;
+  }): Promise<void> {
+    const from = options.from || this.getFromAddress();
+
+    if (this.transport === "resend" && this.resend) {
+      const { error } = await this.resend.emails.send({
+        from,
+        to: options.to,
+        subject: options.subject,
+        html: options.html,
+      });
+
+      if (error) {
+        this.logger.error(
+          `Resend email delivery failed for ${options.to}: ${error.message}`,
+        );
+        throw new InternalServerErrorException("Failed to send email");
+      }
+
+      return;
+    }
+
+    if (this.transport === "smtp" && this.transporter) {
+      await this.transporter.sendMail({ ...options, from });
+      return;
+    }
+
+    this.logger.log(`[DEV MODE] Email to ${options.to}: ${options.subject}`);
+  }
+
+  private getFromAddress(): string {
+    if (this.transport === "resend") {
+      return (
+        this.config.get<string>("app.resend.from") || "noreply@propertyos.in"
+      );
+    }
+
+    return (
+      this.config.get<string>("app.smtp.from") ||
+      this.config.get<string>("app.smtp.user") ||
+      "noreply@propertyos.in"
+    );
   }
 
   private buildOtpHtml(
     otp: string,
-    purpose: "EMAIL_VERIFICATION" | "PASSWORD_RESET" | "MOBILE_RECOVERY",
+    purpose:
+      | "LOGIN_2FA"
+      | "EMAIL_VERIFICATION"
+      | "PASSWORD_RESET"
+      | "MOBILE_RECOVERY",
   ): string {
     const headingMap = {
+      LOGIN_2FA: "Verify Your Login",
       EMAIL_VERIFICATION: "Verify Your Email",
       PASSWORD_RESET: "Reset Your Password",
       MOBILE_RECOVERY: "Recover Your Account",
     };
 
     const messageMap = {
+      LOGIN_2FA: "Use the following code to finish signing in to your account:",
       EMAIL_VERIFICATION:
         "Use the following code to verify your email address:",
       PASSWORD_RESET: "Use the following code to reset your password:",

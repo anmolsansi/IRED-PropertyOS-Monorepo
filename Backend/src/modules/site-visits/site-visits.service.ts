@@ -6,6 +6,7 @@ import {
 import { PrismaService } from "../../prisma/prisma.service";
 import { SiteVisitStatus } from "@prisma/client";
 import { buildLinkedGeographyWhere, GeographicScope } from "../../shared/utils/geography-filter";
+import { verifyEntityGeography } from "../../shared/utils/verify-entity-geography";
 
 @Injectable()
 export class SiteVisitsService {
@@ -61,7 +62,7 @@ export class SiteVisitsService {
     };
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, geographicScope?: GeographicScope) {
     const siteVisit = await this.prisma.siteVisit.findUnique({
       where: { id },
       include: {
@@ -72,6 +73,7 @@ export class SiteVisitsService {
       },
     });
     if (!siteVisit) throw new NotFoundException("Site visit not found");
+    await verifyEntityGeography(this.prisma, geographicScope, siteVisit, "Site visit");
     return siteVisit;
   }
 

@@ -18,6 +18,7 @@ import {
 import { ChangeRequestsService } from "./change-requests.service";
 import { JwtAuthGuard } from "../../shared/guards/jwt-auth.guard";
 import { Roles, Role } from "../../shared/decorators/roles.decorator";
+import { GeographyScope } from "../../shared/decorators/geography-scope.decorator";
 import { CurrentUser } from "../../shared/decorators/current-user.decorator";
 import { ZodValidationPipe } from "../../shared/pipes/zod-validation.pipe";
 import {
@@ -39,6 +40,7 @@ export class ChangeRequestsController {
   constructor(private readonly changeRequestsService: ChangeRequestsService) {}
 
   @Get()
+  @GeographyScope()
   @ApiOperation({ summary: "List change requests" })
   @ApiResponse({
     status: 200,
@@ -61,14 +63,21 @@ export class ChangeRequestsController {
     },
   })
   @UsePipes(new ZodValidationPipe(ChangeRequestQuerySchema))
-  async findAll(@Query() query: ChangeRequestQueryDto) {
-    return this.changeRequestsService.findAll(query);
+  async findAll(
+    @Query() query: ChangeRequestQueryDto,
+    @CurrentUser("geographicScope") scope: any,
+  ) {
+    return this.changeRequestsService.findAll(query, scope);
   }
 
   @Get(":id")
+  @GeographyScope()
   @ApiOperation({ summary: "Get change request by ID" })
-  async findOne(@Param("id") id: string) {
-    return this.changeRequestsService.findOne(id);
+  async findOne(
+    @Param("id") id: string,
+    @CurrentUser("geographicScope") scope: any,
+  ) {
+    return this.changeRequestsService.findOne(id, scope);
   }
 
   @Post(":id/withdraw")

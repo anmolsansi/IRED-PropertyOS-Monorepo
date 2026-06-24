@@ -38,6 +38,11 @@ export default registerAs("app", () => ({
     from: process.env.SMTP_FROM,
   },
 
+  resend: {
+    apiKey: process.env.RESEND_API_KEY,
+    from: process.env.RESEND_FROM_EMAIL,
+  },
+
   s3: {
     endpoint: process.env.S3_ENDPOINT,
     bucket: process.env.S3_BUCKET || "propertyos-media",

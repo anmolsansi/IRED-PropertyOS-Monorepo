@@ -21,6 +21,7 @@ const OTP_LENGTH = 6;
 export function OtpForm() {
   const [otp, setOtp] = useState<string[]>(new Array(OTP_LENGTH).fill(""));
   const [resendCooldown, setResendCooldown] = useState(30);
+  const verifyingRef = useRef(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -46,6 +47,7 @@ export function OtpForm() {
 
   const handleChange = useCallback(
     (index: number, value: string) => {
+      value = value.replace(/\D/g, "");
       if (value.length > 1) return;
 
       const newOtp = [...otp];
@@ -55,13 +57,8 @@ export function OtpForm() {
       if (value && index < OTP_LENGTH - 1) {
         inputRefs.current[index + 1]?.focus();
       }
-
-      if (newOtp.every((digit) => digit !== "")) {
-        handleVerify(newOtp.join(""));
-      }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [otp]
+    [otp],
   );
 
   const handleKeyDown = useCallback(
@@ -76,7 +73,10 @@ export function OtpForm() {
   const handlePaste = useCallback(
     (e: React.ClipboardEvent) => {
       e.preventDefault();
-      const pastedData = e.clipboardData.getData("text").slice(0, OTP_LENGTH);
+      const pastedData = e.clipboardData
+        .getData("text")
+        .replace(/\D/g, "")
+        .slice(0, OTP_LENGTH);
       const newOtp = [...otp];
 
       for (let i = 0; i < pastedData.length; i++) {
@@ -88,19 +88,22 @@ export function OtpForm() {
       const nextEmptyIndex = newOtp.findIndex((digit) => digit === "");
       const focusIndex = nextEmptyIndex === -1 ? OTP_LENGTH - 1 : nextEmptyIndex;
       inputRefs.current[focusIndex]?.focus();
-
-      if (newOtp.every((digit) => digit !== "")) {
-        handleVerify(newOtp.join(""));
-      }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [otp]
+    [otp],
   );
 
   async function handleVerify(code: string) {
-    if (!userId) return;
+    if (!userId || verifyingRef.current) return;
 
+    if (!/^\d{6}$/.test(code)) {
+      toast.error("Enter the 6-digit OTP code.");
+      return;
+    }
+
+    verifyingRef.current = true;
     const user = await verify(userId, code);
+    verifyingRef.current = false;
+
     if (!user) {
       toast.error("Invalid or expired OTP. Please try again.");
       setOtp(new Array(OTP_LENGTH).fill(""));

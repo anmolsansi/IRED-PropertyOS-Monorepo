@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { api, buildFilterQuery } from "@/lib/api/client";
+import { ApiError, api, buildFilterQuery } from "@/lib/api/client";
 import type { Property, PaginatedResponse, FilterParams } from "@/types";
 
 interface BackendContact {
@@ -26,8 +26,10 @@ interface BackendBuilding {
   state?: { id: string; name: string; code: string };
   cityId?: string;
   city?: { id: string; name: string };
+  cityName?: string;
   localityId?: string;
   locality?: { id: string; name: string };
+  localityName?: string;
   pincode?: string;
   fullAddress?: string;
   landmark?: string;
@@ -43,6 +45,8 @@ interface BackendBuilding {
   verificationStatus?: { id: string; name: string };
   parkingDetails?: Record<string, unknown>;
   liftDetails?: Record<string, unknown>;
+  commercialTerms?: Record<string, unknown>;
+  additionalFields?: Record<string, unknown>;
   notes?: string;
   createdBy?: string;
   createdAt: string;
@@ -75,8 +79,8 @@ function adaptBuildingToProperty(building: BackendBuilding): Property & { contac
     buildingName: building.name,
     address: [building.fullAddress, building.landmark].filter(Boolean).join(", ") || "",
     state: building.state?.name || "",
-    city: building.city?.name || "",
-    locality: building.locality?.name || "",
+    city: building.city?.name || building.cityName || "",
+    locality: building.locality?.name || building.localityName || "",
     pincode: building.pincode || "",
     latitude: building.latitude,
     longitude: building.longitude,
@@ -107,7 +111,21 @@ export function useProperties(filters: FilterParams = {}) {
   return useQuery({
     queryKey: ["properties", filters],
     queryFn: async (): Promise<PaginatedResponse<Property>> => {
-      const response = await api.getPaginated<BackendBuilding>("/buildings", queryParams);
+      let response: PaginatedResponse<BackendBuilding>;
+      try {
+        response = await api.getPaginated<BackendBuilding>("/buildings", queryParams);
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 403) {
+          return {
+            data: [],
+            total: 0,
+            page: Number(filters.page) || 1,
+            pageSize: Number(filters.pageSize) || 10,
+            totalPages: 0,
+          };
+        }
+        throw error;
+      }
       return {
         ...response,
         data: response.data.map(adaptBuildingToProperty),

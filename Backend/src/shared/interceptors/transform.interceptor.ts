@@ -12,6 +12,28 @@ export interface ApiResponse<T> {
   meta?: Record<string, unknown>;
 }
 
+function serializeForJson(value: unknown): unknown {
+  if (typeof value === "bigint") {
+    return value.toString();
+  }
+
+  if (value instanceof Date) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => serializeForJson(item));
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, serializeForJson(item)]),
+    );
+  }
+
+  return value;
+}
+
 @Injectable()
 export class TransformInterceptor<T> implements NestInterceptor<
   T,
@@ -32,11 +54,11 @@ export class TransformInterceptor<T> implements NestInterceptor<
           "data" in data &&
           "meta" in data
         ) {
-          return data as ApiResponse<T>;
+          return serializeForJson(data) as ApiResponse<T>;
         }
 
         return {
-          data,
+          data: serializeForJson(data) as T,
           meta: {
             timestamp: new Date().toISOString(),
             requestId,

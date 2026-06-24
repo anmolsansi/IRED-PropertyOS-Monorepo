@@ -19,6 +19,7 @@ import {
 import { MediaService } from "./media.service";
 import { JwtAuthGuard } from "../../shared/guards/jwt-auth.guard";
 import { Roles, Role } from "../../shared/decorators/roles.decorator";
+import { GeographyScope } from "../../shared/decorators/geography-scope.decorator";
 import { CurrentUser } from "../../shared/decorators/current-user.decorator";
 import { ZodValidationPipe } from "../../shared/pipes/zod-validation.pipe";
 import {
@@ -40,6 +41,7 @@ export class MediaController {
   constructor(private readonly mediaService: MediaService) {}
 
   @Get()
+  @GeographyScope()
   @ApiOperation({ summary: "List media files" })
   @ApiResponse({
     status: 200,
@@ -62,22 +64,29 @@ export class MediaController {
     },
   })
   @UsePipes(new ZodValidationPipe(MediaQuerySchema))
-  async findAll(@Query() query: MediaQueryDto) {
+  async findAll(
+    @Query() query: MediaQueryDto,
+    @CurrentUser("geographicScope") scope: any,
+  ) {
     if (query.buildingId)
-      return this.mediaService.findByBuilding(query.buildingId);
-    if (query.floorId) return this.mediaService.findByFloor(query.floorId);
-    if (query.unitId) return this.mediaService.findByUnit(query.unitId);
+      return this.mediaService.findByBuilding(query.buildingId, scope);
+    if (query.floorId) return this.mediaService.findByFloor(query.floorId, scope);
+    if (query.unitId) return this.mediaService.findByUnit(query.unitId, scope);
     return this.mediaService.findAll({
       page: query.page,
       limit: query.limit,
       fileType: query.fileType,
-    });
+    }, scope);
   }
 
   @Get(":id")
+  @GeographyScope()
   @ApiOperation({ summary: "Get media by ID" })
-  async findOne(@Param("id") id: string) {
-    return this.mediaService.findOne(id);
+  async findOne(
+    @Param("id") id: string,
+    @CurrentUser("geographicScope") scope: any,
+  ) {
+    return this.mediaService.findOne(id, scope);
   }
 
   @Get(":id/download-url")

@@ -13,6 +13,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useTask, useUpdateTask } from "@/hooks/use-tasks";
 import { useFollowUps, useCreateFollowUp } from "@/hooks/use-follow-ups";
+import { useUsers } from "@/hooks/use-users";
+import { useAuthSession } from "@/hooks/use-session";
 import { useQueryClient } from "@tanstack/react-query";
 import { PRIORITY_COLORS } from "@/lib/constants";
 import { ArrowLeft, Plus, CheckCircle, XCircle, Clock } from "lucide-react";
@@ -64,6 +66,11 @@ export default function TaskDetailPage({
   const updateTask = useUpdateTask();
   const createFollowUp = useCreateFollowUp();
   const queryClient = useQueryClient();
+  const { session } = useAuthSession();
+  const user = session?.user;
+  const { data: usersData } = useUsers();
+  const users = usersData?.data ?? [];
+  const isAdmin = user?.role === "ADMIN";
 
   const [showFollowUpForm, setShowFollowUpForm] = useState(false);
   const [followUpTitle, setFollowUpTitle] = useState("");
@@ -77,6 +84,16 @@ export default function TaskDetailPage({
       toast.success(`Task marked as ${TASK_STATUS_LABELS[newStatus]}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to update task");
+    }
+  }
+
+  async function handleAssigneeChange(userId: string) {
+    try {
+      await updateTask.mutateAsync({ id, data: { assignedTo: userId } });
+      toast.success("Task reassigned successfully");
+      queryClient.invalidateQueries({ queryKey: ["task", id] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to reassign task");
     }
   }
 
@@ -202,7 +219,28 @@ export default function TaskDetailPage({
                   })
                 : "—",
             },
-            { label: "Assigned To", value: task.assignedTo?.fullName || "—" },
+            {
+              label: "Assigned To",
+              value: isAdmin ? (
+                <Select
+                  value={task.assignedTo?.id || ""}
+                  onValueChange={(v) => v && handleAssigneeChange(v)}
+                >
+                  <SelectTrigger className="h-8 w-auto min-w-[160px]">
+                    <SelectValue placeholder="Unassigned" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {users.map((u) => (
+                      <SelectItem key={u.id} value={u.id}>
+                        {u.fullName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                task.assignedTo?.fullName || "—"
+              ),
+            },
             { label: "Client", value: task.client?.name || "—" },
             { label: "Building", value: task.buildingId || "—" },
           ]}

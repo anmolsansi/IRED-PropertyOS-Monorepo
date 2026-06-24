@@ -7,6 +7,8 @@ import {
 } from "@nestjs/swagger";
 import { SearchService } from "./search.service";
 import { JwtAuthGuard } from "../../shared/guards/jwt-auth.guard";
+import { GeographyScope } from "../../shared/decorators/geography-scope.decorator";
+import { CurrentUser } from "../../shared/decorators/current-user.decorator";
 import { ZodValidationPipe } from "../../shared/pipes/zod-validation.pipe";
 import {
   SearchPropertiesQuerySchema,
@@ -25,6 +27,7 @@ export class SearchController {
   constructor(private readonly searchService: SearchService) {}
 
   @Get("properties")
+  @GeographyScope()
   @ApiOperation({ summary: "Search properties with advanced filters" })
   @ApiResponse({
     status: 200,
@@ -47,21 +50,32 @@ export class SearchController {
     },
   })
   @UsePipes(new ZodValidationPipe(SearchPropertiesQuerySchema))
-  async searchProperties(@Query() query: SearchPropertiesQueryDto) {
-    return this.searchService.searchProperties(query);
+  async searchProperties(
+    @Query() query: SearchPropertiesQueryDto,
+    @CurrentUser("geographicScope") scope: any,
+  ) {
+    return this.searchService.searchProperties(query, scope);
   }
 
   @Get("units")
+  @GeographyScope()
   @ApiOperation({ summary: "Search units with advanced filters" })
   @UsePipes(new ZodValidationPipe(SearchUnitsQuerySchema))
-  async searchUnits(@Query() query: SearchUnitsQueryDto) {
-    return this.searchService.searchUnits(query);
+  async searchUnits(
+    @Query() query: SearchUnitsQueryDto,
+    @CurrentUser("geographicScope") scope: any,
+  ) {
+    return this.searchService.searchUnits(query, scope);
   }
 
   @Get("contacts")
+  @GeographyScope()
   @ApiOperation({ summary: "Search contacts" })
   @UsePipes(new ZodValidationPipe(SearchContactsQuerySchema))
-  async searchContacts(@Query() query: SearchContactsQueryDto) {
-    return this.searchService.searchContacts(query);
+  async searchContacts(
+    @Query() query: SearchContactsQueryDto,
+    @CurrentUser("geographicScope") scope: any,
+  ) {
+    return this.searchService.searchContacts(query, scope);
   }
 }

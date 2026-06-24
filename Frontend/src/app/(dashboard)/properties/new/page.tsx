@@ -19,10 +19,9 @@ import {
 import { toast } from "sonner";
 import { propertySchema } from "@/lib/validation";
 import { useCreateProperty } from "@/hooks/use-properties";
+import { useCompleteUpload, useUploadMedia } from "@/hooks/use-media";
 import {
   useStates,
-  useCities,
-  useLocalities,
   usePropertyTypes,
   useFurnishingStatuses,
   useAvailabilityStatuses,
@@ -34,13 +33,7 @@ import { Plus, Trash2, Upload, X, ImageIcon, FileText, Film } from "lucide-react
 import type { Contact, MediaDocument } from "@/types";
 
 const steps = [
-  { id: "basic", title: "Basic Info", description: "Building name and type" },
-  { id: "location", title: "Location", description: "Address and GPS" },
-  { id: "area", title: "Area & Terms", description: "Rent and commercial terms" },
-  { id: "availability", title: "Availability", description: "Status and furnishing" },
-  { id: "contacts", title: "Contacts", description: "Contact details" },
-  { id: "media", title: "Media", description: "Photos and documents" },
-  { id: "notes", title: "Notes", description: "Additional information" },
+  { id: "property", title: "Add Property", description: "All property details" },
   { id: "review", title: "Review", description: "Review and submit" },
 ];
 
@@ -59,6 +52,27 @@ const MEDIA_CATEGORIES = [
   { value: "document", label: "Document", icon: FileText },
   { value: "floor_plan", label: "Floor Plan", icon: FileText },
 ];
+
+const ADDITIONAL_FIELD_TYPES = [
+  { value: "instagram", label: "Instagram" },
+  { value: "facebook", label: "Facebook" },
+  { value: "website", label: "Website" },
+  { value: "linkedin", label: "LinkedIn" },
+  { value: "other", label: "Other" },
+];
+
+interface AdditionalField {
+  id: string;
+  type: string;
+  label: string;
+  value: string;
+}
+
+interface PendingMediaFile {
+  id: string;
+  file: File;
+  category: MediaDocument["category"];
+}
 
 function ValidatedField({
   label,
@@ -114,7 +128,7 @@ const initialFormData: FormData = {
   entryType: "building",
   buildingName: "",
   propertyType: "",
-  source: "field",
+  source: "",
   address: "",
   state: "",
   city: "",
@@ -143,12 +157,17 @@ export default function NewPropertyPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const createProperty = useCreateProperty();
+  const uploadMedia = useUploadMedia();
+  const completeUpload = useCompleteUpload();
   const [formData, setFormData] = useState<FormData>(initialFormData);
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [media, setMedia] = useState<MediaDocument[]>([]);
+  const [media, setMedia] = useState<PendingMediaFile[]>([]);
+  const [additionalFields, setAdditionalFields] = useState<AdditionalField[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
   const idCounter = useRef(0);
+  const mediaInputRef = useRef<HTMLInputElement>(null);
+  const pendingMediaCategory = useRef<MediaDocument["category"]>("photo");
 
   const captureGps = () => {
     if (!navigator.geolocation) {
@@ -181,11 +200,54 @@ export default function NewPropertyPage() {
   const { data: furnishingStatuses = [] } = useFurnishingStatuses();
   const { data: availabilityStatuses = [] } = useAvailabilityStatuses();
   const { data: sources = [] } = useSources();
-  const { data: cities = [] } = useCities(formData.state || undefined);
-  const { data: localities = [] } = useLocalities(formData.city || undefined);
 
   function updateField(field: string, value: string | null) {
     setFormData((prev) => ({ ...prev, [field]: value ?? "" }));
+  }
+
+  function getMediaFileType(category: MediaDocument["category"]) {
+    return category === "photo" ? "image" : category === "video" ? "video" : "document";
+  }
+
+  function getCreatedBuildingId(response: unknown) {
+    const maybeWrapped = response as { data?: { id?: string }; id?: string };
+    return maybeWrapped.data?.id || maybeWrapped.id;
+  }
+
+  async function uploadPendingMedia(buildingId: string) {
+    if (media.length === 0) return;
+
+    let uploadedCount = 0;
+    for (const item of media) {
+      const uploadResponse = await uploadMedia.mutateAsync({
+        fileName: item.file.name,
+        mimeType: item.file.type || "application/octet-stream",
+        fileType: getMediaFileType(item.category),
+        buildingId,
+        fileSizeBytes: item.file.size,
+      });
+      const uploadData = uploadResponse.data ?? uploadResponse;
+      const uploadUrl = uploadData.uploadUrl || uploadData.presignedUrl;
+      if (!uploadUrl) throw new Error(`Upload URL missing for ${item.file.name}`);
+
+      const uploadResult = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": item.file.type || "application/octet-stream" },
+        body: item.file,
+      });
+
+      if (!uploadResult.ok) {
+        throw new Error(`Failed to upload ${item.file.name}`);
+      }
+
+      await completeUpload.mutateAsync({
+        mediaId: uploadData.mediaId,
+        fileSizeBytes: item.file.size,
+      });
+      uploadedCount += 1;
+    }
+
+    toast.success(`${uploadedCount} media file(s) uploaded`);
   }
 
   async function handleSubmit() {
@@ -202,22 +264,60 @@ export default function NewPropertyPage() {
       const payload: Record<string, unknown> = {
         name: formData.buildingName,
         fullAddress: formData.address || undefined,
+        cityName: formData.city || undefined,
+        localityName: formData.locality || undefined,
         pincode: formData.pincode || undefined,
         notes: formData.notes || undefined,
       };
 
+      const commercialTerms = {
+        availableArea: formData.availableArea ? parseFloat(formData.availableArea) : undefined,
+        rentPerSqFt: formData.rentPerSqFt ? parseFloat(formData.rentPerSqFt) : undefined,
+        camCharges: formData.camCharges ? parseFloat(formData.camCharges) : undefined,
+        maintenanceCharges: formData.maintenanceCharges ? parseFloat(formData.maintenanceCharges) : undefined,
+        securityDeposit: formData.securityDeposit ? parseFloat(formData.securityDeposit) : undefined,
+        leaseTerms: formData.leaseTerms || undefined,
+        escalationDetails: formData.escalationDetails || undefined,
+        brokerage: formData.brokerage || undefined,
+        furnishingStatusId: formData.furnishingStatus || undefined,
+        availabilityDate: formData.availabilityDate || undefined,
+        possessionDate: formData.possessionDate || undefined,
+      };
+
+      const extraFields = additionalFields
+        .filter((field) => field.value.trim())
+        .map((field) => ({
+          type: field.type,
+          label: field.label.trim() || ADDITIONAL_FIELD_TYPES.find((item) => item.value === field.type)?.label || "Other",
+          value: field.value.trim(),
+        }));
+
       if (formData.propertyType) payload.propertyTypeId = formData.propertyType;
       if (formData.state) payload.stateId = formData.state;
-      if (formData.city) payload.cityId = formData.city;
-      if (formData.locality) payload.localityId = formData.locality;
       if (formData.source) payload.sourceId = formData.source;
       if (formData.availabilityStatus) payload.availabilityStatusId = formData.availabilityStatus;
       if (formData.mapsUrl) payload.googleMapsUrl = formData.mapsUrl;
       if (formData.latitude) payload.latitude = parseFloat(formData.latitude);
       if (formData.longitude) payload.longitude = parseFloat(formData.longitude);
       if (formData.totalArea) payload.totalBuildingArea = parseFloat(formData.totalArea);
+      if (Object.values(commercialTerms).some((value) => value !== undefined)) {
+        payload.commercialTerms = commercialTerms;
+      }
+      if (extraFields.length > 0) payload.additionalFields = extraFields;
 
-      await createProperty.mutateAsync(payload);
+      const createdProperty = await createProperty.mutateAsync(payload);
+      const buildingId = getCreatedBuildingId(createdProperty);
+      if (buildingId) {
+        try {
+          await uploadPendingMedia(buildingId);
+        } catch (uploadError) {
+          const uploadMessage =
+            uploadError instanceof Error
+              ? uploadError.message
+              : "Property created, but media upload failed.";
+          toast.error(uploadMessage);
+        }
+      }
       await queryClient.invalidateQueries({ queryKey: ["properties"] });
       toast.success("Property created successfully!");
       router.push("/properties");
@@ -232,10 +332,7 @@ export default function NewPropertyPage() {
   const validateStep = useCallback(
     (stepIndex: number): Record<string, string> | null => {
       const stepFields: Record<number, string[]> = {
-        0: ["entryType", "buildingName", "propertyType"],
-        1: ["address", "state", "city", "locality", "pincode"],
-        2: ["totalArea", "availableArea", "rentPerSqFt"],
-        3: ["availabilityStatus", "furnishingStatus"],
+        0: ["entryType", "buildingName", "propertyType", "state", "city", "pincode", "mapsUrl", "totalArea", "availableArea", "rentPerSqFt"],
       };
 
       const fields = stepFields[stepIndex];
@@ -298,27 +395,64 @@ export default function NewPropertyPage() {
   }
 
   // Media handlers
-  function addMediaItem(category: string) {
-    idCounter.current += 1;
-    const newItem: MediaDocument = {
-      id: `temp-${idCounter.current}`,
-      entityId: "",
-      entityType: "property",
-      fileName: `sample-${category}-${media.length + 1}.jpg`,
-      fileUrl: "",
-      fileSize: 0,
-      mimeType: category === "video" ? "video/mp4" : category === "document" ? "application/pdf" : "image/jpeg",
-      category: category as MediaDocument["category"],
-      caption: "",
-      uploadedBy: "",
-      isDeleted: false,
-      createdAt: new Date().toISOString(),
-    };
-    setMedia([...media, newItem]);
+  function openMediaPicker(category: MediaDocument["category"]) {
+    pendingMediaCategory.current = category;
+    mediaInputRef.current?.click();
+  }
+
+  function handleMediaSelection(files: FileList | null) {
+    if (!files || files.length === 0) return;
+
+    const category = pendingMediaCategory.current;
+    const selectedFiles = Array.from(files).map((file) => {
+      idCounter.current += 1;
+      return {
+        id: `media-${idCounter.current}`,
+        file,
+        category,
+      };
+    });
+
+    setMedia((prev) => [...prev, ...selectedFiles]);
+    if (mediaInputRef.current) mediaInputRef.current.value = "";
   }
 
   function removeMediaItem(id: string) {
     setMedia((prev) => prev.filter((m) => m.id !== id));
+  }
+
+  function addAdditionalField() {
+    idCounter.current += 1;
+    setAdditionalFields((prev) => [
+      ...prev,
+      {
+        id: `extra-${idCounter.current}`,
+        type: "instagram",
+        label: "Instagram",
+        value: "",
+      },
+    ]);
+  }
+
+  function updateAdditionalField(id: string, field: keyof AdditionalField, value: string) {
+    setAdditionalFields((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item;
+        if (field === "type") {
+          const selectedType = ADDITIONAL_FIELD_TYPES.find((type) => type.value === value);
+          return {
+            ...item,
+            type: value,
+            label: selectedType?.label || item.label,
+          };
+        }
+        return { ...item, [field]: value };
+      }),
+    );
+  }
+
+  function removeAdditionalField(id: string) {
+    setAdditionalFields((prev) => prev.filter((item) => item.id !== id));
   }
 
   return (
@@ -329,8 +463,11 @@ export default function NewPropertyPage() {
       />
 
       <MultiStepForm steps={steps} onSubmit={handleSubmit} validateStep={validateStep} isSubmitting={isSubmitting}>
-        {/* Step 1: Basic Info */}
+        {/* Step 1: Add Property */}
         <StepContent>
+          <div className="space-y-8">
+          <section className="space-y-4">
+          <h3 className="text-sm font-semibold">Basic Info</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <ValidatedField label="Entry Type" required field="entryType">
               <Select value={formData.entryType} onValueChange={(v) => updateField("entryType", v)}>
@@ -356,7 +493,7 @@ export default function NewPropertyPage() {
             <ValidatedField label="Property Type" required field="propertyType">
               <Select value={formData.propertyType} onValueChange={(v) => updateField("propertyType", v)}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select property type" />
+                  <SelectValue>{findById(propertyTypes, formData.propertyType)?.name || "Select property type"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {propertyTypes.map((pt) => (
@@ -371,7 +508,7 @@ export default function NewPropertyPage() {
             <FormField label="Source">
               <Select value={formData.source} onValueChange={(v) => updateField("source", v)}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select source" />
+                  <SelectValue>{findById(sources, formData.source)?.name || "Select source"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {sources.map((s) => (
@@ -383,14 +520,15 @@ export default function NewPropertyPage() {
               </Select>
             </FormField>
           </div>
-        </StepContent>
+          </section>
 
-        {/* Step 2: Location */}
-        <StepContent>
+        {/* Location */}
+          <section className="space-y-4">
+          <h3 className="text-sm font-semibold">Location</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <ValidatedField label="Full Address" required field="address" className="col-span-2">
+            <ValidatedField label="Full Address" field="address" className="col-span-2">
               <Textarea
-                placeholder="Enter complete address"
+                placeholder="Enter complete address (optional for new records)"
                 value={formData.address}
                 onChange={(e) => updateField("address", e.target.value)}
               />
@@ -406,7 +544,7 @@ export default function NewPropertyPage() {
                 }}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select state" />
+                  <SelectValue>{findById(states, formData.state)?.name || "Select state or union territory"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {states.map((state) => (
@@ -419,43 +557,20 @@ export default function NewPropertyPage() {
             </ValidatedField>
 
             <ValidatedField label="City" required field="city">
-              <Select
+              <Input
+                placeholder="e.g. New Delhi"
                 value={formData.city}
-                onValueChange={(v) => {
-                  updateField("city", v);
-                  updateField("locality", "");
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={formData.state ? "Select city" : "Select state first"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {cities.map((city) => (
-                    <SelectItem key={city.id} value={city.id}>
-                      {city.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={(e) => updateField("city", e.target.value)}
+              />
             </ValidatedField>
 
-            <ValidatedField label="Locality" required field="locality">
-              <Select
+            <FormField label="Locality">
+              <Input
+                placeholder="e.g. Connaught Place"
                 value={formData.locality}
-                onValueChange={(v) => updateField("locality", v)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={formData.city ? "Select locality" : "Select city first"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {localities.map((loc) => (
-                    <SelectItem key={loc.id} value={loc.id}>
-                      {loc.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </ValidatedField>
+                onChange={(e) => updateField("locality", e.target.value)}
+              />
+            </FormField>
 
             <ValidatedField label="Pincode" required field="pincode">
               <Input
@@ -510,12 +625,13 @@ export default function NewPropertyPage() {
               />
             </FormField>
           </div>
-        </StepContent>
+          </section>
 
-        {/* Step 3: Area & Commercial Terms */}
-        <StepContent>
+        {/* Area & Commercial Terms */}
+          <section className="space-y-4">
+          <h3 className="text-sm font-semibold">Area & Commercial Terms</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <ValidatedField label="Total Area (sqft)" required field="totalArea">
+            <ValidatedField label="Total Area (sqft)" field="totalArea">
               <Input
                 type="number"
                 placeholder="e.g. 5000"
@@ -524,7 +640,7 @@ export default function NewPropertyPage() {
               />
             </ValidatedField>
 
-            <ValidatedField label="Available Area (sqft)" required field="availableArea">
+            <ValidatedField label="Available Area (sqft)" field="availableArea">
               <Input
                 type="number"
                 placeholder="e.g. 2500"
@@ -533,7 +649,7 @@ export default function NewPropertyPage() {
               />
             </ValidatedField>
 
-            <ValidatedField label="Rent per sqft (₹)" required field="rentPerSqFt">
+            <ValidatedField label="Rent per sqft (₹)" field="rentPerSqFt">
               <Input
                 type="number"
                 placeholder="e.g. 125"
@@ -593,15 +709,16 @@ export default function NewPropertyPage() {
               />
             </FormField>
           </div>
-        </StepContent>
+          </section>
 
-        {/* Step 4: Availability & Furnishing */}
-        <StepContent>
+        {/* Availability & Furnishing */}
+          <section className="space-y-4">
+          <h3 className="text-sm font-semibold">Availability & Furnishing</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <ValidatedField label="Availability Status" required field="availabilityStatus">
+            <FormField label="Availability Status">
               <Select value={formData.availabilityStatus} onValueChange={(v) => updateField("availabilityStatus", v)}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select status" />
+                  <SelectValue>{findById(availabilityStatuses, formData.availabilityStatus)?.name || "Select status"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {availabilityStatuses.map((status) => (
@@ -611,12 +728,12 @@ export default function NewPropertyPage() {
                   ))}
                 </SelectContent>
               </Select>
-            </ValidatedField>
+            </FormField>
 
-            <ValidatedField label="Furnishing Status" required field="furnishingStatus">
+            <FormField label="Furnishing Status">
               <Select value={formData.furnishingStatus} onValueChange={(v) => updateField("furnishingStatus", v)}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select furnishing" />
+                  <SelectValue>{findById(furnishingStatuses, formData.furnishingStatus)?.name || "Select furnishing"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {furnishingStatuses.map((fs) => (
@@ -626,7 +743,7 @@ export default function NewPropertyPage() {
                   ))}
                 </SelectContent>
               </Select>
-            </ValidatedField>
+            </FormField>
 
             <FormField label="Availability Date">
               <Input
@@ -644,10 +761,11 @@ export default function NewPropertyPage() {
               />
             </FormField>
           </div>
-        </StepContent>
+          </section>
 
-        {/* Step 5: Contacts */}
-        <StepContent>
+        {/* Contacts */}
+          <section className="space-y-4">
+          <h3 className="text-sm font-semibold">Contacts</h3>
           <div className="space-y-4">
             {contacts.map((contact) => (
               <div
@@ -757,11 +875,19 @@ export default function NewPropertyPage() {
               Add Contact
             </Button>
           </div>
-        </StepContent>
+          </section>
 
-        {/* Step 6: Media */}
-        <StepContent>
+        {/* Media */}
+          <section className="space-y-4">
+          <h3 className="text-sm font-semibold">Media</h3>
           <div className="space-y-4">
+            <input
+              ref={mediaInputRef}
+              type="file"
+              className="hidden"
+              multiple
+              onChange={(event) => handleMediaSelection(event.target.files)}
+            />
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               {MEDIA_CATEGORIES.map((cat) => {
                 const Icon = cat.icon;
@@ -771,7 +897,7 @@ export default function NewPropertyPage() {
                     type="button"
                     variant="outline"
                     className="h-auto py-4 flex-col gap-2"
-                    onClick={() => addMediaItem(cat.value)}
+                    onClick={() => openMediaPicker(cat.value as MediaDocument["category"])}
                   >
                     <Icon className="h-5 w-5" />
                     <span className="text-xs">Add {cat.label}</span>
@@ -794,9 +920,10 @@ export default function NewPropertyPage() {
                         <FileText className="h-4 w-4 text-muted-foreground" />
                       )}
                       <div>
-                        <p className="text-sm font-medium">{item.fileName}</p>
+                        <p className="text-sm font-medium">{item.file.name}</p>
                         <p className="text-xs text-muted-foreground">
-                          {MEDIA_CATEGORIES.find((c) => c.value === item.category)?.label}
+                          {MEDIA_CATEGORIES.find((c) => c.value === item.category)?.label} •{" "}
+                          {(item.file.size / 1024 / 1024).toFixed(2)} MB
                         </p>
                       </div>
                     </div>
@@ -817,14 +944,67 @@ export default function NewPropertyPage() {
               <div className="text-center py-8 text-muted-foreground border rounded-lg">
                 <Upload className="h-8 w-8 mx-auto mb-2 opacity-50" />
                 <p className="text-sm">No media files added yet.</p>
-                <p className="text-xs">Click the buttons above to add photos, videos, or documents.</p>
+                <p className="text-xs">Click the buttons above to choose photos, videos, or documents.</p>
               </div>
             )}
           </div>
-        </StepContent>
+          </section>
 
-        {/* Step 7: Notes */}
-        <StepContent>
+        {/* Additional Fields */}
+          <section className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold">Additional Fields</h3>
+            <Button type="button" variant="outline" size="sm" onClick={addAdditionalField}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Field
+            </Button>
+          </div>
+          {additionalFields.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Add Instagram, Facebook, website, or any custom field when available.</p>
+          ) : (
+            <div className="space-y-3">
+              {additionalFields.map((field) => (
+                <div key={field.id} className="grid grid-cols-1 md:grid-cols-[180px_1fr_1fr_auto] gap-3 rounded-lg border p-3">
+                  <Select value={field.type} onValueChange={(value) => updateAdditionalField(field.id, "type", value || "other")}>
+                    <SelectTrigger>
+                      <SelectValue>{ADDITIONAL_FIELD_TYPES.find((type) => type.value === field.type)?.label || "Other"}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ADDITIONAL_FIELD_TYPES.map((type) => (
+                        <SelectItem key={type.value} value={type.value}>
+                          {type.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    placeholder="Field label"
+                    value={field.label}
+                    onChange={(e) => updateAdditionalField(field.id, "label", e.target.value)}
+                  />
+                  <Input
+                    placeholder="Value or URL"
+                    value={field.value}
+                    onChange={(e) => updateAdditionalField(field.id, "value", e.target.value)}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="text-destructive"
+                    onClick={() => removeAdditionalField(field.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+          </section>
+
+        {/* Notes */}
+          <section className="space-y-4">
+          <h3 className="text-sm font-semibold">Notes</h3>
           <FormField label="Notes">
             <Textarea
               placeholder="Additional notes about this property..."
@@ -832,9 +1012,11 @@ export default function NewPropertyPage() {
               onChange={(e) => updateField("notes", e.target.value)}
             />
           </FormField>
+          </section>
+          </div>
         </StepContent>
 
-        {/* Step 8: Review */}
+        {/* Step 2: Review */}
         <StepContent>
           <div className="space-y-6">
             <div className="p-4 rounded-lg bg-muted">
@@ -868,11 +1050,17 @@ export default function NewPropertyPage() {
                 <span className="text-muted-foreground">State:</span>
                 <span>{findById(states, formData.state)?.name || "—"}</span>
                 <span className="text-muted-foreground">City:</span>
-                <span>{findById(cities, formData.city)?.name || "—"}</span>
+                <span>{formData.city || "—"}</span>
                 <span className="text-muted-foreground">Locality:</span>
-                <span>{findById(localities, formData.locality)?.name || "—"}</span>
+                <span>{formData.locality || "—"}</span>
                 <span className="text-muted-foreground">Pincode:</span>
                 <span>{formData.pincode || "—"}</span>
+                <span className="text-muted-foreground">Coordinates:</span>
+                <span>
+                  {formData.latitude && formData.longitude
+                    ? `${formData.latitude}, ${formData.longitude}`
+                    : "—"}
+                </span>
               </div>
             </div>
 
@@ -948,12 +1136,29 @@ export default function NewPropertyPage() {
                 <div className="flex flex-wrap gap-2">
                   {media.map((m) => (
                     <Badge key={m.id} variant="outline" className="text-xs">
-                      {m.fileName}
+                      {m.file.name}
                     </Badge>
                   ))}
                 </div>
               )}
             </div>
+
+            {/* Additional Fields */}
+            {additionalFields.some((field) => field.value.trim()) && (
+              <div>
+                <h4 className="text-sm font-semibold mb-2">Additional Fields</h4>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
+                  {additionalFields
+                    .filter((field) => field.value.trim())
+                    .map((field) => (
+                      <div key={field.id} className="contents">
+                        <span className="text-muted-foreground">{field.label || "Other"}:</span>
+                        <span className="break-all">{field.value}</span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
 
             {/* Notes */}
             {formData.notes && (

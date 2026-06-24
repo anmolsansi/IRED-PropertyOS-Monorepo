@@ -75,6 +75,7 @@ export class DealsController {
   }
 
   @Get(":id")
+  @GeographyScope()
   @ApiOperation({ summary: "Get deal by ID" })
   @ApiResponse({
     status: 200,
@@ -90,8 +91,11 @@ export class DealsController {
       },
     },
   })
-  async findOne(@Param("id") id: string) {
-    return this.dealsService.findOne(id);
+  async findOne(
+    @Param("id") id: string,
+    @CurrentUser("geographicScope") scope: any,
+  ) {
+    return this.dealsService.findOne(id, scope);
   }
 
   @Post()

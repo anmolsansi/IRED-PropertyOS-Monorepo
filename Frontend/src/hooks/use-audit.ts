@@ -9,7 +9,7 @@ export interface AuditEvent {
   eventType: string;
   entityType: string;
   entityId: string;
-  metadataJson: any;
+  metadataJson?: Record<string, unknown> | null;
   ipAddress: string;
   userAgent: string;
   createdAt: string;
@@ -17,7 +17,7 @@ export interface AuditEvent {
     id: string;
     fullName: string;
     email: string;
-  };
+  } | null;
 }
 
 export interface AuditEventsResponse {
@@ -30,15 +30,40 @@ export interface AuditEventsResponse {
   };
 }
 
+interface WrappedAuditEventsResponse {
+  data: AuditEventsResponse;
+}
+
+function unwrapAuditResponse(
+  response: AuditEventsResponse | WrappedAuditEventsResponse,
+): AuditEventsResponse {
+  if (Array.isArray((response as AuditEventsResponse).data)) {
+    return response as AuditEventsResponse;
+  }
+
+  const wrapped = response as WrappedAuditEventsResponse;
+  return {
+    data: Array.isArray(wrapped.data?.data) ? wrapped.data.data : [],
+    pagination: wrapped.data?.pagination ?? {
+      page: 1,
+      limit: 20,
+      total: 0,
+      totalPages: 0,
+    },
+  };
+}
+
 export function useAuditEvents() {
   return useQuery({
     queryKey: ["audit"],
     queryFn: async () => {
-      const response = await api.get<AuditEventsResponse>("/audit", {
+      const response = await api.get<
+        AuditEventsResponse | WrappedAuditEventsResponse
+      >("/audit", {
         limit: "20",
         page: "1",
       });
-      return response;
+      return unwrapAuditResponse(response);
     },
     staleTime: 60 * 1000,
   });

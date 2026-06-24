@@ -69,6 +69,7 @@ export default function PropertyDetailPage({
   const createUnit = useCreateUnit();
   const deleteFloor = useDeleteFloor();
   const deleteUnit = useDeleteUnit();
+  const deleteProperty = useDeleteProperty();
 
   const [addFloorOpen, setAddFloorOpen] = useState(false);
   const [addUnitOpen, setAddUnitOpen] = useState(false);
@@ -101,15 +102,13 @@ export default function PropertyDetailPage({
     );
   }
 
-  const deleteProperty = useDeleteProperty();
-
   async function handleDelete() {
     try {
       await deleteProperty.mutateAsync(id);
       toast.success("Property deleted successfully");
-      queryClient.invalidateQueries({ queryKey: ["buildings"] });
+      queryClient.invalidateQueries({ queryKey: ["properties"] });
       router.push("/properties");
-    } catch (error) {
+    } catch {
       toast.error("Failed to delete property");
     }
   }
@@ -202,11 +201,17 @@ export default function PropertyDetailPage({
           </Button>
         </Link>
         <AlertDialog>
-          <AlertDialogTrigger>
-            <Button variant="outline" size="sm" className="text-destructive hover:text-destructive">
+          <AlertDialogTrigger
+            render={
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+              />
+            }
+          >
               <Trash2 className="h-4 w-4 mr-2" />
               Delete
-            </Button>
           </AlertDialogTrigger>
           <AlertDialogContent>
             <AlertDialogHeader>
@@ -455,10 +460,16 @@ export default function PropertyDetailPage({
                             <Plus className="h-3 w-3" />
                           </Button>
                           <AlertDialog>
-                            <AlertDialogTrigger>
-                              <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive">
+                            <AlertDialogTrigger
+                              render={
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-destructive hover:text-destructive"
+                                />
+                              }
+                            >
                                 <Trash2 className="h-3 w-3" />
-                              </Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
                               <AlertDialogHeader>

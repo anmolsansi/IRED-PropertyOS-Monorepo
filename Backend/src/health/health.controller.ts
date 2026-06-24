@@ -8,8 +8,10 @@ import {
 } from "@nestjs/terminus";
 import { ApiTags, ApiOperation, ApiResponse } from "@nestjs/swagger";
 import { PrismaService } from "../prisma/prisma.service";
+import { Public } from "../shared/decorators/public.decorator";
 
 @ApiTags("health")
+@Public()
 @Controller("health")
 export class HealthController {
   constructor(
@@ -45,13 +47,24 @@ export class HealthController {
           await new Promise<void>((resolve, reject) => {
             const socket = net.createConnection({ host, port });
             socket.setTimeout(2000);
-            socket.on("connect", () => { socket.destroy(); resolve(); });
-            socket.on("error", (err) => { socket.destroy(); reject(err); });
-            socket.on("timeout", () => { socket.destroy(); reject(new Error("timeout")); });
+            socket.on("connect", () => {
+              socket.destroy();
+              resolve();
+            });
+            socket.on("error", (err) => {
+              socket.destroy();
+              reject(err);
+            });
+            socket.on("timeout", () => {
+              socket.destroy();
+              reject(new Error("timeout"));
+            });
           });
           return { redis: { status: "up" as const } };
         } catch {
-          return { redis: { status: "down" as const, message: "Connection failed" } };
+          return {
+            redis: { status: "down" as const, message: "Connection failed" },
+          };
         }
       },
       async (): Promise<HealthIndicatorResult> => {
@@ -67,13 +80,24 @@ export class HealthController {
           await new Promise<void>((resolve, reject) => {
             const socket = net.createConnection({ host, port });
             socket.setTimeout(2000);
-            socket.on("connect", () => { socket.destroy(); resolve(); });
-            socket.on("error", (err) => { socket.destroy(); reject(err); });
-            socket.on("timeout", () => { socket.destroy(); reject(new Error("timeout")); });
+            socket.on("connect", () => {
+              socket.destroy();
+              resolve();
+            });
+            socket.on("error", (err) => {
+              socket.destroy();
+              reject(err);
+            });
+            socket.on("timeout", () => {
+              socket.destroy();
+              reject(new Error("timeout"));
+            });
           });
           return { s3: { status: "up" as const } };
         } catch {
-          return { s3: { status: "down" as const, message: "Connection failed" } };
+          return {
+            s3: { status: "down" as const, message: "Connection failed" },
+          };
         }
       },
     ]);

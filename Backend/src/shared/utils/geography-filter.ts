@@ -1,8 +1,11 @@
 export interface GeographicScope {
+  denyAll?: boolean;
   stateIds: string[];
   cityIds: string[];
   localityIds: string[];
 }
+
+const NO_MATCH_ID = "00000000-0000-0000-0000-000000000000";
 
 /**
  * Build a Prisma WHERE clause that restricts results to the user's geographic scope.
@@ -21,6 +24,10 @@ export function buildGeographyWhere(
   columnPrefix = "",
 ): Record<string, any> {
   if (!scope) return {};
+
+  if (scope.denyAll) {
+    return { id: NO_MATCH_ID };
+  }
 
   const hasStateScope = scope.stateIds.length > 0;
   const hasCityScope = scope.cityIds.length > 0;
@@ -65,6 +72,10 @@ export function buildLinkedGeographyWhere(
 ): Record<string, any> {
   if (!scope) return {};
 
+  if (scope.denyAll) {
+    return { building: { id: NO_MATCH_ID } };
+  }
+
   const hasStateScope = scope.stateIds.length > 0;
   const hasCityScope = scope.cityIds.length > 0;
   const hasLocalityScope = scope.localityIds.length > 0;
@@ -101,6 +112,10 @@ export function buildProposalGeographyWhere(
   scope: GeographicScope | undefined,
 ): Record<string, any> {
   if (!scope) return {};
+
+  if (scope.denyAll) {
+    return { units: { some: { building: { id: NO_MATCH_ID } } } };
+  }
 
   const hasStateScope = scope.stateIds.length > 0;
   const hasCityScope = scope.cityIds.length > 0;

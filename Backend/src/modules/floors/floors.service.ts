@@ -5,6 +5,8 @@ import {
   diffFields,
 } from "../change-requests/change-request.helper";
 import { EntityType } from "@prisma/client";
+import { GeographicScope } from "../../shared/utils/geography-filter";
+import { verifyEntityGeography } from "../../shared/utils/verify-entity-geography";
 
 const EDITABLE_FIELDS = [
   "floorName",
@@ -19,7 +21,16 @@ const EDITABLE_FIELDS = [
 export class FloorsService {
   constructor(private prisma: PrismaService) {}
 
-  async findByBuilding(buildingId: string) {
+  async findByBuilding(buildingId: string, geographicScope?: GeographicScope) {
+    if (geographicScope) {
+      const building = await this.prisma.building.findUnique({
+        where: { id: buildingId },
+        select: { id: true, stateId: true, cityId: true, localityId: true },
+      });
+      if (building) {
+        await verifyEntityGeography(this.prisma, geographicScope, building, "Floor (building filter)");
+      }
+    }
     return this.prisma.floor.findMany({
       where: { buildingId, deletedAt: null },
       orderBy: { floorNumber: "asc" },
@@ -33,8 +44,8 @@ export class FloorsService {
     });
   }
 
-  async findOne(id: string) {
-    return this.prisma.floor.findUnique({
+  async findOne(id: string, geographicScope?: GeographicScope) {
+    const floor = await this.prisma.floor.findUnique({
       where: { id },
       include: {
         building: true,
@@ -45,6 +56,12 @@ export class FloorsService {
         },
       },
     });
+    if (!floor) throw new NotFoundException("Floor not found");
+    // Floors are scoped through their building
+    if (geographicScope && floor.building) {
+      await verifyEntityGeography(this.prisma, geographicScope, floor.building, "Floor");
+    }
+    return floor;
   }
 
   async create(buildingId: string, data: any, userId: string) {

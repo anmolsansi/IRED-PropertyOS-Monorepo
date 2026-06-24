@@ -29,7 +29,6 @@ import {
   Film,
   Download,
   Trash2,
-  X,
   ChevronLeft,
   ChevronRight,
   Calendar,
@@ -191,6 +190,7 @@ export function MediaGallery({
                           alt={item.caption || item.fileName}
                           width={200}
                           height={200}
+                          unoptimized
                           className="w-full h-full object-cover"
                         />
                       ) : (
@@ -268,6 +268,7 @@ export function MediaGallery({
                     alt={previewItem.caption || previewItem.fileName}
                     width={800}
                     height={600}
+                    unoptimized
                     className="max-h-[60vh] object-contain"
                   />
                 ) : isPDF(previewItem) && previewItem.fileUrl ? (

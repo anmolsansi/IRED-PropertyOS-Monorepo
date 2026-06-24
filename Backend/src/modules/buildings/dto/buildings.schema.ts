@@ -7,8 +7,10 @@ export const CreateBuildingSchema = z.object({
   propertyTypeId: uuid.optional(),
   stateId: uuid.optional(),
   cityId: uuid.optional(),
+  cityName: z.string().trim().min(1).max(120).optional(),
   zoneId: uuid.optional(),
   localityId: uuid.optional(),
+  localityName: z.string().trim().min(1).max(160).optional(),
   microMarketId: uuid.optional(),
   fullAddress: z.string().optional(),
   landmark: z.string().optional(),
@@ -30,6 +32,8 @@ export const CreateBuildingSchema = z.object({
   roadWidth: z.number().positive().optional(),
   frontage: z.number().positive().optional(),
   nearbyTransportDetails: z.any().optional(),
+  commercialTerms: z.any().optional(),
+  additionalFields: z.any().optional(),
   notes: z.string().optional(),
 });
 

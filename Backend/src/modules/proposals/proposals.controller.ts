@@ -68,6 +68,7 @@ export class ProposalsController {
   }
 
   @Get(":id")
+  @GeographyScope()
   @ApiOperation({ summary: "Get proposal by ID" })
   @ApiResponse({
     status: 200,
@@ -90,8 +91,11 @@ export class ProposalsController {
       },
     },
   })
-  async findOne(@Param("id") id: string) {
-    return this.proposalsService.findOne(id);
+  async findOne(
+    @Param("id") id: string,
+    @CurrentUser("geographicScope") scope: any,
+  ) {
+    return this.proposalsService.findOne(id, scope);
   }
 
   @Post()

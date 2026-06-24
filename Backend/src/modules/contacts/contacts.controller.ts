@@ -6,6 +6,7 @@ import {
   Delete,
   Param,
   Body,
+  Query,
   UseGuards,
   UsePipes,
 } from "@nestjs/common";
@@ -18,6 +19,7 @@ import {
 import { ContactsService } from "./contacts.service";
 import { JwtAuthGuard } from "../../shared/guards/jwt-auth.guard";
 import { Roles, Role } from "../../shared/decorators/roles.decorator";
+import { GeographyScope } from "../../shared/decorators/geography-scope.decorator";
 import { CurrentUser } from "../../shared/decorators/current-user.decorator";
 import { ZodValidationPipe } from "../../shared/pipes/zod-validation.pipe";
 import {
@@ -34,7 +36,19 @@ import {
 export class ContactsController {
   constructor(private readonly contactsService: ContactsService) {}
 
+  @Get()
+  @GeographyScope()
+  @ApiOperation({ summary: "List contacts" })
+  @ApiResponse({ status: 200, description: "Paginated list of contacts" })
+  async findAll(
+    @Query() query: { page?: number; limit?: number; contactRoleId?: string },
+    @CurrentUser("geographicScope") scope: any,
+  ) {
+    return this.contactsService.findAll(query, scope);
+  }
+
   @Get(":id")
+  @GeographyScope()
   @ApiOperation({ summary: "Get contact by ID" })
   @ApiResponse({
     status: 200,
@@ -50,8 +64,11 @@ export class ContactsController {
     },
   })
   @ApiResponse({ status: 404, description: "Contact not found" })
-  async findOne(@Param("id") id: string) {
-    return this.contactsService.findOne(id);
+  async findOne(
+    @Param("id") id: string,
+    @CurrentUser("geographicScope") scope: any,
+  ) {
+    return this.contactsService.findOne(id, scope);
   }
 
   @Post()

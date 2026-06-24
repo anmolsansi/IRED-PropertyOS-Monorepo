@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  CanActivate,
-  ExecutionContext,
-  ForbiddenException,
-} from "@nestjs/common";
+import { Injectable, CanActivate, ExecutionContext } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import { PrismaService } from "../../prisma/prisma.service";
 import { Role } from "../decorators/roles.decorator";
@@ -45,13 +40,8 @@ export class GeographyGuard implements CanActivate {
       },
     });
 
-    if (assignments.length === 0) {
-      throw new ForbiddenException(
-        "No geographic assignments found. Contact admin.",
-      );
-    }
-
     const geographicScope = {
+      denyAll: assignments.length === 0,
       stateIds: assignments
         .filter((a) => a.assignmentType === "state")
         .map((a) => a.stateId)

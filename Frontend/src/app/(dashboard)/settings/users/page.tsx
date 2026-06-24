@@ -52,7 +52,6 @@ import {
   useAdminResetPassword,
 } from "@/hooks/use-users";
 import { useStates, useCities, useLocalities } from "@/hooks/use-reference";
-import { useQueryClient } from "@tanstack/react-query";
 import {
   Plus,
   Trash2,
@@ -81,7 +80,6 @@ export default function AdminUsersPage() {
   });
   const { data, isLoading } = useUsers(filters);
   const users = data?.data || [];
-  const queryClient = useQueryClient();
   const inviteUser = useInviteUser();
   const updateUser = useUpdateUser();
   const deleteUser = useDeleteUser();
@@ -361,7 +359,7 @@ export default function AdminUsersPage() {
             <DialogHeader>
               <DialogTitle>Invite User</DialogTitle>
               <DialogDescription>
-                Send an invitation. A temporary password will be generated and sent via email.
+                Create a user. A temporary password will be generated for you to share securely.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">

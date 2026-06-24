@@ -71,9 +71,13 @@ export class SiteVisitsController {
   }
 
   @Get(":id")
+  @GeographyScope()
   @ApiOperation({ summary: "Get site visit by ID" })
-  async findOne(@Param("id") id: string) {
-    return this.siteVisitsService.findOne(id);
+  async findOne(
+    @Param("id") id: string,
+    @CurrentUser("geographicScope") scope: any,
+  ) {
+    return this.siteVisitsService.findOne(id, scope);
   }
 
   @Post()

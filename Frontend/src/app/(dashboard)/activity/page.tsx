@@ -23,11 +23,16 @@ function parseAction(eventType: string): string {
   }
 }
 
-function formatEntityName(entityType: string, metadataJson: any): string {
-  if (metadataJson?.name) return metadataJson.name;
-  if (metadataJson?.fullName) return metadataJson.fullName;
-  if (metadataJson?.title) return metadataJson.title;
-  return entityType.charAt(0).toUpperCase() + entityType.slice(1).replace(/_/g, " ");
+function formatEntityName(
+  entityType: string,
+  metadataJson?: Record<string, unknown> | null,
+): string {
+  if (typeof metadataJson?.name === "string") return metadataJson.name;
+  if (typeof metadataJson?.fullName === "string") return metadataJson.fullName;
+  if (typeof metadataJson?.title === "string") return metadataJson.title;
+  return (
+    entityType.charAt(0).toUpperCase() + entityType.slice(1).replace(/_/g, " ")
+  );
 }
 
 const ACTION_CONFIG: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
@@ -53,7 +58,7 @@ function formatTimestamp(iso: string) {
 
 export default function ActivityPage() {
   const { data, isLoading } = useAuditEvents();
-  const events = data?.data ?? [];
+  const events = Array.isArray(data?.data) ? data.data : [];
 
   return (
     <div className="space-y-6">
@@ -91,7 +96,9 @@ export default function ActivityPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm">
-                        <span className="font-medium">{event.actor.fullName}</span>
+                        <span className="font-medium">
+                          {event.actor?.fullName ?? event.actor?.email ?? "System"}
+                        </span>
                         <span className="text-muted-foreground"> {config.label} </span>
                         <span className="font-medium">{formatEntityName(event.entityType, event.metadataJson)}</span>
                       </p>

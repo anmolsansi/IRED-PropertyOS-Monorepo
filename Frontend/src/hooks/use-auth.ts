@@ -117,14 +117,19 @@ export function useResendOtp() {
 // --- Get Current User ---
 
 export function useCurrentUser() {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(() => {
+    if (typeof window === "undefined") return null;
 
-  useEffect(() => {
     const stored = localStorage.getItem("auth-user");
-    if (stored) {
-      setUser(JSON.parse(stored));
+    if (!stored) return null;
+
+    try {
+      return JSON.parse(stored) as AuthUser;
+    } catch {
+      localStorage.removeItem("auth-user");
+      return null;
     }
-  }, []);
+  });
 
   const fetchUser = useCallback(async () => {
     if (!getAccessToken()) return null;
@@ -137,9 +142,21 @@ export function useCurrentUser() {
       }
       return data;
     } catch {
+      clearTokens();
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("auth-user");
+      }
+      setUser(null);
       return null;
     }
   }, []);
+
+  useEffect(() => {
+    if (!user) {
+      const timeout = window.setTimeout(() => void fetchUser(), 0);
+      return () => window.clearTimeout(timeout);
+    }
+  }, [fetchUser, user]);
 
   const logout = useCallback(() => {
     clearTokens();
@@ -184,16 +201,16 @@ export function useResetPassword() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const resetPassword = useCallback(async (userId: string, otp: string, newPassword: string): Promise<boolean> => {
+  const resetPassword = useCallback(async (userId: string, otp: string, newPassword: string): Promise<{ success: boolean; error?: string }> => {
     setIsLoading(true);
     setError(null);
     try {
       await api.post("/auth/reset-password", { userId, otp, newPassword });
-      return true;
+      return { success: true };
     } catch (err) {
       const message = err instanceof Error ? err.message : "Password reset failed";
       setError(message);
-      return false;
+      return { success: false, error: message };
     } finally {
       setIsLoading(false);
     }

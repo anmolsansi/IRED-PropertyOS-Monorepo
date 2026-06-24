@@ -1,7 +1,6 @@
 import {
   Injectable,
   UnauthorizedException,
-  BadRequestException,
   NotFoundException,
   Logger,
 } from "@nestjs/common";
@@ -12,7 +11,7 @@ import * as argon2 from "argon2";
 import { PrismaService } from "../../prisma/prisma.service";
 import { OtpService } from "./otp.service";
 import { MailService } from "../email/mail.service";
-import { OtpPurpose, User } from "@prisma/client";
+import { User } from "@prisma/client";
 
 const TEST_LOGIN_DISABLED =
   process.env.NODE_ENV === "production" || process.env.APP_ENV === "production";
@@ -48,9 +47,9 @@ export class AuthService {
       throw new UnauthorizedException("Invalid email or password");
     }
 
-    const otp = await this.otpService.generate(user.id, "EMAIL_VERIFICATION");
+    const otp = await this.otpService.generate(user.id, "LOGIN_2FA");
 
-    await this.mailService.sendOtp(user.email, otp, "EMAIL_VERIFICATION");
+    await this.mailService.sendOtp(user.email, otp, "LOGIN_2FA");
 
     await this.prisma.user.update({
       where: { id: user.id },
@@ -147,7 +146,7 @@ export class AuthService {
       throw new UnauthorizedException("Account is not active");
     }
 
-    await this.otpService.verify(userId, "EMAIL_VERIFICATION", otp);
+    await this.otpService.verify(userId, "LOGIN_2FA", otp);
 
     if (!user.emailVerifiedAt) {
       await this.prisma.user.update({
@@ -190,9 +189,9 @@ export class AuthService {
       throw new NotFoundException("User not found");
     }
 
-    const otp = await this.otpService.generate(userId, "EMAIL_VERIFICATION");
+    const otp = await this.otpService.generate(userId, "LOGIN_2FA");
 
-    await this.mailService.sendOtp(user.email, otp, "EMAIL_VERIFICATION");
+    await this.mailService.sendOtp(user.email, otp, "LOGIN_2FA");
 
     return { message: "OTP resent to your email" };
   }
@@ -376,7 +375,10 @@ export class AuthService {
     };
   }
 
-  async updateMe(userId: string, data: { fullName?: string; mobileNumber?: string }) {
+  async updateMe(
+    userId: string,
+    data: { fullName?: string; mobileNumber?: string },
+  ) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
     });
@@ -389,7 +391,9 @@ export class AuthService {
       where: { id: userId },
       data: {
         ...(data.fullName !== undefined && { fullName: data.fullName }),
-        ...(data.mobileNumber !== undefined && { mobileNumber: data.mobileNumber }),
+        ...(data.mobileNumber !== undefined && {
+          mobileNumber: data.mobileNumber,
+        }),
       },
       select: {
         id: true,

@@ -19,6 +19,7 @@ import {
 import { UnitsService } from "./units.service";
 import { JwtAuthGuard } from "../../shared/guards/jwt-auth.guard";
 import { Roles, Role } from "../../shared/decorators/roles.decorator";
+import { GeographyScope } from "../../shared/decorators/geography-scope.decorator";
 import { CurrentUser } from "../../shared/decorators/current-user.decorator";
 import { ZodValidationPipe } from "../../shared/pipes/zod-validation.pipe";
 import {
@@ -38,6 +39,7 @@ export class UnitsController {
   constructor(private readonly unitsService: UnitsService) {}
 
   @Get()
+  @GeographyScope()
   @ApiOperation({ summary: "List units with filters" })
   @ApiResponse({
     status: 200,
@@ -59,16 +61,23 @@ export class UnitsController {
     },
   })
   @UsePipes(new ZodValidationPipe(UnitQuerySchema))
-  async findAll(@Query() query: UnitQueryDto) {
-    return this.unitsService.findAll(query);
+  async findAll(
+    @Query() query: UnitQueryDto,
+    @CurrentUser("geographicScope") scope: any,
+  ) {
+    return this.unitsService.findAll(query, scope);
   }
 
   @Get(":id")
+  @GeographyScope()
   @ApiOperation({ summary: "Get unit by ID" })
   @ApiResponse({ status: 200, description: "Unit details with relations" })
   @ApiResponse({ status: 404, description: "Unit not found" })
-  async findOne(@Param("id") id: string) {
-    return this.unitsService.findOne(id);
+  async findOne(
+    @Param("id") id: string,
+    @CurrentUser("geographicScope") scope: any,
+  ) {
+    return this.unitsService.findOne(id, scope);
   }
 
   @Post()

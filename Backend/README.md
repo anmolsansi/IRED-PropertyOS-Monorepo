@@ -143,7 +143,9 @@ See `.env.example` for all required configuration. Key variables:
 | `REDIS_HOST` | Redis host for BullMQ |
 | `JWT_ACCESS_SECRET` | Secret for access tokens |
 | `JWT_REFRESH_SECRET` | Secret for refresh tokens |
-| `SMTP_HOST` | SMTP server (falls back to console logging if not set) |
+| `RESEND_API_KEY` | Resend API key for transactional email delivery |
+| `RESEND_FROM_EMAIL` | Verified Resend sender, e.g. `IRED PropertyOS <otp@yourdomain.com>` |
+| `SMTP_HOST` | Optional SMTP fallback server (falls back to console logging if Resend and SMTP are not set) |
 | `S3_ENDPOINT` | S3/MinIO endpoint for file storage |
 
 ## Project Structure

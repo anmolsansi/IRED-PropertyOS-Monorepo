@@ -16,7 +16,11 @@ import { toast } from "sonner";
 import Link from "next/link";
 import { useResetPassword } from "@/hooks/use-auth";
 
+const PASSWORD_REQUIREMENTS =
+  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+
 function ResetPasswordContent() {
+  const [otp, setOtp] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isComplete, setIsComplete] = useState(false);
@@ -36,8 +40,15 @@ function ResetPasswordContent() {
 
     if (!userId) return;
 
-    if (password.length < 8) {
-      toast.error("Password must be at least 8 characters");
+    if (!/^\d{6}$/.test(otp)) {
+      toast.error("Enter the 6-digit reset code from your email.");
+      return;
+    }
+
+    if (!PASSWORD_REQUIREMENTS.test(password)) {
+      toast.error(
+        "Password must be at least 8 characters and include uppercase, lowercase, and a number.",
+      );
       return;
     }
 
@@ -46,8 +57,14 @@ function ResetPasswordContent() {
       return;
     }
 
-    const success = await resetPassword(userId, "", password);
-    if (!success) return;
+    const result = await resetPassword(userId, otp, password);
+    if (!result.success) {
+      toast.error(
+        result.error ||
+          "Password reset failed. Check the latest reset code and try again.",
+      );
+      return;
+    }
 
     setIsComplete(true);
     toast.success("Password reset successfully!");
@@ -86,10 +103,24 @@ function ResetPasswordContent() {
             </div>
           </div>
           <CardTitle className="text-2xl">Reset Password</CardTitle>
-          <CardDescription>Enter your new password below</CardDescription>
+          <CardDescription>
+            Enter the reset code from your email and choose a new password
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Reset Code</label>
+              <Input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="6-digit code"
+                value={otp}
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+                required
+              />
+            </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">New Password</label>
               <Input
@@ -99,6 +130,9 @@ function ResetPasswordContent() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
+              <p className="text-xs text-muted-foreground">
+                Include uppercase, lowercase, and a number.
+              </p>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Confirm Password</label>

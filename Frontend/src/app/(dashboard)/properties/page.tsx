@@ -52,10 +52,14 @@ import {
   MAJOR_CITIES,
 } from "@/lib/constants";
 import { useProperties } from "@/hooks/use-properties";
+import { useDeleteProperty } from "@/hooks/use-properties";
 import type { FilterParams } from "@/types";
 import Link from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 export default function PropertiesPage() {
+  const queryClient = useQueryClient();
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [view, setView] = useState<"list" | "map">("list");
   const [filters, setFilters] = useState<FilterParams>({
@@ -64,6 +68,7 @@ export default function PropertiesPage() {
   });
 
   const { data, isLoading } = useProperties(filters);
+  const deleteProperty = useDeleteProperty();
   const properties = data?.data || [];
   const total = data?.total || 0;
   const totalPages = data?.totalPages || 1;
@@ -90,16 +95,61 @@ export default function PropertiesPage() {
   const hasActiveFilters =
     filters.state || filters.city || filters.locality || filters.propertyType || filters.furnishingStatus || filters.availabilityStatus;
 
+  const refreshProperties = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: ["properties"] });
+  }, [queryClient]);
+
+  const deleteProperties = useCallback(
+    async (ids: string[]) => {
+      if (ids.length === 0) {
+        toast.error("Select at least one property first.");
+        return;
+      }
+
+      try {
+        await Promise.all(ids.map((id) => deleteProperty.mutateAsync(id)));
+        setSelectedRows([]);
+        await refreshProperties();
+        toast.success(`${ids.length} propert${ids.length === 1 ? "y" : "ies"} deleted`);
+      } catch {
+        toast.error("Failed to delete selected properties");
+      }
+    },
+    [deleteProperty, refreshProperties],
+  );
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Properties"
         description="Search, filter and manage your property inventory across India."
       >
-        <Button variant="outline" size="sm">
-          <SlidersHorizontal className="h-4 w-4 mr-2" />
-          Bulk Actions
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button variant="outline" size="sm" />
+            }
+          >
+            <SlidersHorizontal className="h-4 w-4 mr-2" />
+            Bulk Actions
+            {selectedRows.length > 0 ? ` (${selectedRows.length})` : ""}
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuItem onClick={() => setSelectedRows(properties.map((p) => p.id))}>
+              Select visible
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setSelectedRows([])}>
+              Clear selection
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              variant="destructive"
+              onClick={() => deleteProperties(selectedRows)}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete selected
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <Button variant="outline" size="sm">
           <Download className="h-4 w-4 mr-2" />
           Export
@@ -529,7 +579,10 @@ export default function PropertiesPage() {
                                     Edit
                                   </Link>
                                 </DropdownMenuItem>
-                                <DropdownMenuItem className="text-destructive">
+                                <DropdownMenuItem
+                                  variant="destructive"
+                                  onClick={() => deleteProperties([property.id])}
+                                >
                                   <Trash2 className="h-4 w-4 mr-2" />
                                   Delete
                                 </DropdownMenuItem>

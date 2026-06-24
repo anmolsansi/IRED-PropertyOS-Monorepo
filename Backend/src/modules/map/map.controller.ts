@@ -16,6 +16,8 @@ import {
 } from "@nestjs/swagger";
 import { MapService } from "./map.service";
 import { JwtAuthGuard } from "../../shared/guards/jwt-auth.guard";
+import { GeographyScope } from "../../shared/decorators/geography-scope.decorator";
+import { CurrentUser } from "../../shared/decorators/current-user.decorator";
 import { ZodValidationPipe } from "../../shared/pipes/zod-validation.pipe";
 import {
   BoundsQuerySchema,
@@ -32,6 +34,7 @@ export class MapController {
   constructor(private readonly mapService: MapService) {}
 
   @Get("properties")
+  @GeographyScope()
   @ApiOperation({ summary: "Get properties within map bounds" })
   @ApiResponse({
     status: 200,
@@ -52,11 +55,15 @@ export class MapController {
     },
   })
   @UsePipes(new ZodValidationPipe(BoundsQuerySchema))
-  async findByBounds(@Query() query: BoundsQueryDto) {
-    return this.mapService.findByBounds(query);
+  async findByBounds(
+    @Query() query: BoundsQueryDto,
+    @CurrentUser("geographicScope") scope: any,
+  ) {
+    return this.mapService.findByBounds(query, scope);
   }
 
   @Get("properties/nearby")
+  @GeographyScope()
   @ApiOperation({ summary: "Get nearby properties" })
   @ApiResponse({
     status: 200,
@@ -76,7 +83,10 @@ export class MapController {
     },
   })
   @UsePipes(new ZodValidationPipe(NearbyQuerySchema))
-  async findNearby(@Query() query: NearbyQueryDto) {
-    return this.mapService.findNearby(query.lat, query.lng, query.radius);
+  async findNearby(
+    @Query() query: NearbyQueryDto,
+    @CurrentUser("geographicScope") scope: any,
+  ) {
+    return this.mapService.findNearby(query.lat, query.lng, query.radius, scope);
   }
 }

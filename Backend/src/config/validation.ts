@@ -28,6 +28,9 @@ const envSchema = z.object({
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().email().optional(),
 
+  RESEND_API_KEY: z.string().optional(),
+  RESEND_FROM_EMAIL: z.string().optional(),
+
   S3_ENDPOINT: z.string().url().optional(),
   S3_BUCKET: z.string().default("propertyos-media"),
   S3_ACCESS_KEY: z.string().optional(),

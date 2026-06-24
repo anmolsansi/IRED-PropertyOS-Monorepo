@@ -5,15 +5,22 @@ import {
   diffFields,
 } from "../change-requests/change-request.helper";
 import { EntityType } from "@prisma/client";
-import { buildGeographyWhere, GeographicScope } from "../../shared/utils/geography-filter";
+import { randomUUID } from "node:crypto";
+import {
+  buildGeographyWhere,
+  GeographicScope,
+} from "../../shared/utils/geography-filter";
+import { verifyEntityGeography } from "../../shared/utils/verify-entity-geography";
 
 const EDITABLE_FIELDS = [
   "name",
   "propertyTypeId",
   "stateId",
   "cityId",
+  "cityName",
   "zoneId",
   "localityId",
+  "localityName",
   "microMarketId",
   "fullAddress",
   "landmark",
@@ -34,6 +41,8 @@ const EDITABLE_FIELDS = [
   "roadWidth",
   "frontage",
   "nearbyTransportDetails",
+  "commercialTerms",
+  "additionalFields",
   "notes",
 ];
 
@@ -74,6 +83,8 @@ export class BuildingsService {
           { name: { contains: search, mode: "insensitive" as const } },
           { buildingCode: { contains: search, mode: "insensitive" as const } },
           { fullAddress: { contains: search, mode: "insensitive" as const } },
+          { cityName: { contains: search, mode: "insensitive" as const } },
+          { localityName: { contains: search, mode: "insensitive" as const } },
         ],
       }),
     };
@@ -107,8 +118,8 @@ export class BuildingsService {
     };
   }
 
-  async findOne(id: string) {
-    return this.prisma.building.findUnique({
+  async findOne(id: string, geographicScope?: GeographicScope) {
+    const building = await this.prisma.building.findUnique({
       where: { id },
       include: {
         state: true,
@@ -129,16 +140,41 @@ export class BuildingsService {
         },
       },
     });
+    if (!building) throw new NotFoundException("Building not found");
+    await verifyEntityGeography(
+      this.prisma,
+      geographicScope,
+      building,
+      "Building",
+    );
+    return building;
   }
 
   async create(data: any, userId: string) {
+    const buildingCode =
+      data.buildingCode || (await this.generateBuildingCode());
+
     return this.prisma.building.create({
       data: {
         ...data,
+        buildingCode,
         createdBy: userId,
         updatedBy: userId,
       },
     });
+  }
+
+  private async generateBuildingCode() {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const code = `BLD-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${randomUUID().slice(0, 8).toUpperCase()}`;
+      const existing = await this.prisma.building.findUnique({
+        where: { buildingCode: code },
+        select: { id: true },
+      });
+      if (!existing) return code;
+    }
+
+    return `BLD-${randomUUID().replace(/-/g, "").slice(0, 16).toUpperCase()}`;
   }
 
   async update(id: string, data: any, userId: string, isAdmin: boolean) {

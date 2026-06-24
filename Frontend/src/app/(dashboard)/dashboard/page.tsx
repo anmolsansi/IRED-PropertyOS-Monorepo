@@ -386,12 +386,21 @@ function WorkerDashboard() {
 }
 
 export default function DashboardPage() {
-  const { session } = useAuthSession();
+  const { session, status } = useAuthSession();
   const role = session?.user?.role;
 
-  if (role === "WORKER") {
-    return <WorkerDashboard />;
+  if (status === "loading") {
+    return (
+      <div className="space-y-6">
+        <LoadingSkeleton type="cards" count={4} />
+        <LoadingSkeleton type="cards" count={4} />
+      </div>
+    );
   }
 
-  return <AdminDashboard />;
+  if (role === "ADMIN") {
+    return <AdminDashboard />;
+  }
+
+  return <WorkerDashboard />;
 }

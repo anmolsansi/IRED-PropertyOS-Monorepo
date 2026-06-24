@@ -1,9 +1,10 @@
-import { Injectable, NotFoundException, Logger } from "@nestjs/common";
+import { Injectable, NotFoundException, ForbiddenException, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PrismaService } from "../../prisma/prisma.service";
 import { ProposalStatus } from "@prisma/client";
 import PDFDocument from "pdfkit";
 import { buildProposalGeographyWhere, GeographicScope } from "../../shared/utils/geography-filter";
+import { verifyEntityGeography } from "../../shared/utils/verify-entity-geography";
 
 @Injectable()
 export class ProposalsService {
@@ -87,7 +88,7 @@ export class ProposalsService {
     };
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, geographicScope?: GeographicScope) {
     const proposal = await this.prisma.proposal.findUnique({
       where: { id },
       include: {
@@ -96,6 +97,32 @@ export class ProposalsService {
       },
     });
     if (!proposal) throw new NotFoundException("Proposal not found");
+    // Proposals are scoped through their units' buildings
+    if (geographicScope) {
+      const unitIds = (proposal.unitIds as string[]) || [];
+      if (unitIds.length > 0) {
+        const units = await this.prisma.unit.findMany({
+          where: { id: { in: unitIds } },
+          select: { buildingId: true },
+        });
+        const buildingIds = [...new Set(units.map((u) => u.buildingId).filter(Boolean))];
+        if (buildingIds.length > 0) {
+          const buildings = await this.prisma.building.findMany({
+            where: { id: { in: buildingIds as string[] } },
+            select: { id: true, stateId: true, cityId: true, localityId: true },
+          });
+          for (const b of buildings) {
+            try {
+              await verifyEntityGeography(this.prisma, geographicScope, b, "Proposal");
+              return proposal;
+            } catch {
+              continue;
+            }
+          }
+          throw new ForbiddenException("Proposal not found in your assigned geography");
+        }
+      }
+    }
     return proposal;
   }
 

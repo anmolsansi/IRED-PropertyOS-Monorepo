@@ -2,14 +2,20 @@ import { Injectable, NotFoundException, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import {
   S3Client,
+  CreateBucketCommand,
+  HeadBucketCommand,
   PutObjectCommand,
   GetObjectCommand,
-  DeleteObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID } from "node:crypto";
 import { PrismaService } from "../../prisma/prisma.service";
 import { FileType, UploadStatus } from "@prisma/client";
+import {
+  GeographicScope,
+  buildLinkedGeographyWhere,
+} from "../../shared/utils/geography-filter";
+import { verifyEntityGeography } from "../../shared/utils/verify-entity-geography";
 
 @Injectable()
 export class MediaService {
@@ -17,6 +23,7 @@ export class MediaService {
   private readonly s3: S3Client;
   private readonly bucket: string;
   private readonly publicUrl: string;
+  private bucketReady?: Promise<void>;
 
   constructor(
     private prisma: PrismaService,
@@ -37,11 +44,16 @@ export class MediaService {
     });
   }
 
-  async findAll(query?: { page?: number; limit?: number; fileType?: string }) {
+  async findAll(
+    query?: { page?: number; limit?: number; fileType?: string },
+    geographicScope?: GeographicScope,
+  ) {
     const { page = 1, limit = 20, fileType } = query || {};
     const skip = (page - 1) * limit;
 
-    const where: any = { deletedAt: null };
+    const geoWhere = buildLinkedGeographyWhere(geographicScope);
+
+    const where: any = { deletedAt: null, ...geoWhere };
     if (fileType) where.fileType = fileType;
 
     const [data, total] = await Promise.all([
@@ -61,7 +73,7 @@ export class MediaService {
     ]);
 
     return {
-      data,
+      data: data.map((media) => this.withPublicUrl(media)),
       meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
     };
   }
@@ -75,6 +87,8 @@ export class MediaService {
     unitId?: string;
     documentCategoryId?: string;
   }) {
+    await this.ensureBucket();
+
     const ext = params.fileName.split(".").pop() || "";
     const storageKey = `${params.fileType}/${randomUUID()}.${ext}`;
 
@@ -106,10 +120,31 @@ export class MediaService {
 
     return {
       mediaId: media.id,
+      uploadUrl: presignedUrl,
       presignedUrl,
       storageKey,
-      publicUrl: `${this.publicUrl}/${storageKey}`,
+      publicUrl: this.buildPublicUrl(storageKey),
     };
+  }
+
+  private async ensureBucket() {
+    this.bucketReady ??= (async () => {
+      try {
+        await this.s3.send(new HeadBucketCommand({ Bucket: this.bucket }));
+      } catch {
+        this.logger.warn(
+          `Media bucket "${this.bucket}" not found; creating it now.`,
+        );
+        try {
+          await this.s3.send(new CreateBucketCommand({ Bucket: this.bucket }));
+        } catch (error) {
+          this.bucketReady = undefined;
+          throw error;
+        }
+      }
+    })();
+
+    return this.bucketReady;
   }
 
   async completeUpload(id: string, fileSizeBytes?: number) {
@@ -144,7 +179,7 @@ export class MediaService {
     return { url: presignedUrl, fileName: media.originalFileName };
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, geographicScope?: GeographicScope) {
     const media = await this.prisma.media.findUnique({
       where: { id },
       include: {
@@ -155,28 +190,111 @@ export class MediaService {
       },
     });
     if (!media) throw new NotFoundException("Media not found");
-    return media;
+    // Media is scoped through its building
+    if (geographicScope && media.building) {
+      await verifyEntityGeography(
+        this.prisma,
+        geographicScope,
+        media.building,
+        "Media",
+      );
+    }
+    return this.withPublicUrl(media);
   }
 
-  async findByBuilding(buildingId: string) {
-    return this.prisma.media.findMany({
+  async findByBuilding(buildingId: string, geographicScope?: GeographicScope) {
+    if (geographicScope) {
+      const building = await this.prisma.building.findUnique({
+        where: { id: buildingId },
+        select: { id: true, stateId: true, cityId: true, localityId: true },
+      });
+      if (building) {
+        await verifyEntityGeography(
+          this.prisma,
+          geographicScope,
+          building,
+          "Media (building filter)",
+        );
+      }
+    }
+    const media = await this.prisma.media.findMany({
       where: { buildingId, deletedAt: null },
       orderBy: { uploadedAt: "desc" },
     });
+    return media.map((item) => this.withPublicUrl(item));
   }
 
-  async findByFloor(floorId: string) {
-    return this.prisma.media.findMany({
+  async findByFloor(floorId: string, geographicScope?: GeographicScope) {
+    if (geographicScope) {
+      const floor = await this.prisma.floor.findUnique({
+        where: { id: floorId },
+        select: { id: true, buildingId: true },
+      });
+      if (floor) {
+        const building = await this.prisma.building.findUnique({
+          where: { id: floor.buildingId },
+          select: { id: true, stateId: true, cityId: true, localityId: true },
+        });
+        if (building) {
+          await verifyEntityGeography(
+            this.prisma,
+            geographicScope,
+            building,
+            "Media (floor filter)",
+          );
+        }
+      }
+    }
+    const media = await this.prisma.media.findMany({
       where: { floorId, deletedAt: null },
       orderBy: { uploadedAt: "desc" },
     });
+    return media.map((item) => this.withPublicUrl(item));
   }
 
-  async findByUnit(unitId: string) {
-    return this.prisma.media.findMany({
+  async findByUnit(unitId: string, geographicScope?: GeographicScope) {
+    if (geographicScope) {
+      const unit = await this.prisma.unit.findUnique({
+        where: { id: unitId },
+        select: { id: true, buildingId: true },
+      });
+      if (unit) {
+        const building = await this.prisma.building.findUnique({
+          where: { id: unit.buildingId },
+          select: { id: true, stateId: true, cityId: true, localityId: true },
+        });
+        if (building) {
+          await verifyEntityGeography(
+            this.prisma,
+            geographicScope,
+            building,
+            "Media (unit filter)",
+          );
+        }
+      }
+    }
+    const media = await this.prisma.media.findMany({
       where: { unitId, deletedAt: null },
       orderBy: { uploadedAt: "desc" },
     });
+    return media.map((item) => this.withPublicUrl(item));
+  }
+
+  private withPublicUrl<T extends { storageKey: string }>(media: T) {
+    return {
+      ...media,
+      publicUrl: this.buildPublicUrl(media.storageKey),
+    };
+  }
+
+  private buildPublicUrl(storageKey: string) {
+    const baseUrl = this.publicUrl.replace(/\/$/, "");
+    if (!baseUrl) return storageKey;
+
+    const bucketPath = `/${this.bucket}`;
+    return baseUrl.endsWith(bucketPath)
+      ? `${baseUrl}/${storageKey}`
+      : `${baseUrl}${bucketPath}/${storageKey}`;
   }
 
   async updateMetadata(

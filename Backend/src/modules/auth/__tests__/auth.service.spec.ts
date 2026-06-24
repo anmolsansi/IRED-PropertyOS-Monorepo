@@ -47,14 +47,12 @@ describe("AuthService", () => {
 
     jwtService = {
       signAsync: jest.fn().mockResolvedValue("mock-token"),
-      verify: jest
-        .fn()
-        .mockReturnValue({
-          sub: "user-1",
-          email: "test@test.com",
-          jti: "jti-1",
-          exp: 9999999999,
-        }),
+      verify: jest.fn().mockReturnValue({
+        sub: "user-1",
+        email: "test@test.com",
+        jti: "jti-1",
+        exp: 9999999999,
+      }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -131,11 +129,12 @@ describe("AuthService", () => {
       const result = await service.login("test@test.com", "correct-password");
       expect(result).toHaveProperty("userId", "user-1");
       expect(result).toHaveProperty("requiresOtp", true);
-      expect(otpService.generate).toHaveBeenCalledWith(
-        "user-1",
-        "EMAIL_VERIFICATION",
+      expect(otpService.generate).toHaveBeenCalledWith("user-1", "LOGIN_2FA");
+      expect(mailService.sendOtp).toHaveBeenCalledWith(
+        "test@test.com",
+        "123456",
+        "LOGIN_2FA",
       );
-      expect(mailService.sendOtp).toHaveBeenCalled();
     });
   });
 

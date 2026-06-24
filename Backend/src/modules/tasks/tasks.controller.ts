@@ -75,6 +75,7 @@ export class TasksController {
   }
 
   @Get(":id")
+  @GeographyScope()
   @ApiOperation({ summary: "Get task by ID" })
   @ApiResponse({
     status: 200,
@@ -99,8 +100,11 @@ export class TasksController {
       },
     },
   })
-  async findOne(@Param("id") id: string) {
-    return this.tasksService.findOne(id);
+  async findOne(
+    @Param("id") id: string,
+    @CurrentUser("geographicScope") scope: any,
+  ) {
+    return this.tasksService.findOne(id, scope);
   }
 
   @Post()

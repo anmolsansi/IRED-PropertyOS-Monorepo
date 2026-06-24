@@ -35,9 +35,26 @@ interface BackendMedia {
   mimeType: string;
   fileSizeBytes: number;
   storageKey: string;
+  publicUrl?: string;
   uploadStatus: string;
   uploadedBy?: string;
   createdAt: string;
+}
+
+const MEDIA_BASE_URL =
+  process.env.NEXT_PUBLIC_MEDIA_URL || "http://localhost:9000/propertyos-media";
+
+function buildMediaUrl(media: BackendMedia) {
+  if (media.publicUrl) return media.publicUrl;
+  if (!media.storageKey) return "";
+  if (/^https?:\/\//i.test(media.storageKey) || media.storageKey.startsWith("/")) {
+    return media.storageKey;
+  }
+
+  return `${MEDIA_BASE_URL.replace(/\/$/, "")}/${media.storageKey
+    .split("/")
+    .map(encodeURIComponent)
+    .join("/")}`;
 }
 
 function adaptBackendMedia(media: BackendMedia): MediaDocument {
@@ -52,7 +69,7 @@ function adaptBackendMedia(media: BackendMedia): MediaDocument {
     entityId: media.buildingId || "",
     entityType: "building",
     fileName: media.originalFileName,
-    fileUrl: media.storageKey,
+    fileUrl: buildMediaUrl(media),
     fileSize: Number(media.fileSizeBytes),
     mimeType: media.mimeType,
     category: categoryMap[media.fileType] || "other",
@@ -102,7 +119,15 @@ export function useUploadMedia() {
       entityId?: string;
       fileSizeBytes?: number;
     }) => {
-      return api.post<{ data: { uploadUrl: string; mediaId: string } }>("/media/upload-url", data);
+      return api.post<{
+        data: {
+          uploadUrl: string;
+          presignedUrl?: string;
+          mediaId: string;
+          publicUrl?: string;
+          storageKey?: string;
+        };
+      }>("/media/upload-url", data);
     },
   };
 }
@@ -116,7 +141,9 @@ export function useGetUploadUrl() {
       entityType: "building" | "floor" | "unit";
       entityId: string;
     }) => {
-      return api.post<{ data: { uploadUrl: string; mediaId: string } }>("/media/upload-url", data);
+      return api.post<{
+        data: { uploadUrl: string; presignedUrl?: string; mediaId: string };
+      }>("/media/upload-url", data);
     },
   });
 }
@@ -134,8 +161,8 @@ export function useCompleteUpload() {
       documentCategoryId?: string;
     }) => {
       const payload: Record<string, unknown> = {};
-      if (data.uploadId) payload.uploadId = data.uploadId;
-      if (data.mediaId) payload.uploadId = data.mediaId;
+      if (data.uploadId) payload.mediaId = data.uploadId;
+      if (data.mediaId) payload.mediaId = data.mediaId;
       if (data.storageUrl) payload.storageUrl = data.storageUrl;
       if (data.mimeType) payload.mimeType = data.mimeType;
       if (data.fileType) payload.fileType = data.fileType;

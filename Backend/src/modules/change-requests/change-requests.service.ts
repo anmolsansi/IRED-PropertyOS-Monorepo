@@ -12,6 +12,7 @@ import {
   EntityType,
   SnapshotSource,
 } from "@prisma/client";
+import { GeographicScope } from "../../shared/utils/geography-filter";
 
 @Injectable()
 export class ChangeRequestsService {
@@ -19,17 +20,25 @@ export class ChangeRequestsService {
 
   constructor(private prisma: PrismaService) {}
 
-  async findAll(query: {
-    page?: number;
-    limit?: number;
-    status?: string;
-    entityType?: string;
-    cityId?: string;
-  }) {
+  async findAll(
+    query: {
+      page?: number;
+      limit?: number;
+      status?: string;
+      entityType?: string;
+      cityId?: string;
+    },
+    geographicScope?: GeographicScope,
+  ) {
     const { page = 1, limit = 20, ...filters } = query;
     const skip = (page - 1) * limit;
 
+    const geoWhere = geographicScope
+      ? await this.buildChangeRequestGeographyWhere(geographicScope)
+      : {};
+
     const where = {
+      ...geoWhere,
       ...(filters.status && { status: filters.status as ChangeRequestStatus }),
       ...(filters.entityType && {
         entityType: filters.entityType as EntityType,
@@ -62,7 +71,7 @@ export class ChangeRequestsService {
     };
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, geographicScope?: GeographicScope) {
     const request = await this.prisma.changeRequest.findUnique({
       where: { id },
       include: {
@@ -75,6 +84,30 @@ export class ChangeRequestsService {
     });
 
     if (!request) throw new NotFoundException("Change request not found");
+
+    // Change requests are scoped through their entity's building
+    if (geographicScope && request.entityId) {
+      const masterData = await this.getMasterData(
+        request.entityType,
+        request.entityId,
+      );
+      if (masterData && masterData.buildingId) {
+        const { verifyEntityGeography } =
+          await import("../../shared/utils/verify-entity-geography");
+        const building = await this.prisma.building.findUnique({
+          where: { id: masterData.buildingId },
+          select: { id: true, stateId: true, cityId: true, localityId: true },
+        });
+        if (building) {
+          await verifyEntityGeography(
+            this.prisma,
+            geographicScope,
+            building,
+            "Change request",
+          );
+        }
+      }
+    }
 
     let masterData: any = null;
     if (request.entityId) {
@@ -408,6 +441,33 @@ export class ChangeRequestsService {
     });
 
     return updated;
+  }
+
+  private async buildChangeRequestGeographyWhere(scope: GeographicScope) {
+    if (scope.denyAll) {
+      return { entityId: "00000000-0000-0000-0000-000000000000" };
+    }
+
+    const hasScope =
+      scope.stateIds.length > 0 ||
+      scope.cityIds.length > 0 ||
+      scope.localityIds.length > 0;
+    if (!hasScope) return {};
+
+    const buildingFilter: any = {};
+    if (scope.stateIds.length > 0)
+      buildingFilter.stateId = { in: scope.stateIds };
+    if (scope.cityIds.length > 0) buildingFilter.cityId = { in: scope.cityIds };
+    if (scope.localityIds.length > 0)
+      buildingFilter.localityId = { in: scope.localityIds };
+
+    const buildings = await this.prisma.building.findMany({
+      where: buildingFilter,
+      select: { id: true },
+    });
+    const buildingIds = buildings.map((b) => b.id);
+
+    return { entityId: { in: buildingIds } };
   }
 
   private async getMasterData(entityType: string, entityId: string) {

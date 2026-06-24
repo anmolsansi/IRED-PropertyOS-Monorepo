@@ -73,6 +73,7 @@ export class BuildingsController {
   }
 
   @Get(":id")
+  @GeographyScope()
   @ApiOperation({ summary: "Get building by ID" })
   @ApiResponse({
     status: 200,
@@ -93,8 +94,11 @@ export class BuildingsController {
     },
   })
   @ApiResponse({ status: 404, description: "Building not found" })
-  async findOne(@Param("id") id: string) {
-    return this.buildingsService.findOne(id);
+  async findOne(
+    @Param("id") id: string,
+    @CurrentUser("geographicScope") scope: any,
+  ) {
+    return this.buildingsService.findOne(id, scope);
   }
 
   @Post()
