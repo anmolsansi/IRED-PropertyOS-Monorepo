@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,23 +13,104 @@ import { User, Bell, Shield, Save } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api/client";
 
+interface ProfileSettingsProps {
+  defaultEmail: string;
+  defaultFullName: string;
+  defaultPhone: string;
+  isSaving: boolean;
+  role?: string;
+  onSave: (profile: {
+    email: string;
+    fullName: string;
+    phone: string;
+  }) => Promise<void>;
+}
+
+function ProfileSettings({
+  defaultEmail,
+  defaultFullName,
+  defaultPhone,
+  isSaving,
+  role,
+  onSave,
+}: ProfileSettingsProps) {
+  const [fullName, setFullName] = useState(defaultFullName);
+  const [email, setEmail] = useState(defaultEmail);
+  const [phone, setPhone] = useState(defaultPhone);
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <User className="h-4 w-4" />
+          Profile
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="name">Full Name</Label>
+            <Input
+              id="name"
+              value={fullName}
+              onChange={(event) => setFullName(event.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="phone">Phone</Label>
+            <Input
+              id="phone"
+              value={phone}
+              onChange={(event) => setPhone(event.target.value)}
+              placeholder="e.g. +91 98765 43210"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="role">Role</Label>
+            <Input
+              id="role"
+              disabled
+              value={role === "ADMIN" ? "Administrator" : "Worker"}
+            />
+          </div>
+        </div>
+        <div className="flex justify-end">
+          <Button
+            size="sm"
+            onClick={() => onSave({ email, fullName, phone })}
+            disabled={isSaving}
+          >
+            <Save className="h-4 w-4 mr-2" />
+            {isSaving ? "Saving..." : "Save Changes"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function SettingsPage() {
   const { user, setUser } = useCurrentUser();
   const [isSaving, setIsSaving] = useState(false);
 
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-
-  useEffect(() => {
-    if (user) {
-      setFullName(user.fullName || "");
-      setEmail(user.email || "");
-      setPhone(user.mobileNumber || "");
-    }
-  }, [user]);
-
-  async function handleSaveProfile() {
+  async function handleSaveProfile({
+    email,
+    fullName,
+    phone,
+  }: {
+    email: string;
+    fullName: string;
+    phone: string;
+  }) {
     if (!fullName.trim()) {
       toast.error("Full name is required");
       return;
@@ -73,7 +154,6 @@ export default function SettingsPage() {
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Sidebar */}
         <div className="lg:col-span-1 space-y-4">
           <Card>
             <CardContent className="p-6">
@@ -82,7 +162,9 @@ export default function SettingsPage() {
                   <User className="h-8 w-8 text-primary" />
                 </div>
                 <div>
-                  <p className="font-semibold">{user?.fullName || "Admin User"}</p>
+                  <p className="font-semibold">
+                    {user?.fullName || "Admin User"}
+                  </p>
                   <p className="text-sm text-muted-foreground">
                     {user?.email || "admin@ired.com"}
                   </p>
@@ -95,63 +177,17 @@ export default function SettingsPage() {
           </Card>
         </div>
 
-        {/* Main Content */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Profile */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <User className="h-4 w-4" />
-                Profile
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Full Name</Label>
-                  <Input
-                    id="name"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Phone</Label>
-                  <Input
-                    id="phone"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="e.g. +91 98765 43210"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="role">Role</Label>
-                  <Input
-                    id="role"
-                    disabled
-                    value={user?.role === "ADMIN" ? "Administrator" : "Worker"}
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end">
-                <Button size="sm" onClick={handleSaveProfile} disabled={isSaving}>
-                  <Save className="h-4 w-4 mr-2" />
-                  {isSaving ? "Saving..." : "Save Changes"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          <ProfileSettings
+            key={user?.id ?? "anonymous"}
+            defaultEmail={user?.email ?? ""}
+            defaultFullName={user?.fullName ?? ""}
+            defaultPhone={user?.mobileNumber ?? ""}
+            isSaving={isSaving}
+            role={user?.role}
+            onSave={handleSaveProfile}
+          />
 
-          {/* Notifications */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
@@ -163,12 +199,14 @@ export default function SettingsPage() {
               {[
                 {
                   label: "New approval requests",
-                  description: "Get notified when a worker submits a change request",
+                  description:
+                    "Get notified when a worker submits a change request",
                   defaultChecked: true,
                 },
                 {
                   label: "Property updates",
-                  description: "Get notified when assigned properties are updated",
+                  description:
+                    "Get notified when assigned properties are updated",
                   defaultChecked: true,
                 },
                 {
@@ -177,10 +215,15 @@ export default function SettingsPage() {
                   defaultChecked: false,
                 },
               ].map((item) => (
-                <div key={item.label} className="flex items-start justify-between py-2">
+                <div
+                  key={item.label}
+                  className="flex items-start justify-between py-2"
+                >
                   <div>
                     <p className="text-sm font-medium">{item.label}</p>
-                    <p className="text-xs text-muted-foreground">{item.description}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {item.description}
+                    </p>
                   </div>
                   <input
                     type="checkbox"
@@ -192,7 +235,6 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          {/* Security */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">

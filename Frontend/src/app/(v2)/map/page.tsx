@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, type ReactNode } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import "leaflet/dist/leaflet.css";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,7 +15,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Building2,
   Maximize2,
   IndianRupee,
   Navigation,
@@ -49,29 +48,24 @@ const STATUS_LABELS: Record<string, string> = {
   "On Hold": "On Hold",
 };
 
-function ClientOnly({ children }: { children: ReactNode }) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  if (!mounted) return null;
-  return <>{children}</>;
-}
-
 function LeafletMap({
   properties,
-  selectedId,
   onSelect,
 }: {
   properties: MapProperty[];
-  selectedId: string | null;
   onSelect: (id: string) => void;
 }) {
   const [L, setL] = useState<typeof import("leaflet") | null>(null);
-  const [map, setMap] = useState<import("leaflet").Map | null>(null);
+  const mapRef = useRef<import("leaflet").Map | null>(null);
 
   useEffect(() => {
     import("leaflet").then((leaflet) => {
       setL(leaflet);
-      delete (leaflet.Icon.Default.prototype as any)._getIconUrl;
+      const defaultIconPrototype = leaflet.Icon.Default
+        .prototype as typeof leaflet.Icon.Default.prototype & {
+        _getIconUrl?: unknown;
+      };
+      delete defaultIconPrototype._getIconUrl;
       leaflet.Icon.Default.mergeOptions({
         iconRetinaUrl:
           "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
@@ -95,7 +89,7 @@ function LeafletMap({
   }, [properties]);
 
   useEffect(() => {
-    if (!L || map) return;
+    if (!L || mapRef.current) return;
     const m = L.map("property-map", { scrollWheelZoom: true }).setView(
       center,
       12,
@@ -107,20 +101,22 @@ function LeafletMap({
           '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       },
     ).addTo(m);
-    setMap(m);
+    mapRef.current = m;
     return () => {
       m.remove();
-      setMap(null);
+      mapRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [L]);
 
   useEffect(() => {
+    const map = mapRef.current;
     if (!L || !map) return;
     map.setView(center, map.getZoom());
-  }, [L, map, center]);
+  }, [L, center]);
 
   useEffect(() => {
+    const map = mapRef.current;
     if (!L || !map) return;
     map.eachLayer((layer) => {
       if (layer instanceof L.Marker) map.removeLayer(layer);
@@ -156,7 +152,7 @@ function LeafletMap({
         `<div style="font-size:13px"><b>${p.name}</b><br/>${p.locality?.name ?? ""}, ${p.city?.name ?? ""}</div>`,
       );
     });
-  }, [L, map, properties, onSelect]);
+  }, [L, properties, onSelect]);
 
   return (
     <div
@@ -246,15 +242,10 @@ export default function MapPage() {
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
               ) : (
-                <ClientOnly>
-                  <LeafletMap
-                    properties={filtered}
-                    selectedId={selectedId}
-                    onSelect={(id) =>
-                      setSelectedId(id === selectedId ? null : id)
-                    }
-                  />
-                </ClientOnly>
+                <LeafletMap
+                  properties={filtered}
+                  onSelect={(id) => setSelectedId(id === selectedId ? null : id)}
+                />
               )}
             </CardContent>
           </Card>

@@ -126,6 +126,7 @@ function PropertyForm({ property }: { property: Property }) {
   // Set UUIDs once reference data loads
   useEffect(() => {
     if (!refDataLoaded) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setFormData((prev) => ({
       ...prev,
       propertyTypeId: prev.propertyTypeId || propertyTypeId,

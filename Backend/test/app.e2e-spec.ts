@@ -7,7 +7,7 @@ import {
   teardownTestContainers,
   seedTestData,
 } from './setup';
-import { PrismaClient } from '../src/generated/prisma';
+import { PrismaClient } from '@prisma/client';
 
 describe('IRED PropertyOS API (e2e)', () => {
   let app: INestApplication;

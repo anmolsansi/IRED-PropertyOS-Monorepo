@@ -6,7 +6,7 @@ import {
   DealStatus,
   SiteVisitStatus,
   Priority,
-} from "../src/generated/prisma";
+} from "@prisma/client";
 import * as argon2 from "argon2";
 
 const prisma = new PrismaClient();

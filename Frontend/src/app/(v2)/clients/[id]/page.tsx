@@ -32,6 +32,19 @@ const STATUS_COLORS: Record<string, string> = {
   expired: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
 };
 
+interface ClientRequirementSummary {
+  id: string;
+  title?: string | null;
+  requirementType: string;
+  preferredCity?: string | null;
+  preferredLocality?: string | null;
+  minBudget?: number | null;
+  maxBudget?: number | null;
+  minArea?: number | null;
+  maxArea?: number | null;
+  status: string;
+}
+
 export default function ClientDetailPage({
   params,
 }: {
@@ -151,7 +164,7 @@ export default function ClientDetailPage({
         <CardContent>
           {client.requirements && client.requirements.length > 0 ? (
             <div className="space-y-3">
-              {client.requirements.map((req: any) => (
+              {client.requirements.map((req: ClientRequirementSummary) => (
                 <Link key={req.id} href={`/requirements/${req.id}`}>
                   <div className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer">
                     <div className="space-y-1">

@@ -1,5 +1,5 @@
 import { GenericContainer, StartedTestContainer, Wait } from 'testcontainers';
-import { PrismaClient } from '../src/generated/prisma';
+import { PrismaClient } from '@prisma/client';
 import * as argon2 from 'argon2';
 
 let postgres: StartedTestContainer;

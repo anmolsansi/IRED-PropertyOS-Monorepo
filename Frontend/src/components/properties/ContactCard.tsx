@@ -90,6 +90,133 @@ const defaultFormData: ContactFormData = {
   isPrimary: false,
 };
 
+interface ContactFormProps {
+  formData: ContactFormData;
+  isPending: boolean;
+  onCancel: () => void;
+  onFormDataChange: (updater: (current: ContactFormData) => ContactFormData) => void;
+  onSubmit: () => void;
+  submitLabel: string;
+}
+
+function ContactForm({
+  formData,
+  isPending,
+  onCancel,
+  onFormDataChange,
+  onSubmit,
+  submitLabel,
+}: ContactFormProps) {
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="contactType">Type</Label>
+        <Select
+          value={formData.contactType}
+          onValueChange={(value) =>
+            value &&
+            onFormDataChange((current) => ({ ...current, contactType: value }))
+          }
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {CONTACT_TYPES.map((type) => (
+              <SelectItem key={type.value} value={type.value}>
+                {type.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="contactName">Name *</Label>
+        <Input
+          id="contactName"
+          value={formData.name}
+          onChange={(event) =>
+            onFormDataChange((current) => ({
+              ...current,
+              name: event.target.value,
+            }))
+          }
+          placeholder="Contact name"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="contactPhone">Phone *</Label>
+        <Input
+          id="contactPhone"
+          value={formData.phone}
+          onChange={(event) =>
+            onFormDataChange((current) => ({
+              ...current,
+              phone: event.target.value,
+            }))
+          }
+          placeholder="Phone number"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="contactEmail">Email</Label>
+        <Input
+          id="contactEmail"
+          type="email"
+          value={formData.email}
+          onChange={(event) =>
+            onFormDataChange((current) => ({
+              ...current,
+              email: event.target.value,
+            }))
+          }
+          placeholder="Email address"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="contactDesignation">Designation</Label>
+        <Input
+          id="contactDesignation"
+          value={formData.designation}
+          onChange={(event) =>
+            onFormDataChange((current) => ({
+              ...current,
+              designation: event.target.value,
+            }))
+          }
+          placeholder="Job title or role"
+        />
+      </div>
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="contactPrimary"
+          checked={formData.isPrimary}
+          onChange={(event) =>
+            onFormDataChange((current) => ({
+              ...current,
+              isPrimary: event.target.checked,
+            }))
+          }
+          className="h-4 w-4"
+        />
+        <Label htmlFor="contactPrimary">Primary contact</Label>
+      </div>
+      <DialogFooter>
+        <Button variant="outline" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button
+          onClick={onSubmit}
+          disabled={!formData.name || !formData.phone || isPending}
+        >
+          {submitLabel}
+        </Button>
+      </DialogFooter>
+    </div>
+  );
+}
+
 interface ContactCardProps {
   contacts: Contact[];
   entityId?: string;
@@ -200,86 +327,7 @@ export function ContactCard({ contacts, entityId, entityType = "building", onCon
     setEditContact(contact);
   };
 
-  const ContactForm = ({ onSubmit, submitLabel }: { onSubmit: () => void; submitLabel: string }) => (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="contactType">Type</Label>
-        <Select
-          value={formData.contactType}
-          onValueChange={(value) => value && setFormData((f) => ({ ...f, contactType: value }))}
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {CONTACT_TYPES.map((t) => (
-              <SelectItem key={t.value} value={t.value}>
-                {t.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="contactName">Name *</Label>
-        <Input
-          id="contactName"
-          value={formData.name}
-          onChange={(e) => setFormData((f) => ({ ...f, name: e.target.value }))}
-          placeholder="Contact name"
-        />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="contactPhone">Phone *</Label>
-        <Input
-          id="contactPhone"
-          value={formData.phone}
-          onChange={(e) => setFormData((f) => ({ ...f, phone: e.target.value }))}
-          placeholder="Phone number"
-        />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="contactEmail">Email</Label>
-        <Input
-          id="contactEmail"
-          type="email"
-          value={formData.email}
-          onChange={(e) => setFormData((f) => ({ ...f, email: e.target.value }))}
-          placeholder="Email address"
-        />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="contactDesignation">Designation</Label>
-        <Input
-          id="contactDesignation"
-          value={formData.designation}
-          onChange={(e) => setFormData((f) => ({ ...f, designation: e.target.value }))}
-          placeholder="Job title or role"
-        />
-      </div>
-      <div className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          id="contactPrimary"
-          checked={formData.isPrimary}
-          onChange={(e) => setFormData((f) => ({ ...f, isPrimary: e.target.checked }))}
-          className="h-4 w-4"
-        />
-        <Label htmlFor="contactPrimary">Primary contact</Label>
-      </div>
-      <DialogFooter>
-        <Button variant="outline" onClick={resetForm}>
-          Cancel
-        </Button>
-        <Button
-          onClick={onSubmit}
-          disabled={!formData.name || !formData.phone || createContact.isPending || updateContact.isPending}
-        >
-          {submitLabel}
-        </Button>
-      </DialogFooter>
-    </div>
-  );
+  const formIsPending = createContact.isPending || updateContact.isPending;
 
   return (
     <Card>
@@ -304,7 +352,14 @@ export function ContactCard({ contacts, entityId, entityType = "building", onCon
                   Add a new contact for this property.
                 </DialogDescription>
               </DialogHeader>
-              <ContactForm onSubmit={handleCreate} submitLabel="Create" />
+              <ContactForm
+                formData={formData}
+                isPending={formIsPending}
+                onCancel={resetForm}
+                onFormDataChange={setFormData}
+                onSubmit={handleCreate}
+                submitLabel="Create"
+              />
             </DialogContent>
           </Dialog>
         </div>
@@ -390,7 +445,14 @@ export function ContactCard({ contacts, entityId, entityType = "building", onCon
                             Update contact details.
                           </DialogDescription>
                         </DialogHeader>
-                        <ContactForm onSubmit={handleEdit} submitLabel="Save" />
+                        <ContactForm
+                          formData={formData}
+                          isPending={formIsPending}
+                          onCancel={resetForm}
+                          onFormDataChange={setFormData}
+                          onSubmit={handleEdit}
+                          submitLabel="Save"
+                        />
                       </DialogContent>
                     </Dialog>
                     <AlertDialog>

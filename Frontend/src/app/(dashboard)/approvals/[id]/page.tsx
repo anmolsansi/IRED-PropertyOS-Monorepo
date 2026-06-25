@@ -63,6 +63,7 @@ export default function ApprovalDetailPage({
         initial[fc.id] = fc.status === "conflict" ? "pending" : "pending";
         edits[fc.id] = fc.workerValue;
       });
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFieldStatuses(initial);
       setFieldEdits(edits);
     }
