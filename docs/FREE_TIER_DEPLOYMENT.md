@@ -99,6 +99,34 @@ Use these settings:
 
 Set all env vars from `Backend/.env.render.example`.
 
+### Required runtime env vars
+
+If Render starts the container and exits with:
+
+```text
+Invalid environment variables:
+{
+  DATABASE_URL: [ 'Invalid url' ],
+  JWT_ACCESS_SECRET: [ 'Required' ],
+  JWT_REFRESH_SECRET: [ 'Required' ]
+}
+```
+
+the image built correctly, but the service is missing required runtime secrets.
+Add these in Render > Service > Environment:
+
+```env
+DATABASE_URL=postgresql://USER:PASSWORD@HOST.neon.tech/DB?sslmode=require&connect_timeout=15
+JWT_ACCESS_SECRET=<long-random-secret-at-least-16-chars>
+JWT_REFRESH_SECRET=<different-long-random-secret-at-least-16-chars>
+```
+
+Generate secrets locally with:
+
+```bash
+openssl rand -hex 32
+```
+
 ## 4. Deploy frontend on Vercel
 
 1. Import the same GitHub repo into Vercel.

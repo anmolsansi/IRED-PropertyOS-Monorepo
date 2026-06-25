@@ -43,7 +43,6 @@ COPY prisma ./prisma
 ENV NODE_ENV=production
 ENV PORT=10000
 ENV APP_PORT=10000
-ENV DATABASE_URL=""
 
 USER propertyos
 
