@@ -130,11 +130,11 @@ Run it once after the backend deploys and the database schema exists:
 
 ```bash
 cd Backend
-DATABASE_URL="postgresql://USER:PASSWORD@HOST.neon.tech/DB?sslmode=require&connect_timeout=15" \
-MASTER_ADMIN_EMAIL="admin@yourdomain.com" \
-MASTER_ADMIN_PASSWORD="change-this-password" \
 npm ci
 npx prisma generate
+export DATABASE_URL="postgresql://USER:PASSWORD@HOST.neon.tech/DB?sslmode=require&connect_timeout=15"
+export MASTER_ADMIN_EMAIL="admin@yourdomain.com"
+export MASTER_ADMIN_PASSWORD="change-this-password"
 npm run db:seed
 ```
 
