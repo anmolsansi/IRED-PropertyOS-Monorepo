@@ -1,7 +1,14 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { api, storeTokens, clearTokens, getAccessToken } from "@/lib/api/client";
+import { useClerk } from "@clerk/nextjs";
+import {
+  api,
+  storeTokens,
+  clearTokens,
+  getAccessToken,
+  hasClerkTokenGetter,
+} from "@/lib/api/client";
 
 // --- Types ---
 
@@ -117,6 +124,7 @@ export function useResendOtp() {
 // --- Get Current User ---
 
 export function useCurrentUser() {
+  const { signOut } = useClerk();
   const [user, setUser] = useState<AuthUser | null>(() => {
     if (typeof window === "undefined") return null;
 
@@ -132,7 +140,7 @@ export function useCurrentUser() {
   });
 
   const fetchUser = useCallback(async () => {
-    if (!getAccessToken()) return null;
+    if (!getAccessToken() && !hasClerkTokenGetter()) return null;
     try {
       const response = await api.get<{ data: AuthUser }>("/auth/me");
       const data = response.data ?? response as unknown as AuthUser;
@@ -158,14 +166,29 @@ export function useCurrentUser() {
     }
   }, [fetchUser, user]);
 
-  const logout = useCallback(() => {
+  useEffect(() => {
+    if (user) return;
+
+    const handleTokenSourceChange = () => {
+      void fetchUser();
+    };
+
+    window.addEventListener("auth-token-source-changed", handleTokenSourceChange);
+    return () =>
+      window.removeEventListener(
+        "auth-token-source-changed",
+        handleTokenSourceChange,
+      );
+  }, [fetchUser, user]);
+
+  const logout = useCallback(async () => {
     clearTokens();
     setUser(null);
     if (typeof window !== "undefined") {
       localStorage.removeItem("auth-user");
-      window.location.href = "/login";
+      await signOut({ redirectUrl: "/sign-in" });
     }
-  }, []);
+  }, [signOut]);
 
   return { user, fetchUser, logout, setUser };
 }

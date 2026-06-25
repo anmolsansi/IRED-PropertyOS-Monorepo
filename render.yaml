@@ -31,6 +31,12 @@ services:
         sync: false
       - key: DATABASE_URL
         sync: false
+      - key: AUTH_PROVIDER
+        value: clerk
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: CLERK_AUTHORIZED_PARTIES
+        sync: false
       - key: JWT_ACCESS_SECRET
         generateValue: true
       - key: JWT_REFRESH_SECRET

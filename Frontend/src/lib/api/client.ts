@@ -2,6 +2,21 @@ import type { FilterParams, PaginatedResponse } from "@/types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api/v1";
 
+type ClerkTokenGetter = () => Promise<string | null>;
+
+let clerkTokenGetter: ClerkTokenGetter | null = null;
+
+export function setClerkTokenGetter(getter: ClerkTokenGetter | null) {
+  clerkTokenGetter = getter;
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("auth-token-source-changed"));
+  }
+}
+
+export function hasClerkTokenGetter() {
+  return Boolean(clerkTokenGetter);
+}
+
 // --- Token Management ---
 
 let accessToken: string | null = null;
@@ -69,6 +84,10 @@ async function refreshAccessToken(): Promise<string | null> {
 }
 
 async function getValidAccessToken(): Promise<string | null> {
+  if (clerkTokenGetter) {
+    return clerkTokenGetter();
+  }
+
   return accessToken;
 }
 
@@ -229,7 +248,7 @@ export const api = {
 export function logout() {
   clearTokens();
   if (typeof window !== "undefined") {
-    window.location.href = "/login";
+    window.location.href = "/sign-in";
   }
 }
 
