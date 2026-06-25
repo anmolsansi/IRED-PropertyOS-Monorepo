@@ -43,13 +43,15 @@ COPY --from=build /app/src/generated ./dist/generated
 COPY prisma ./prisma
 
 ENV NODE_ENV=production
+ENV PORT=10000
+ENV APP_PORT=10000
 ENV DATABASE_URL=""
 
 USER propertyos
 
-EXPOSE 3000
+EXPOSE 10000
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/v1/health || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT:-10000}/api/v1/health || exit 1
 
 CMD ["node", "dist/main.js"]

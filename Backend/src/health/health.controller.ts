@@ -38,11 +38,16 @@ export class HealthController {
   check() {
     return this.health.check([
       () => this.prisma.pingCheck("database", this.prismaService),
-      () => this.memory.checkRSS("memory_rss", 300 * 1024 * 1024),
+      () => this.memory.checkRSS("memory_rss", 450 * 1024 * 1024),
       async (): Promise<HealthIndicatorResult> => {
+        const host = process.env.REDIS_HOST;
+
+        if (!host || host === "disabled") {
+          return { redis: { status: "up" as const, message: "Not configured" } };
+        }
+
         try {
           const net = await import("node:net");
-          const host = process.env.REDIS_HOST || "localhost";
           const port = parseInt(process.env.REDIS_PORT || "6379", 10);
           await new Promise<void>((resolve, reject) => {
             const socket = net.createConnection({ host, port });
