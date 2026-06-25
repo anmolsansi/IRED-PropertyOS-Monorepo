@@ -1,4 +1,4 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, Optional } from "@nestjs/common";
 import { InjectQueue } from "@nestjs/bullmq";
 import { Queue } from "bullmq";
 import { NotificationsGateway } from "./gateway/notifications.gateway";
@@ -16,12 +16,19 @@ export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
 
   constructor(
-    @InjectQueue("email") private emailQueue: Queue,
-    @InjectQueue("sms") private smsQueue: Queue,
     private gateway: NotificationsGateway,
+    @Optional() @InjectQueue("email") private emailQueue?: Queue,
+    @Optional() @InjectQueue("sms") private smsQueue?: Queue,
   ) {}
 
   async sendEmail(payload: NotificationPayload): Promise<void> {
+    if (!this.emailQueue) {
+      this.logger.warn(
+        `Email queue disabled; notification email not queued for ${payload.to}`,
+      );
+      return;
+    }
+
     const job = await this.emailQueue.add("send-email", payload, {
       priority:
         payload.priority === "high" ? 1 : payload.priority === "low" ? 3 : 2,
@@ -30,6 +37,11 @@ export class NotificationsService {
   }
 
   async sendSms(to: string, message: string): Promise<void> {
+    if (!this.smsQueue) {
+      this.logger.warn(`SMS queue disabled; SMS not queued for ${to}`);
+      return;
+    }
+
     const job = await this.smsQueue.add("send-sms", { to, message });
     this.logger.log(`SMS job queued: ${job.id} to ${to}`);
   }
@@ -160,6 +172,13 @@ export class NotificationsService {
   }
 
   async getQueueStats() {
+    if (!this.emailQueue || !this.smsQueue) {
+      return {
+        email: { waiting: 0, active: 0, completed: 0, failed: 0 },
+        sms: { waiting: 0, active: 0, completed: 0, failed: 0 },
+      };
+    }
+
     const [emailWaiting, emailActive, emailCompleted, emailFailed] =
       await Promise.all([
         this.emailQueue.getWaitingCount(),
@@ -193,6 +212,8 @@ export class NotificationsService {
 
   async retryFailed(queueName: "email" | "sms") {
     const queue = queueName === "email" ? this.emailQueue : this.smsQueue;
+    if (!queue) return { retried: 0 };
+
     const failed = await queue.getFailed();
     let retried = 0;
     for (const job of failed) {
