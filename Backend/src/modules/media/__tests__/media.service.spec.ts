@@ -5,7 +5,11 @@ import { ConfigService } from "@nestjs/config";
 import { NotFoundException } from "@nestjs/common";
 
 jest.mock("@aws-sdk/client-s3", () => ({
-  S3Client: jest.fn().mockImplementation(() => ({})),
+  S3Client: jest.fn().mockImplementation(() => ({
+    send: jest.fn().mockResolvedValue({}),
+  })),
+  CreateBucketCommand: jest.fn(),
+  HeadBucketCommand: jest.fn(),
   PutObjectCommand: jest.fn(),
   GetObjectCommand: jest.fn(),
 }));
@@ -88,7 +92,10 @@ describe("MediaService", () => {
       const mockMedia = { id: "m-1", storageKey: "image/test.jpg" };
       prisma.media.findUnique.mockResolvedValue(mockMedia);
       const result = await service.findOne("m-1");
-      expect(result).toEqual(mockMedia);
+      expect(result).toEqual({
+        ...mockMedia,
+        publicUrl: "https://s3.example.com/test-bucket/image/test.jpg",
+      });
     });
   });
 
