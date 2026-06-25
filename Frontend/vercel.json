@@ -1,8 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
-  "buildCommand": "npm run build",
-  "installCommand": "npm ci",
+  "buildCommand": "if [ -d Frontend ]; then cd Frontend; fi; npm run build",
+  "installCommand": "if [ -d Frontend ]; then cd Frontend; fi; npm ci --workspaces=false --include=optional",
   "outputDirectory": ".next",
   "headers": [
     {
