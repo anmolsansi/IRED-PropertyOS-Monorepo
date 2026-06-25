@@ -106,22 +106,24 @@ async function bootstrap() {
   }
 
   const port = configService.get<number>("app.port") ?? 3000;
+  const baseUrl = configService.get<string>("app.url") ?? `http://localhost:${port}`;
+
   app.getHttpAdapter().get("/", (_req, res) => {
     res.json({
       name: "IRED PropertyOS API",
       status: "ok",
       frontend:
         configService.get<string>("app.frontendUrl") ?? "http://localhost:3000",
-      docs: `http://localhost:${port}/api/docs`,
-      health: `http://localhost:${port}/api/v1/health`,
-      apiBase: `http://localhost:${port}/api/v1`,
+      docs: `${baseUrl}/api/docs`,
+      health: `${baseUrl}/api/v1/health`,
+      apiBase: `${baseUrl}/api/v1`,
     });
   });
 
-  await app.listen(port);
+  await app.listen(port, "0.0.0.0");
 
-  console.log(`🚀 Application running on: http://localhost:${port}`);
-  console.log(`📚 Swagger docs: http://localhost:${port}/api/docs`);
+  console.log(`🚀 Application running on: http://0.0.0.0:${port}`);
+  console.log(`📚 Swagger docs: ${baseUrl}/api/docs`);
 }
 
 bootstrap();
