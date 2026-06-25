@@ -90,7 +90,7 @@ Use these settings:
 |---|---|
 | Runtime | Node |
 | Root Directory | `Backend` |
-| Build Command | `npm ci && npx prisma generate && npm run build` |
+| Build Command | `npm ci --legacy-peer-deps && npx prisma generate && npm run build` |
 | Pre-Deploy Command | `npx prisma db push` |
 | Start Command | `npm run start:prod` |
 | Health Check Path | `/api/v1/health` |
@@ -130,7 +130,7 @@ Run it once after the backend deploys and the database schema exists:
 
 ```bash
 cd Backend
-npm ci
+npm ci --legacy-peer-deps
 npx prisma generate
 export DATABASE_URL="postgresql://USER:PASSWORD@HOST.neon.tech/DB?sslmode=require&connect_timeout=15"
 export MASTER_ADMIN_EMAIL="admin@yourdomain.com"

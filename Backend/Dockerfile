@@ -3,14 +3,14 @@ FROM node:20-alpine AS deps
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev && npm cache clean --force
+RUN npm ci --legacy-peer-deps --omit=dev && npm cache clean --force
 
 # ─── Stage 2: Generate Prisma client ───────────────────────────
 FROM node:20-alpine AS prisma
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
-RUN npm ci && npm cache clean --force
+RUN npm ci --legacy-peer-deps && npm cache clean --force
 
 COPY prisma ./prisma
 RUN npx prisma generate
@@ -20,10 +20,9 @@ FROM node:20-alpine AS build
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
-RUN npm ci && npm cache clean --force
+RUN npm ci --legacy-peer-deps && npm cache clean --force
 
 COPY --from=prisma /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=prisma /app/src/generated ./src/generated
 COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
 
@@ -39,7 +38,6 @@ RUN addgroup -g 1001 -S propertyos && \
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=prisma /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=build /app/dist ./dist
-COPY --from=build /app/src/generated ./dist/generated
 COPY prisma ./prisma
 
 ENV NODE_ENV=production
