@@ -39,6 +39,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=prisma /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=build /app/dist ./dist
 COPY prisma ./prisma
+COPY scripts/deploy-migrations.js ./scripts/deploy-migrations.js
 
 ENV NODE_ENV=production
 ENV APP_PORT=10000
@@ -50,4 +51,4 @@ EXPOSE 10000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT:-10000}/api/v1/health || exit 1
 
-CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && node dist/main.js"]
+CMD ["sh", "-c", "node scripts/deploy-migrations.js && node dist/main.js"]
