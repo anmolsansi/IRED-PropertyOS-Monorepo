@@ -41,7 +41,6 @@ COPY --from=build /app/dist ./dist
 COPY prisma ./prisma
 
 ENV NODE_ENV=production
-ENV PORT=10000
 ENV APP_PORT=10000
 
 USER propertyos

@@ -2,6 +2,7 @@ import { z } from "zod";
 
 const envSchema = z.object({
   APP_NAME: z.string().default("IRED-PropertyOS"),
+  PORT: z.coerce.number().optional(),
   APP_PORT: z.coerce.number().default(4000),
   APP_ENV: z.enum(["development", "production", "test"]).default("development"),
   APP_URL: z.string().url().default("http://localhost:4000"),
