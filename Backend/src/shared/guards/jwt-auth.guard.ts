@@ -7,8 +7,17 @@ import {
 import { Reflector } from "@nestjs/core";
 import { AuthGuard } from "@nestjs/passport";
 import { createClerkClient, verifyToken } from "@clerk/backend";
+import { UserRole, UserStatus } from "@prisma/client";
 import { IS_PUBLIC_KEY } from "../decorators/public.decorator";
 import { PrismaService } from "../../prisma/prisma.service";
+
+const DEFAULT_MASTER_ADMIN_EMAIL = "anmolsansi@gmail.com";
+
+function getMasterAdminEmail() {
+  return (
+    process.env.MASTER_ADMIN_EMAIL || DEFAULT_MASTER_ADMIN_EMAIL
+  ).toLowerCase();
+}
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard("jwt") {
@@ -104,7 +113,7 @@ export class JwtAuthGuard extends AuthGuard("jwt") {
 
     const normalizedEmail = primaryEmail.toLowerCase();
 
-    const user = await this.prisma.user.findUnique({
+    let user = await this.prisma.user.findUnique({
       where: { email: normalizedEmail },
       select: {
         id: true,
@@ -117,17 +126,69 @@ export class JwtAuthGuard extends AuthGuard("jwt") {
     });
 
     if (!user) {
-      this.logger.warn(
-        `Clerk auth rejected: no matching PropertyOS user path=${requestPath} email=${normalizedEmail}`,
-      );
-      throw new UnauthorizedException("User is not active in IRED PropertyOS");
+      if (normalizedEmail === getMasterAdminEmail()) {
+        user = await this.prisma.user.create({
+          data: {
+            email: normalizedEmail,
+            fullName: clerkUser.fullName || "Master Admin",
+            passwordHash: "clerk-managed",
+            role: UserRole.ADMIN,
+            status: UserStatus.active,
+            emailVerifiedAt: new Date(),
+          },
+          select: {
+            id: true,
+            email: true,
+            fullName: true,
+            role: true,
+            status: true,
+            organizationId: true,
+          },
+        });
+        this.logger.warn(
+          `Clerk auth auto-provisioned master admin path=${requestPath} email=${normalizedEmail} userId=${user.id}`,
+        );
+      } else {
+        this.logger.warn(
+          `Clerk auth rejected: no matching PropertyOS user path=${requestPath} email=${normalizedEmail}`,
+        );
+        throw new UnauthorizedException(
+          "No active PropertyOS user exists for this Clerk account",
+        );
+      }
     }
 
-    if (user.status !== "active") {
+    if (
+      user.status !== UserStatus.active &&
+      normalizedEmail === getMasterAdminEmail()
+    ) {
+      user = await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          role: UserRole.ADMIN,
+          status: UserStatus.active,
+          deactivatedAt: null,
+          emailVerifiedAt: new Date(),
+        },
+        select: {
+          id: true,
+          email: true,
+          fullName: true,
+          role: true,
+          status: true,
+          organizationId: true,
+        },
+      });
+      this.logger.warn(
+        `Clerk auth reactivated master admin path=${requestPath} email=${normalizedEmail} userId=${user.id}`,
+      );
+    }
+
+    if (user.status !== UserStatus.active) {
       this.logger.warn(
         `Clerk auth rejected: inactive PropertyOS user path=${requestPath} email=${normalizedEmail} status=${user.status}`,
       );
-      throw new UnauthorizedException("User is not active in IRED PropertyOS");
+      throw new UnauthorizedException("PropertyOS user is inactive");
     }
 
     request.user = user;
