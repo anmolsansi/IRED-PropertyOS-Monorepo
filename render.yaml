@@ -6,7 +6,7 @@ services:
     region: singapore
     rootDir: Backend
     buildCommand: npm ci --legacy-peer-deps && npx prisma generate && npm run build
-    preDeployCommand: npx prisma db push
+    preDeployCommand: node scripts/deploy-migrations.js
     startCommand: npm run start:prod
     healthCheckPath: /api/v1/health
     autoDeployTrigger: commit
