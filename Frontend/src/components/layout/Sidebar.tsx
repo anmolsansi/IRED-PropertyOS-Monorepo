@@ -23,6 +23,9 @@ export function Sidebar({ isV2 = false }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const { mode, toggleMode, isMaster } = useDataMode();
   const navItems = isV2 ? V2_NAV_ITEMS : V1_NAV_ITEMS;
+  const activeHref = navItems
+    .filter((item) => pathname === item.href || pathname.startsWith(item.href + "/"))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
 
   return (
     <aside
@@ -51,7 +54,7 @@ export function Sidebar({ isV2 = false }: SidebarProps) {
           <SidebarItem
             key={item.href}
             item={item}
-            active={pathname === item.href || pathname.startsWith(item.href + "/")}
+            active={activeHref === item.href}
             collapsed={collapsed}
           />
         ))}
