@@ -14,11 +14,13 @@ function ClerkTokenBridge({ children }: { children: React.ReactNode }) {
     }
 
     if (!isSignedIn) {
+      console.info("[auth] Clerk loaded without an active session");
       setClerkTokenGetter(null);
       setIsTokenSourceReady(true);
       return;
     }
 
+    console.info("[auth] Clerk loaded with an active session");
     setClerkTokenGetter(() => getToken());
     setIsTokenSourceReady(true);
   }, [getToken, isLoaded, isSignedIn]);
