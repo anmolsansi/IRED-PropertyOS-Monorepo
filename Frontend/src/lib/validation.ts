@@ -2,7 +2,6 @@ import { z } from "zod";
 
 export const propertySchema = z.object({
   entryType: z.enum(["building", "floor", "unit"]),
-  buildingName: z.string().min(1, "Building name is required").max(200),
   propertyType: z.string().min(1, "Property type is required"),
   source: z.string().optional(),
   address: z.string().max(500).optional(),

@@ -126,7 +126,7 @@ function Select({
   const currentValue = isControlled ? value : defaultValue
 
   return (
-    <div className={cn("relative inline-flex", className)}>
+    <div className={cn("relative flex w-full min-w-0", className)}>
       <select
         {...(isControlled
           ? { value: value ?? "" }
@@ -134,8 +134,8 @@ function Select({
         disabled={disabled}
         onChange={(event) => onValueChange?.(event.target.value)}
         className={cn(
-          "flex w-fit appearance-none items-center justify-between gap-1.5 rounded-lg border border-input bg-background py-2 pr-8 pl-2.5 text-sm whitespace-nowrap transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30",
-          trigger.size === "sm" ? "h-7 rounded-md" : "h-8",
+          "flex w-full min-w-0 appearance-none items-center justify-between gap-1.5 truncate rounded-lg border border-input bg-background py-0 pr-8 pl-2.5 text-sm leading-5 whitespace-nowrap transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30",
+          trigger.size === "sm" ? "h-8 rounded-md" : "h-10",
           trigger.className
         )}
       >

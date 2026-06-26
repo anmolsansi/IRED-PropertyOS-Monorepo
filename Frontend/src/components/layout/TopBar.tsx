@@ -66,14 +66,14 @@ export function TopBar() {
   return (
     <>
       <header role="banner" className="sticky top-0 z-30 h-16 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="flex h-full items-center gap-4 px-6">
+        <div className="flex h-full min-w-0 items-center gap-4 px-6">
           {/* Welcome */}
-          <div className="flex-1">
-            <h1 className="text-lg font-semibold">
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-lg font-semibold leading-6">
               Welcome back, {user?.fullName?.split(" ")[0] || "User"}{" "}
               <span className="inline-block">👋</span>
             </h1>
-            <p className="text-sm text-muted-foreground">
+            <p className="truncate text-sm leading-5 text-muted-foreground">
               Here&apos;s what&apos;s happening across your portfolio today.
             </p>
           </div>
@@ -82,17 +82,17 @@ export function TopBar() {
           <button
             onClick={() => setSearchOpen(true)}
             aria-label="Search (Ctrl+K)"
-            className="relative w-96 hidden md:flex items-center h-10 pl-10 pr-12 rounded-lg border bg-muted/50 text-sm text-muted-foreground hover:bg-muted transition-colors"
+            className="relative hidden h-10 w-72 shrink-0 items-center rounded-lg border bg-muted/50 pl-10 pr-12 text-sm text-muted-foreground transition-colors hover:bg-muted lg:flex xl:w-96"
           >
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" />
-            <span>Search properties, clients, deals...</span>
+            <span className="truncate">Search properties, clients, deals...</span>
             <kbd className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
               <span className="text-xs">⌘</span>K
             </kbd>
           </button>
 
           {/* Right side */}
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             {/* Notifications - hidden until backend support exists */}
             <button className="relative p-2 rounded-lg hover:bg-muted transition-colors" aria-label="Notifications" disabled>
               <Bell className="h-5 w-5 text-muted-foreground" />
@@ -110,8 +110,8 @@ export function TopBar() {
                     <AvatarImage src="" alt={user?.fullName || "User"} />
                     <AvatarFallback>{initials}</AvatarFallback>
                   </Avatar>
-                  <div className="text-left hidden sm:block">
-                    <p className="text-sm font-medium">{user?.fullName || "User"}</p>
+                  <div className="hidden max-w-36 text-left sm:block">
+                    <p className="truncate text-sm font-medium">{user?.fullName || "User"}</p>
                     <p className="text-xs text-muted-foreground capitalize">
                       {user?.role?.toLowerCase() || "worker"}
                     </p>
