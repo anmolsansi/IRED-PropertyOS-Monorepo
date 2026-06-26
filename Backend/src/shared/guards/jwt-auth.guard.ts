@@ -56,13 +56,17 @@ export class JwtAuthGuard extends AuthGuard("jwt") {
       : null;
 
     if (!token) {
-      this.logger.warn(`Clerk auth rejected: missing bearer token path=${requestPath}`);
+      this.logger.warn(
+        `Clerk auth rejected: missing bearer token path=${requestPath}`,
+      );
       throw new UnauthorizedException("Missing Clerk session token");
     }
 
     const secretKey = process.env.CLERK_SECRET_KEY;
     if (!secretKey) {
-      this.logger.error("Clerk auth rejected: CLERK_SECRET_KEY is not configured");
+      this.logger.error(
+        "Clerk auth rejected: CLERK_SECRET_KEY is not configured",
+      );
       throw new UnauthorizedException("Clerk is not configured");
     }
 
@@ -92,13 +96,15 @@ export class JwtAuthGuard extends AuthGuard("jwt") {
     }
 
     const clerk = createClerkClient({ secretKey });
-    const clerkUser = await clerk.users.getUser(verifiedToken.sub).catch((error) => {
-      const message = error instanceof Error ? error.message : "unknown";
-      this.logger.warn(
-        `Clerk auth rejected: unable to load Clerk user path=${requestPath} clerkUserId=${verifiedToken.sub} error=${message}`,
-      );
-      throw new UnauthorizedException("Unable to load Clerk user");
-    });
+    const clerkUser = await clerk.users
+      .getUser(verifiedToken.sub)
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : "unknown";
+        this.logger.warn(
+          `Clerk auth rejected: unable to load Clerk user path=${requestPath} clerkUserId=${verifiedToken.sub} error=${message}`,
+        );
+        throw new UnauthorizedException("Unable to load Clerk user");
+      });
     const primaryEmail =
       clerkUser.emailAddresses.find(
         (email) => email.id === clerkUser.primaryEmailAddressId,
@@ -119,6 +125,7 @@ export class JwtAuthGuard extends AuthGuard("jwt") {
         id: true,
         email: true,
         fullName: true,
+        clerkUserId: true,
         role: true,
         status: true,
         organizationId: true,
@@ -140,6 +147,7 @@ export class JwtAuthGuard extends AuthGuard("jwt") {
             id: true,
             email: true,
             fullName: true,
+            clerkUserId: true,
             role: true,
             status: true,
             organizationId: true,
@@ -174,6 +182,7 @@ export class JwtAuthGuard extends AuthGuard("jwt") {
           id: true,
           email: true,
           fullName: true,
+          clerkUserId: true,
           role: true,
           status: true,
           organizationId: true,
@@ -189,6 +198,22 @@ export class JwtAuthGuard extends AuthGuard("jwt") {
         `Clerk auth rejected: inactive PropertyOS user path=${requestPath} email=${normalizedEmail} status=${user.status}`,
       );
       throw new UnauthorizedException("PropertyOS user is inactive");
+    }
+
+    if (!user.clerkUserId) {
+      user = await this.prisma.user.update({
+        where: { id: user.id },
+        data: { clerkUserId: verifiedToken.sub },
+        select: {
+          id: true,
+          email: true,
+          fullName: true,
+          clerkUserId: true,
+          role: true,
+          status: true,
+          organizationId: true,
+        },
+      });
     }
 
     request.user = user;

@@ -8,24 +8,45 @@ jest.mock("argon2", () => ({
   hash: jest.fn().mockResolvedValue("hashed-password"),
 }));
 
+const clerkClientMock = {
+  users: {
+    getUserList: jest.fn(),
+    createUser: jest.fn(),
+    updateUser: jest.fn(),
+    deleteUser: jest.fn(),
+  },
+};
+
+jest.mock("@clerk/backend", () => ({
+  createClerkClient: jest.fn(() => clerkClientMock),
+}));
+
 describe("UsersService", () => {
   let service: UsersService;
   let prisma: any;
   let mailService: any;
+  const originalAuthProvider = process.env.AUTH_PROVIDER;
+  const originalClerkSecretKey = process.env.CLERK_SECRET_KEY;
 
   beforeEach(async () => {
+    delete process.env.AUTH_PROVIDER;
+    delete process.env.CLERK_SECRET_KEY;
+    jest.clearAllMocks();
+    clerkClientMock.users.getUserList.mockResolvedValue({ data: [] });
+    clerkClientMock.users.createUser.mockResolvedValue({ id: "clerk-u-1" });
+    clerkClientMock.users.updateUser.mockResolvedValue({ id: "clerk-u-1" });
+    clerkClientMock.users.deleteUser.mockResolvedValue({ id: "clerk-u-1" });
+
     prisma = {
       user: {
         findMany: jest.fn().mockResolvedValue([]),
         findUnique: jest.fn(),
         count: jest.fn().mockResolvedValue(0),
-        create: jest
-          .fn()
-          .mockResolvedValue({
-            id: "u-1",
-            email: "test@test.com",
-            role: "WORKER",
-          }),
+        create: jest.fn().mockResolvedValue({
+          id: "u-1",
+          email: "test@test.com",
+          role: "WORKER",
+        }),
         update: jest.fn().mockResolvedValue({ id: "u-1" }),
       },
       workerGeographicAssignment: {
@@ -55,6 +76,19 @@ describe("UsersService", () => {
     }).compile();
 
     service = module.get<UsersService>(UsersService);
+  });
+
+  afterAll(() => {
+    if (originalAuthProvider === undefined) {
+      delete process.env.AUTH_PROVIDER;
+    } else {
+      process.env.AUTH_PROVIDER = originalAuthProvider;
+    }
+    if (originalClerkSecretKey === undefined) {
+      delete process.env.CLERK_SECRET_KEY;
+    } else {
+      process.env.CLERK_SECRET_KEY = originalClerkSecretKey;
+    }
   });
 
   it("should be defined", () => {
@@ -94,6 +128,33 @@ describe("UsersService", () => {
       expect(result).toHaveProperty("id");
       expect(result).toHaveProperty("tempPassword");
       expect(prisma.user.create).toHaveBeenCalled();
+    });
+
+    it("should create a Clerk user when Clerk auth is enabled", async () => {
+      process.env.AUTH_PROVIDER = "clerk";
+      process.env.CLERK_SECRET_KEY = "sk_test_123";
+      prisma.user.findUnique.mockResolvedValue(null);
+
+      await service.invite({
+        email: "new@test.com",
+        fullName: "New User",
+        role: "WORKER",
+      });
+
+      expect(clerkClientMock.users.createUser).toHaveBeenCalledWith(
+        expect.objectContaining({
+          emailAddress: ["new@test.com"],
+          password: expect.any(String),
+          firstName: "New",
+          lastName: "User",
+        }),
+      );
+      expect(prisma.user.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          email: "new@test.com",
+          clerkUserId: "clerk-u-1",
+        }),
+      });
     });
 
     it("should throw if email already exists", async () => {
@@ -146,6 +207,27 @@ describe("UsersService", () => {
       const result = await service.resetPassword("u-1");
       expect(result).toHaveProperty("tempPassword");
       expect(prisma.refreshToken.updateMany).toHaveBeenCalled();
+    });
+
+    it("should update Clerk password when Clerk auth is enabled", async () => {
+      process.env.AUTH_PROVIDER = "clerk";
+      process.env.CLERK_SECRET_KEY = "sk_test_123";
+      prisma.user.findUnique.mockResolvedValue({
+        id: "u-1",
+        email: "new@test.com",
+        clerkUserId: "clerk-u-1",
+      });
+
+      await service.resetPassword("u-1");
+
+      expect(clerkClientMock.users.updateUser).toHaveBeenCalledWith(
+        "clerk-u-1",
+        expect.objectContaining({
+          password: expect.any(String),
+          skipPasswordChecks: true,
+          signOutOfOtherSessions: true,
+        }),
+      );
     });
 
     it("should throw if user not found", async () => {

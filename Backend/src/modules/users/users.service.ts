@@ -9,6 +9,16 @@ import { MailService } from "../email/mail.service";
 import { UserRole, UserStatus } from "@prisma/client";
 import * as argon2 from "argon2";
 import { randomBytes } from "node:crypto";
+import { createClerkClient } from "@clerk/backend";
+
+interface ClerkManagedUser {
+  id: string;
+}
+
+interface ClerkUserResult {
+  user: ClerkManagedUser;
+  created: boolean;
+}
 
 @Injectable()
 export class UsersService {
@@ -18,6 +28,80 @@ export class UsersService {
     private prisma: PrismaService,
     private mailService: MailService,
   ) {}
+
+  private isClerkAuthEnabled() {
+    return process.env.AUTH_PROVIDER === "clerk";
+  }
+
+  private getClerkClient() {
+    const secretKey = process.env.CLERK_SECRET_KEY;
+    if (!secretKey) {
+      throw new BadRequestException("Clerk is not configured");
+    }
+    return createClerkClient({ secretKey });
+  }
+
+  private splitName(fullName: string) {
+    const parts = fullName.trim().split(/\s+/).filter(Boolean);
+    const firstName = parts.shift() || fullName.trim();
+    const lastName = parts.join(" ") || undefined;
+    return { firstName, lastName };
+  }
+
+  private async findClerkUserByEmail(
+    email: string,
+  ): Promise<ClerkManagedUser | null> {
+    if (!this.isClerkAuthEnabled()) return null;
+
+    const clerk = this.getClerkClient();
+    const users = await clerk.users.getUserList({ emailAddress: [email] });
+    return users.data[0] ? { id: users.data[0].id } : null;
+  }
+
+  private async createOrReuseClerkUser(params: {
+    email: string;
+    fullName: string;
+    password: string;
+    role: UserRole;
+  }): Promise<ClerkUserResult | null> {
+    if (!this.isClerkAuthEnabled()) return null;
+
+    const existing = await this.findClerkUserByEmail(params.email);
+    if (existing) return { user: existing, created: false };
+
+    const clerk = this.getClerkClient();
+    const { firstName, lastName } = this.splitName(params.fullName);
+    const user = await clerk.users.createUser({
+      emailAddress: [params.email],
+      password: params.password,
+      firstName,
+      lastName,
+      skipPasswordChecks: true,
+      skipLegalChecks: true,
+      privateMetadata: {
+        source: "propertyos",
+        role: params.role,
+      },
+    });
+
+    return { user: { id: user.id }, created: true };
+  }
+
+  private async deleteClerkUserIfCreated(
+    clerkUserId: string | undefined,
+    wasCreated: boolean,
+  ) {
+    if (!wasCreated || !clerkUserId || !this.isClerkAuthEnabled()) return;
+
+    try {
+      await this.getClerkClient().users.deleteUser(clerkUserId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "unknown";
+      this.logger.error(
+        `Failed to roll back Clerk user after local user creation failed clerkUserId=${clerkUserId} error=${message}`,
+      );
+    }
+  }
 
   async findAll(query: {
     page?: number;
@@ -122,16 +206,35 @@ export class UsersService {
     const tempPassword = randomBytes(12).toString("base64url");
     const passwordHash = await argon2.hash(tempPassword);
 
-    const user = await this.prisma.user.create({
-      data: {
-        email: data.email.toLowerCase().trim(),
-        fullName: data.fullName,
-        mobileNumber: data.mobileNumber,
-        passwordHash,
-        role: data.role,
-        status: "active",
-      },
+    const email = data.email.toLowerCase().trim();
+    const clerkResult = await this.createOrReuseClerkUser({
+      email,
+      fullName: data.fullName,
+      role: data.role,
+      password: tempPassword,
     });
+    const clerkUser = clerkResult?.user;
+
+    let user;
+    try {
+      user = await this.prisma.user.create({
+        data: {
+          email,
+          clerkUserId: clerkUser?.id,
+          fullName: data.fullName,
+          mobileNumber: data.mobileNumber,
+          passwordHash,
+          role: data.role,
+          status: "active",
+        },
+      });
+    } catch (error) {
+      await this.deleteClerkUserIfCreated(
+        clerkUser?.id,
+        Boolean(clerkResult?.created),
+      );
+      throw error;
+    }
 
     if (data.stateIds || data.cityIds) {
       const assignments: any[] = [];
@@ -282,9 +385,24 @@ export class UsersService {
     const tempPassword = randomBytes(12).toString("base64url");
     const passwordHash = await argon2.hash(tempPassword);
 
+    let clerkUserId = user.clerkUserId;
+    if (this.isClerkAuthEnabled()) {
+      const clerkUser = clerkUserId
+        ? { id: clerkUserId }
+        : await this.findClerkUserByEmail(user.email);
+      clerkUserId = clerkUser?.id ?? null;
+      if (clerkUserId) {
+        await this.getClerkClient().users.updateUser(clerkUserId, {
+          password: tempPassword,
+          skipPasswordChecks: true,
+          signOutOfOtherSessions: true,
+        });
+      }
+    }
+
     await this.prisma.user.update({
       where: { id: userId },
-      data: { passwordHash },
+      data: { passwordHash, ...(clerkUserId && { clerkUserId }) },
     });
 
     await this.prisma.refreshToken.updateMany({
