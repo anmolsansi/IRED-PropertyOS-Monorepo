@@ -44,14 +44,29 @@ interface BackendMedia {
 const MEDIA_BASE_URL =
   process.env.NEXT_PUBLIC_MEDIA_URL || "http://localhost:9000/propertyos-media";
 
+function isAbsoluteUrl(value: string) {
+  return /^https?:\/\//i.test(value);
+}
+
+function isRootRelativeUrl(value: string) {
+  return value.startsWith("/");
+}
+
 function buildMediaUrl(media: BackendMedia) {
-  if (media.publicUrl) return media.publicUrl;
-  if (!media.storageKey) return "";
-  if (/^https?:\/\//i.test(media.storageKey) || media.storageKey.startsWith("/")) {
-    return media.storageKey;
+  const candidate = media.publicUrl || media.storageKey;
+  if (!candidate) return "";
+  if (isAbsoluteUrl(candidate) || isRootRelativeUrl(candidate)) {
+    return candidate;
   }
 
-  return `${MEDIA_BASE_URL.replace(/\/$/, "")}/${media.storageKey
+  const baseUrl = MEDIA_BASE_URL.replace(/\/$/, "");
+  const bucketName = baseUrl.split("/").filter(Boolean).at(-1);
+  const storageKey =
+    bucketName && candidate.startsWith(`${bucketName}/`)
+      ? candidate.slice(bucketName.length + 1)
+      : candidate;
+
+  return `${baseUrl}/${storageKey
     .split("/")
     .map(encodeURIComponent)
     .join("/")}`;
@@ -195,9 +210,9 @@ export function useDeleteMedia() {
 export function useDownloadMedia() {
   return {
     mutateAsync: async (id: string): Promise<string> => {
-      const response = await api.get<{ data: { downloadUrl: string } }>(`/media/${id}/download-url`);
+      const response = await api.get<{ data: { downloadUrl?: string; url?: string } }>(`/media/${id}/download-url`);
       const data = response.data ?? response;
-      return (data as { downloadUrl: string }).downloadUrl;
+      return (data as { downloadUrl?: string; url?: string }).downloadUrl || (data as { url?: string }).url || "";
     },
   };
 }
