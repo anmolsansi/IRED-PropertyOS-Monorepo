@@ -10,6 +10,7 @@ jest.mock("@aws-sdk/client-s3", () => ({
   })),
   CreateBucketCommand: jest.fn(),
   HeadBucketCommand: jest.fn(),
+  HeadObjectCommand: jest.fn(),
   PutObjectCommand: jest.fn(),
   GetObjectCommand: jest.fn(),
 }));
@@ -95,6 +96,64 @@ describe("MediaService", () => {
       expect(result).toEqual({
         ...mockMedia,
         publicUrl: "https://s3.example.com/test-bucket/image/test.jpg",
+      });
+    });
+
+    it("should not append bucket name to Cloudflare R2 public URLs", async () => {
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          MediaService,
+          { provide: PrismaService, useValue: prisma },
+          {
+            provide: ConfigService,
+            useValue: {
+              get: jest.fn((key: string) => {
+                const config: Record<string, string> = {
+                  "app.s3.bucket": "propertyos-media",
+                  "app.s3.publicUrl":
+                    "https://pub-f0d030c6e52c49d3963eb677df1b1179.r2.dev",
+                  "app.s3.endpoint":
+                    "https://account-id.r2.cloudflarestorage.com",
+                  "app.s3.region": "auto",
+                  "app.s3.accessKey": "key",
+                  "app.s3.secretKey": "secret",
+                };
+                return config[key];
+              }),
+            },
+          },
+        ],
+      }).compile();
+      const r2Service = module.get<MediaService>(MediaService);
+
+      const mockMedia = { id: "m-1", storageKey: "image/test.jpg" };
+      prisma.media.findUnique.mockResolvedValue(mockMedia);
+      const result = await r2Service.findOne("m-1");
+
+      expect(result).toEqual({
+        ...mockMedia,
+        publicUrl:
+          "https://pub-f0d030c6e52c49d3963eb677df1b1179.r2.dev/image/test.jpg",
+      });
+    });
+  });
+
+  describe("completeUpload", () => {
+    it("should verify the object exists before marking upload complete", async () => {
+      prisma.media.findUnique.mockResolvedValue({
+        id: "m-1",
+        storageKey: "image/test.jpg",
+        fileSizeBytes: BigInt(0),
+      });
+
+      await service.completeUpload("m-1", 123);
+
+      expect(prisma.media.update).toHaveBeenCalledWith({
+        where: { id: "m-1" },
+        data: expect.objectContaining({
+          uploadStatus: "completed",
+          fileSizeBytes: BigInt(123),
+        }),
       });
     });
   });
