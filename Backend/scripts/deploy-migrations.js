@@ -13,7 +13,7 @@ const BASELINE_MIGRATIONS = [
 const CLERK_MIGRATION = "20250626000000_add_clerk_user_id";
 
 function runPrisma(args) {
-  execFileSync("npx", ["prisma", ...args], { stdio: "inherit" });
+  execFileSync("npx", ["--no-install", "prisma", ...args], { stdio: "inherit" });
 }
 
 async function getMigrationRowCount() {
