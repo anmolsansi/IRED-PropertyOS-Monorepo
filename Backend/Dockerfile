@@ -1,33 +1,42 @@
-# ─── Stage 1: Install dependencies ─────────────────────────────
+# ─── Stage 1: Install production dependencies ──────────────────
 FROM node:20-alpine AS deps
 WORKDIR /app
 
-COPY package.json package-lock.json* ./
-RUN npm ci --legacy-peer-deps --omit=dev && npm cache clean --force
+COPY package.json package-lock.json ./
+COPY Backend/package.json ./Backend/package.json
+
+RUN npm ci --legacy-peer-deps --omit=dev --workspace=ired-propertyos-backend && npm cache clean --force
 RUN ./node_modules/.bin/prisma --version
+
 
 # ─── Stage 2: Generate Prisma client ───────────────────────────
 FROM node:20-alpine AS prisma
 WORKDIR /app
 
-COPY package.json package-lock.json* ./
-RUN npm ci --legacy-peer-deps && npm cache clean --force
+COPY package.json package-lock.json ./
+COPY Backend/package.json ./Backend/package.json
 
-COPY prisma ./prisma
-RUN npx prisma generate
+RUN npm ci --legacy-peer-deps --workspace=ired-propertyos-backend && npm cache clean --force
+
+COPY Backend/prisma ./prisma
+RUN ./node_modules/.bin/prisma generate
+
 
 # ─── Stage 3: Build application ────────────────────────────────
 FROM node:20-alpine AS build
 WORKDIR /app
 
-COPY package.json package-lock.json* ./
-RUN npm ci --legacy-peer-deps && npm cache clean --force
+COPY package.json package-lock.json ./
+COPY Backend/package.json ./Backend/package.json
+
+RUN npm ci --legacy-peer-deps --workspace=ired-propertyos-backend && npm cache clean --force
 
 COPY --from=prisma /app/node_modules/.prisma ./node_modules/.prisma
-COPY tsconfig.json tsconfig.build.json ./
-COPY src ./src
+COPY Backend/tsconfig.json Backend/tsconfig.build.json ./
+COPY Backend/src ./src
 
-RUN npx nest build
+RUN ./node_modules/.bin/nest build
+
 
 # ─── Stage 4: Production image ─────────────────────────────────
 FROM node:20-alpine AS production
@@ -39,11 +48,13 @@ RUN addgroup -g 1001 -S propertyos && \
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=prisma /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=build /app/dist ./dist
-COPY prisma ./prisma
-COPY scripts/deploy-migrations.js ./scripts/deploy-migrations.js
+
+COPY Backend/prisma ./prisma
+COPY Backend/scripts/deploy-migrations.js ./scripts/deploy-migrations.js
 
 ENV NODE_ENV=production
 ENV APP_PORT=10000
+ENV PORT=10000
 
 USER propertyos
 
