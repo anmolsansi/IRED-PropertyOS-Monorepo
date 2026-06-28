@@ -185,6 +185,11 @@ interface FormData {
   availabilityDate: string;
   possessionDate: string;
   notes: string;
+  landlordName: string;
+  telecallerStatus: string;
+  starRating: string;
+  facingOption: string;
+  unitAccessLocation: string;
 }
 
 const initialFormData: FormData = {
@@ -213,6 +218,11 @@ const initialFormData: FormData = {
   availabilityDate: "",
   possessionDate: "",
   notes: "",
+  landlordName: "",
+  telecallerStatus: "BLANK",
+  starRating: "",
+  facingOption: "",
+  unitAccessLocation: "",
 };
 
 export default function NewPropertyPage() {
@@ -346,6 +356,11 @@ export default function NewPropertyPage() {
         localityName: formData.locality || undefined,
         pincode: formData.pincode || undefined,
         notes: formData.notes || undefined,
+        landlordName: formData.landlordName || undefined,
+        telecallerStatus: formData.telecallerStatus || undefined,
+        starRating: formData.starRating ? parseInt(formData.starRating, 10) : undefined,
+        facingOption: formData.facingOption || undefined,
+        unitAccessLocation: formData.unitAccessLocation || undefined,
       };
 
       const commercialTerms = {
@@ -844,6 +859,68 @@ export default function NewPropertyPage() {
                 value={formData.possessionDate}
                 onChange={(e) => updateField("possessionDate", e.target.value)}
               />
+            </FormField>
+          </div>
+          </section>
+
+        {/* Additional Property Details */}
+          <section className="space-y-4">
+          <h3 className="text-sm font-semibold">Additional Property Details</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField label="Landlord Name">
+              <Input
+                placeholder="e.g. John Doe"
+                value={formData.landlordName}
+                onChange={(e) => updateField("landlordName", e.target.value)}
+              />
+            </FormField>
+
+            <FormField label="Telecaller Status">
+              <Select value={formData.telecallerStatus} onValueChange={(v) => updateField("telecallerStatus", v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="VERIFIED">Verified</SelectItem>
+                  <SelectItem value="REVIEW_NEEDED">Review Needed</SelectItem>
+                  <SelectItem value="BLANK">Blank (Default)</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormField>
+
+            <FormField label="Star Rating">
+              <Input
+                type="number"
+                min="1"
+                max="5"
+                placeholder="e.g. 5"
+                value={formData.starRating}
+                onChange={(e) => updateField("starRating", e.target.value)}
+              />
+            </FormField>
+
+            <FormField label="Facing Option">
+              <Select value={formData.facingOption} onValueChange={(v) => updateField("facingOption", v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Facing Option" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="FRONT">Front</SelectItem>
+                  <SelectItem value="REAR">Rear</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormField>
+
+            <FormField label="Unit Access Location">
+              <Select value={formData.unitAccessLocation} onValueChange={(v) => updateField("unitAccessLocation", v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Access Location" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="MAIN_ROAD">Main Road</SelectItem>
+                  <SelectItem value="INSIDE">Inside</SelectItem>
+                </SelectContent>
+              </Select>
             </FormField>
           </div>
           </section>
