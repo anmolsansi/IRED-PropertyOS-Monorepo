@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "description": "IRED PropertyOS monorepo for the Next.js frontend and NestJS backend.",
+  "dependencies": {
+    "@prisma/client": "6.19.3",
+    "prisma": "6.19.3"
+  },
   "workspaces": [
     "Backend",
     "Frontend"

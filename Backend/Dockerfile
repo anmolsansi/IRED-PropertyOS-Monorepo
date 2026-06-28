@@ -4,6 +4,7 @@ WORKDIR /app
 
 COPY package.json package-lock.json* ./
 RUN npm ci --legacy-peer-deps --omit=dev && npm cache clean --force
+RUN ./node_modules/.bin/prisma --version
 
 # ─── Stage 2: Generate Prisma client ───────────────────────────
 FROM node:20-alpine AS prisma
