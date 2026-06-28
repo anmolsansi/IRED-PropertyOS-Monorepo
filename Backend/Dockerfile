@@ -5,7 +5,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY Backend/package.json ./Backend/package.json
 
-RUN npm ci --legacy-peer-deps --omit=dev --workspace=ired-propertyos-backend && npm cache clean --force
+RUN npm ci --legacy-peer-deps --omit=dev --workspace=ired-propertyos-backend && mkdir -p Backend/node_modules && npm cache clean --force
 RUN ./node_modules/.bin/prisma --version
 
 
@@ -47,8 +47,11 @@ RUN addgroup -g 1001 -S propertyos && \
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/Backend/node_modules ./Backend/node_modules
+
 COPY --from=prisma /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=build /app/Backend/dist ./dist
+COPY --from=prisma /app/node_modules/@prisma/client ./node_modules/@prisma/client
+
+COPY --from=build /app/Backend/dist ./Backend/dist
 
 COPY Backend/prisma ./prisma
 COPY Backend/scripts/deploy-migrations.js ./scripts/deploy-migrations.js
@@ -57,6 +60,8 @@ ENV NODE_ENV=production
 ENV APP_PORT=10000
 ENV PORT=10000
 
+RUN node -e "console.log(require.resolve('@nestjs/core', { paths: ['/app/Backend'] }))"
+
 USER propertyos
 
 EXPOSE 10000
@@ -64,4 +69,4 @@ EXPOSE 10000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT:-10000}/api/v1/health || exit 1
 
-CMD ["sh", "-c", "node scripts/deploy-migrations.js && node dist/main.js"]
+CMD ["sh", "-c", "node scripts/deploy-migrations.js && node Backend/dist/main.js"]
