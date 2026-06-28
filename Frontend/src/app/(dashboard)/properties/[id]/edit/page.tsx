@@ -358,7 +358,7 @@ function PropertyForm({ property }: { property: Property }) {
       {/* Step 2: Location */}
       <StepContent>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <ValidatedField label="Full Address" required field="fullAddress" className="col-span-2">
+          <ValidatedField label="Full Address" required field="fullAddress" className="md:col-span-2">
             <Textarea
               placeholder="Enter complete address"
               value={formData.fullAddress}
@@ -457,7 +457,7 @@ function PropertyForm({ property }: { property: Property }) {
             />
           </FormField>
 
-          <div className="col-span-2">
+          <div className="md:col-span-2">
             <Button
               type="button"
               variant="outline"
@@ -474,7 +474,7 @@ function PropertyForm({ property }: { property: Property }) {
             </Button>
           </div>
 
-          <FormField label="Maps URL" className="col-span-2">
+          <FormField label="Maps URL" className="md:col-span-2">
             <Input
               placeholder="https://maps.google.com/..."
               value={formData.googleMapsUrl}

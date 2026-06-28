@@ -296,7 +296,7 @@ export default function PropertyDetailPage({
         <InfoSection
           title="Location Details"
           fields={[
-            { label: "Full Address", value: property.address, className: "col-span-2" },
+            { label: "Full Address", value: property.address, className: "sm:col-span-2" },
             { label: "State", value: property.state },
             { label: "City", value: property.city },
             { label: "Locality", value: property.locality },
@@ -339,12 +339,12 @@ export default function PropertyDetailPage({
             {
               label: "Est. Monthly Rent",
               value: `₹${monthlyRent.toLocaleString()}`,
-              className: "col-span-2",
+              className: "sm:col-span-2",
             },
             {
               label: "Est. Total Monthly Cost",
               value: `₹${totalMonthlyCharges.toLocaleString()}`,
-              className: "col-span-2",
+              className: "sm:col-span-2",
             },
           ]}
         />
