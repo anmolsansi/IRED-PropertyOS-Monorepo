@@ -32,10 +32,10 @@ COPY Backend/package.json ./Backend/package.json
 RUN npm ci --legacy-peer-deps --workspace=ired-propertyos-backend && npm cache clean --force
 
 COPY --from=prisma /app/node_modules/.prisma ./node_modules/.prisma
-COPY Backend/tsconfig.json Backend/tsconfig.build.json ./
-COPY Backend/src ./src
+COPY Backend/tsconfig.json Backend/tsconfig.build.json ./Backend/
+COPY Backend/src ./Backend/src
 
-RUN ./node_modules/.bin/nest build
+RUN npm run build -w ired-propertyos-backend
 
 
 # ─── Stage 4: Production image ─────────────────────────────────
@@ -47,7 +47,7 @@ RUN addgroup -g 1001 -S propertyos && \
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=prisma /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=build /app/dist ./dist
+COPY --from=build /app/Backend/dist ./dist
 
 COPY Backend/prisma ./prisma
 COPY Backend/scripts/deploy-migrations.js ./scripts/deploy-migrations.js
