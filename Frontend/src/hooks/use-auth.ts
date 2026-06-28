@@ -124,6 +124,8 @@ export function useResendOtp() {
 
 // --- Get Current User ---
 
+let globalFetchPromise: Promise<AuthUser | null> | null = null;
+
 export function useCurrentUser() {
   const { signOut } = useClerk();
   const [user, setUser] = useState<AuthUser | null>(() => {
@@ -143,37 +145,67 @@ export function useCurrentUser() {
   const fetchUser = useCallback(async () => {
     if (!getAccessToken() && !hasClerkTokenGetter()) {
       console.info("[auth] skipping /auth/me: no token source available");
+      setUser(null);
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("auth-user");
+      }
       return null;
     }
-    try {
-      const response = await api.get<{ data: AuthUser }>("/auth/me");
-      const data = response.data ?? response as unknown as AuthUser;
-      console.info("[auth] loaded current PropertyOS user", {
-        email: data.email,
-        role: data.role,
-        status: data.status,
-      });
+    if (globalFetchPromise) {
+      const data = await globalFetchPromise;
+      if (data) {
+        setUser(data);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("auth-user", JSON.stringify(data));
+        }
+      } else {
+        setUser(null);
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("auth-user");
+        }
+      }
+      return data;
+    }
+
+    globalFetchPromise = (async () => {
+      try {
+        const response = await api.get<{ data: AuthUser }>("/auth/me");
+        const data = response.data ?? response as unknown as AuthUser;
+        console.info("[auth] loaded current PropertyOS user", {
+          email: data.email,
+          role: data.role,
+          status: data.status,
+        });
+        return data;
+      } catch (error) {
+        const status = error instanceof ApiError ? error.status : undefined;
+        console.warn("[auth] failed to load current PropertyOS user", {
+          status,
+          message: error instanceof Error ? error.message : "unknown",
+        });
+        clearTokens();
+        if (status === 401 || status === 403) {
+          await signOut({ redirectUrl: "/sign-in" });
+        }
+        return null;
+      } finally {
+        globalFetchPromise = null;
+      }
+    })();
+
+    const data = await globalFetchPromise;
+    if (data) {
       setUser(data);
       if (typeof window !== "undefined") {
         localStorage.setItem("auth-user", JSON.stringify(data));
       }
-      return data;
-    } catch (error) {
-      const status = error instanceof ApiError ? error.status : undefined;
-      console.warn("[auth] failed to load current PropertyOS user", {
-        status,
-        message: error instanceof Error ? error.message : "unknown",
-      });
-      clearTokens();
+    } else {
+      setUser(null);
       if (typeof window !== "undefined") {
         localStorage.removeItem("auth-user");
       }
-      setUser(null);
-      if (status === 401 || status === 403) {
-        await signOut({ redirectUrl: "/sign-in" });
-      }
-      return null;
     }
+    return data;
   }, [signOut]);
 
   useEffect(() => {
@@ -184,8 +216,6 @@ export function useCurrentUser() {
   }, [fetchUser, user]);
 
   useEffect(() => {
-    if (user) return;
-
     const handleTokenSourceChange = () => {
       void fetchUser();
     };
@@ -196,7 +226,7 @@ export function useCurrentUser() {
         "auth-token-source-changed",
         handleTokenSourceChange,
       );
-  }, [fetchUser, user]);
+  }, [fetchUser]);
 
   const logout = useCallback(async () => {
     clearTokens();
