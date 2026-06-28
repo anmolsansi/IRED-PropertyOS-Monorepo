@@ -2,8 +2,8 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
 
-COPY package.json package-lock.json ./
-COPY Backend/package.json ./Backend/package.json
+COPY ./package.json ./package-lock.json ./
+COPY ./Backend/package.json ./Backend/package.json
 
 RUN npm ci --legacy-peer-deps --omit=dev --workspace=ired-propertyos-backend && mkdir -p Backend/node_modules && npm cache clean --force
 RUN ./node_modules/.bin/prisma --version
@@ -13,12 +13,12 @@ RUN ./node_modules/.bin/prisma --version
 FROM node:20-alpine AS prisma
 WORKDIR /app
 
-COPY package.json package-lock.json ./
-COPY Backend/package.json ./Backend/package.json
+COPY ./package.json ./package-lock.json ./
+COPY ./Backend/package.json ./Backend/package.json
 
 RUN npm ci --legacy-peer-deps --workspace=ired-propertyos-backend && npm cache clean --force
 
-COPY Backend/prisma ./prisma
+COPY ./Backend/prisma ./prisma
 RUN ./node_modules/.bin/prisma generate
 
 
@@ -26,14 +26,14 @@ RUN ./node_modules/.bin/prisma generate
 FROM node:20-alpine AS build
 WORKDIR /app
 
-COPY package.json package-lock.json ./
-COPY Backend/package.json ./Backend/package.json
+COPY ./package.json ./package-lock.json ./
+COPY ./Backend/package.json ./Backend/package.json
 
 RUN npm ci --legacy-peer-deps --workspace=ired-propertyos-backend && npm cache clean --force
 
 COPY --from=prisma /app/node_modules/.prisma ./node_modules/.prisma
-COPY Backend/tsconfig.json Backend/tsconfig.build.json ./Backend/
-COPY Backend/src ./Backend/src
+COPY ./Backend/tsconfig.json ./Backend/tsconfig.build.json ./Backend/
+COPY ./Backend/src ./Backend/src
 
 RUN npm run build -w ired-propertyos-backend
 
@@ -53,8 +53,8 @@ COPY --from=prisma /app/node_modules/@prisma/client ./node_modules/@prisma/clien
 
 COPY --from=build /app/Backend/dist ./Backend/dist
 
-COPY Backend/prisma ./prisma
-COPY Backend/scripts/deploy-migrations.js ./scripts/deploy-migrations.js
+COPY ./Backend/prisma ./prisma
+COPY ./Backend/scripts/deploy-migrations.js ./scripts/deploy-migrations.js
 
 ENV NODE_ENV=production
 ENV APP_PORT=10000
