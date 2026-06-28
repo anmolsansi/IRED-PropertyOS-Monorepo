@@ -18,30 +18,25 @@ interface SidebarProps {
   isV2?: boolean;
 }
 
-export function Sidebar({ isV2 = false }: SidebarProps) {
-  const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
-  const { mode, toggleMode, isMaster } = useDataMode();
-  const navItems = isV2 ? V2_NAV_ITEMS : V1_NAV_ITEMS;
-  const activeHref = navItems.reduce<string | undefined>((match, item) => {
-    const isSettingsRoot = item.href === "/settings";
-    const isActive = isSettingsRoot
-      ? pathname === item.href
-      : pathname === item.href || pathname.startsWith(item.href + "/");
-
-    if (!isActive) return match;
-    if (!match || item.href.length > match.length) return item.href;
-    return match;
-  }, undefined);
-
+export function SidebarContent({
+  collapsed,
+  navItems,
+  pathname,
+  mode,
+  isMaster,
+  toggleMode,
+  setCollapsed,
+}: {
+  collapsed: boolean;
+  navItems: NavItem[];
+  pathname: string;
+  mode: string;
+  isMaster: boolean;
+  toggleMode: () => void;
+  setCollapsed?: (val: boolean) => void;
+}) {
   return (
-    <aside
-      aria-label={isV2 ? "CRM Navigation" : "Property Management Navigation"}
-      className={cn(
-        "fixed left-0 top-0 z-40 h-screen bg-sidebar text-sidebar-foreground border-r border-sidebar-border transition-all duration-300 flex flex-col",
-        collapsed ? "w-[68px]" : "w-64"
-      )}
-    >
+    <>
       {/* Logo */}
       <div className="flex items-center gap-2 px-4 h-16 border-b border-sidebar-border shrink-0">
         <Building2 className="h-8 w-8 text-sidebar-primary shrink-0" />
@@ -141,17 +136,46 @@ export function Sidebar({ isV2 = false }: SidebarProps) {
             </a>
           </div>
         )}
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="w-full flex items-center justify-center h-8 rounded-md hover:bg-sidebar-accent transition-colors"
-        >
-          {collapsed ? (
-            <ChevronRight className="h-4 w-4" />
-          ) : (
-            <ChevronLeft className="h-4 w-4" />
-          )}
-        </button>
+        {setCollapsed && (
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            className="w-full flex items-center justify-center h-8 rounded-md hover:bg-sidebar-accent transition-colors hidden md:flex"
+          >
+            {collapsed ? (
+              <ChevronRight className="h-4 w-4" />
+            ) : (
+              <ChevronLeft className="h-4 w-4" />
+            )}
+          </button>
+        )}
       </div>
+    </>
+  );
+}
+
+export function Sidebar({ isV2 = false }: SidebarProps) {
+  const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
+  const { mode, toggleMode, isMaster } = useDataMode();
+  const navItems = isV2 ? V2_NAV_ITEMS : V1_NAV_ITEMS;
+
+  return (
+    <aside
+      aria-label={isV2 ? "CRM Navigation" : "Property Management Navigation"}
+      className={cn(
+        "fixed left-0 top-0 z-40 h-screen bg-sidebar text-sidebar-foreground border-r border-sidebar-border transition-all duration-300 hidden md:flex flex-col",
+        collapsed ? "w-[68px]" : "w-64"
+      )}
+    >
+      <SidebarContent
+        collapsed={collapsed}
+        navItems={navItems}
+        pathname={pathname}
+        mode={mode}
+        isMaster={isMaster}
+        toggleMode={toggleMode}
+        setCollapsed={setCollapsed}
+      />
     </aside>
   );
 }
