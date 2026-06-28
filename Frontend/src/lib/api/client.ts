@@ -158,7 +158,10 @@ async function request<T>(
     response = await fetch(url, { ...options, headers, signal: controller.signal });
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
-      throw new ApiError("Request timed out. Check that the backend is running on port 4000.", 408);
+      throw new ApiError(`Request timed out. Check that the backend is running and reachable at ${BASE_URL}`, 408);
+    }
+    if (error instanceof TypeError) {
+      throw new ApiError(`Network error. Could not connect to backend at ${BASE_URL}. Is it running?`, 503);
     }
     throw error;
   } finally {

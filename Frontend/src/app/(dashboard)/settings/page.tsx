@@ -79,7 +79,7 @@ function ProfileSettings({
             <Input
               id="role"
               disabled
-              value={role === "ADMIN" ? "Administrator" : "Worker"}
+              value={role === "ADMIN" ? "Administrator" : role === "RIDER" ? "Rider" : "Worker"}
             />
           </div>
         </div>
@@ -169,7 +169,7 @@ export default function SettingsPage() {
                     {user?.email || "admin@ired.com"}
                   </p>
                   <Badge variant="secondary" className="mt-1 text-xs">
-                    {user?.role === "ADMIN" ? "Administrator" : "Worker"}
+                    {user?.role === "ADMIN" ? "Administrator" : user?.role === "RIDER" ? "Rider" : "Worker"}
                   </Badge>
                 </div>
               </div>

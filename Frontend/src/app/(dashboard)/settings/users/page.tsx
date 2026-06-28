@@ -65,7 +65,7 @@ import {
 import type { FilterParams, User, GeographicAssignment } from "@/types";
 import { toast } from "sonner";
 
-const ROLE_OPTIONS = ["ADMIN", "WORKER"];
+const ROLE_OPTIONS = ["ADMIN", "WORKER", "RIDER"];
 const STATUS_OPTIONS = ["active", "inactive"];
 
 const ROLE_STATUS_COLORS: Record<string, string> = {
@@ -411,7 +411,7 @@ export default function AdminUsersPage() {
                   <SelectContent>
                     {ROLE_OPTIONS.map((r) => (
                       <SelectItem key={r} value={r}>
-                        {r === "ADMIN" ? "Administrator" : "Worker"}
+                        {r === "ADMIN" ? "Administrator" : r === "WORKER" ? "Worker" : "Rider"}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -477,7 +477,7 @@ export default function AdminUsersPage() {
                     <SelectContent>
                       {ROLE_OPTIONS.map((r) => (
                         <SelectItem key={r} value={r}>
-                          {r === "ADMIN" ? "Administrator" : "Worker"}
+                          {r === "ADMIN" ? "Administrator" : r === "WORKER" ? "Worker" : "Rider"}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -643,7 +643,7 @@ export default function AdminUsersPage() {
             <SelectItem value="all">All Roles</SelectItem>
             {ROLE_OPTIONS.map((r) => (
               <SelectItem key={r} value={r}>
-                {r === "ADMIN" ? "Administrator" : "Worker"}
+                {r === "ADMIN" ? "Administrator" : r === "WORKER" ? "Worker" : "Rider"}
               </SelectItem>
             ))}
           </SelectContent>
