@@ -1,4 +1,5 @@
 name: Deploy
+
 on:
   push:
     branches: [main]
@@ -9,7 +10,18 @@ jobs:
     if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
+
+      - name: Debug repo files
+        run: |
+          pwd
+          ls -la
+          ls -la Backend
+          ls -la Backend/src
+          ls -la Backend/prisma
+          cat .dockerignore || true
+
       - name: Build Docker image
         run: docker build -f Backend/Dockerfile -t propertyos-backend:${{ github.sha }} . 
+
       - name: Run tests
         run: docker compose -f Backend/docker-compose.test.yml up --abort-on-container-exit
