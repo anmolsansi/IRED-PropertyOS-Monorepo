@@ -38,6 +38,11 @@ export const CreateBuildingSchema = z.object({
   nearbyTransportDetails: z.any().optional(),
   commercialTerms: z.any().optional(),
   additionalFields: z.any().optional(),
+  landlordName: z.string().optional(),
+  telecallerStatus: z.enum(["VERIFIED", "REVIEW_NEEDED", "BLANK"]).optional().default("BLANK"),
+  starRating: z.number().int().min(1).max(5).optional(),
+  facingOption: z.enum(["FRONT", "REAR"]).optional(),
+  unitAccessLocation: z.enum(["MAIN_ROAD", "INSIDE"]).optional(),
   notes: z.string().optional(),
 });
 

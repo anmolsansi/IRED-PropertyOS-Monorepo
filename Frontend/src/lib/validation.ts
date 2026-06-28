@@ -29,6 +29,11 @@ export const propertySchema = z.object({
   furnishingStatus: z.string().optional(),
   availabilityDate: z.string().optional(),
   possessionDate: z.string().optional(),
+  landlordName: z.string().optional(),
+  telecallerStatus: z.enum(["VERIFIED", "REVIEW_NEEDED", "BLANK"]).optional(),
+  starRating: z.coerce.number().min(1).max(5).optional().or(z.literal("")),
+  facingOption: z.enum(["FRONT", "REAR"]).optional(),
+  unitAccessLocation: z.enum(["MAIN_ROAD", "INSIDE"]).optional(),
   notes: z.string().max(2000).optional(),
 }).refine(
   (data) => {

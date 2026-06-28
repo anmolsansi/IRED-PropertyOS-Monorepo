@@ -210,6 +210,22 @@ model MicroMarket {
 
 // ─── Reference Data: Configurable ───────────────────────────────
 
+enum TelecallerStatus {
+  VERIFIED
+  REVIEW_NEEDED
+  BLANK
+}
+
+enum FacingOption {
+  FRONT
+  REAR
+}
+
+enum UnitAccessLocation {
+  MAIN_ROAD
+  INSIDE
+}
+
 model PropertyType {
   id        String   @id @default(uuid()) @db.Uuid
   name      String   @unique
@@ -338,6 +354,11 @@ model Building {
   nearbyTransportDetails   Json?               @map("nearby_transport_details")
   commercialTerms          Json?               @map("commercial_terms")
   additionalFields         Json?               @map("additional_fields")
+  landlordName             String?             @map("landlord_name")
+  telecallerStatus         TelecallerStatus?   @default(BLANK) @map("telecaller_status")
+  starRating               Int?                @map("star_rating")
+  facingOption             FacingOption?       @map("facing_option")
+  unitAccessLocation       UnitAccessLocation? @map("unit_access_location")
   notes                    String?
   createdBy                String?             @map("created_by") @db.Uuid
   updatedBy                String?             @map("updated_by") @db.Uuid
