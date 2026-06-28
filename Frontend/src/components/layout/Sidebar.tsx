@@ -56,7 +56,7 @@ export function SidebarContent({
           <SidebarItem
             key={item.href}
             item={item}
-            active={activeHref === item.href}
+            active={pathname === item.href || pathname.startsWith(item.href + "/")}
             collapsed={collapsed}
           />
         ))}
