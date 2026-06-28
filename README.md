@@ -16,6 +16,7 @@ The older `Backend/frontend/` folder is kept as legacy code and is not part of t
 - Redis: `localhost:6379`
 - MinIO: `http://localhost:9000`
 
+
 ## First setup
 
 ```bash
