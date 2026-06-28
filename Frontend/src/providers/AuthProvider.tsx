@@ -5,16 +5,26 @@ import { useEffect } from "react";
 import { setClerkTokenGetter } from "@/lib/api/client";
 
 function ClerkTokenBridge({ children }: { children: React.ReactNode }) {
-  const { getToken, isSignedIn } = useAuth();
+  const { getToken, isLoaded, isSignedIn } = useAuth();
 
   useEffect(() => {
+    if (!isLoaded) {
+      return;
+    }
+
     if (!isSignedIn) {
+      console.info("[auth] Clerk loaded without an active session");
       setClerkTokenGetter(null);
       return;
     }
 
+    console.info("[auth] Clerk loaded with an active session");
     setClerkTokenGetter(() => getToken());
-  }, [getToken, isSignedIn]);
+  }, [getToken, isLoaded, isSignedIn]);
+
+  if (!isLoaded) {
+    return null;
+  }
 
   return <>{children}</>;
 }

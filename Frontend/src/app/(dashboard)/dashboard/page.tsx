@@ -21,6 +21,8 @@ import {
   ClipboardList,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 function formatTimestamp(iso: string) {
   const date = new Date(iso);
@@ -387,9 +389,16 @@ function WorkerDashboard() {
 
 export default function DashboardPage() {
   const { session, status } = useAuthSession();
+  const router = useRouter();
   const role = session?.user?.role;
 
-  if (status === "loading") {
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.replace("/sign-in");
+    }
+  }, [router, status]);
+
+  if (status !== "authenticated" || !role) {
     return (
       <div className="space-y-6">
         <LoadingSkeleton type="cards" count={4} />

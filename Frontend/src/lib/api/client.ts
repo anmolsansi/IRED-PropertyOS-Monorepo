@@ -1,13 +1,26 @@
 import type { FilterParams, PaginatedResponse } from "@/types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api/v1";
+const AUTH_DEBUG =
+  process.env.NEXT_PUBLIC_AUTH_DEBUG === "true" ||
+  process.env.NODE_ENV !== "production";
 
 type ClerkTokenGetter = () => Promise<string | null>;
 
 let clerkTokenGetter: ClerkTokenGetter | null = null;
 
+function logAuthDebug(message: string, context?: Record<string, unknown>) {
+  if (!AUTH_DEBUG) return;
+  console.info(`[auth] ${message}`, context ?? {});
+}
+
+function logAuthWarning(message: string, context?: Record<string, unknown>) {
+  console.warn(`[auth] ${message}`, context ?? {});
+}
+
 export function setClerkTokenGetter(getter: ClerkTokenGetter | null) {
   clerkTokenGetter = getter;
+  logAuthDebug(getter ? "registered Clerk token source" : "cleared Clerk token source");
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("auth-token-source-changed"));
   }
@@ -85,7 +98,18 @@ async function refreshAccessToken(): Promise<string | null> {
 
 async function getValidAccessToken(): Promise<string | null> {
   if (clerkTokenGetter) {
-    return clerkTokenGetter();
+    try {
+      const token = await clerkTokenGetter();
+      if (!token) {
+        logAuthWarning("Clerk token source returned no token");
+      }
+      return token;
+    } catch (error) {
+      logAuthWarning("Clerk token source failed", {
+        error: error instanceof Error ? error.message : "unknown",
+      });
+      return null;
+    }
   }
 
   return accessToken;
@@ -122,6 +146,12 @@ async function request<T>(
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
+  logAuthDebug("sending API request", {
+    endpoint,
+    method: options.method ?? "GET",
+    hasToken: Boolean(token),
+    tokenSource: clerkTokenGetter ? "clerk" : accessToken ? "legacy-jwt" : "none",
+  });
 
   let response: Response;
   try {
@@ -151,6 +181,13 @@ async function request<T>(
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
+    logAuthWarning("API request failed", {
+      endpoint,
+      status: response.status,
+      message: body.message || body.error || "unknown",
+      hasToken: Boolean(headers.Authorization),
+      tokenSource: clerkTokenGetter ? "clerk" : accessToken ? "legacy-jwt" : "none",
+    });
     throw new ApiError(
       body.message || body.error || `Request failed with status ${response.status}`,
       response.status

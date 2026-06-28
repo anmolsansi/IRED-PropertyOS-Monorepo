@@ -153,15 +153,60 @@ export class BuildingsService {
   async create(data: any, userId: string) {
     const buildingCode =
       data.buildingCode || (await this.generateBuildingCode());
+    const normalizedData = await this.resolveReferenceNames(data);
 
     return this.prisma.building.create({
       data: {
-        ...data,
+        ...normalizedData,
         buildingCode,
         createdBy: userId,
         updatedBy: userId,
       },
     });
+  }
+
+  private async resolveReferenceNames(data: any) {
+    const {
+      propertyTypeName,
+      stateCode,
+      stateName,
+      sourceName,
+      ...normalizedData
+    } = data;
+
+    if (!normalizedData.propertyTypeId && propertyTypeName) {
+      const propertyType = await this.prisma.propertyType.upsert({
+        where: { name: propertyTypeName },
+        update: {},
+        create: { name: propertyTypeName },
+      });
+      normalizedData.propertyTypeId = propertyType.id;
+    }
+
+    if (!normalizedData.stateId && (stateCode || stateName)) {
+      const state = stateCode
+        ? await this.prisma.state.upsert({
+            where: { code: stateCode },
+            update: stateName ? { name: stateName } : {},
+            create: { code: stateCode, name: stateName || stateCode },
+          })
+        : await this.prisma.state.findFirst({
+            where: { name: stateName, active: true },
+          });
+
+      if (state) normalizedData.stateId = state.id;
+    }
+
+    if (!normalizedData.sourceId && sourceName) {
+      const source = await this.prisma.source.upsert({
+        where: { name: sourceName },
+        update: {},
+        create: { name: sourceName },
+      });
+      normalizedData.sourceId = source.id;
+    }
+
+    return normalizedData;
   }
 
   private async generateBuildingCode() {

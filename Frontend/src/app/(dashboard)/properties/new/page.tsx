@@ -27,6 +27,7 @@ import {
   useAvailabilityStatuses,
   useSources,
   findById,
+  type ReferenceItem,
 } from "@/hooks/use-reference";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, Upload, X, ImageIcon, FileText, Film } from "lucide-react";
@@ -60,6 +61,69 @@ const ADDITIONAL_FIELD_TYPES = [
   { value: "linkedin", label: "LinkedIn" },
   { value: "other", label: "Other" },
 ];
+
+const FALLBACK_PROPERTY_TYPES: ReferenceItem[] = [
+  "Office",
+  "Retail",
+  "Warehouse",
+  "Industrial",
+  "Residential",
+  "CoWorking",
+  "Plot",
+  "Farmhouse",
+].map((name) => ({ id: name, name, active: true }));
+
+const FALLBACK_SOURCES: ReferenceItem[] = [
+  "Manual Entry",
+  "Website",
+  "Referral",
+  "99acres",
+  "MagicBricks",
+  "Housing.com",
+  "JustDial",
+  "Google Maps",
+  "Walk-in",
+  "Existing Client",
+].map((name) => ({ id: name, name, active: true }));
+
+const FALLBACK_STATES: ReferenceItem[] = [
+  ["AP", "Andhra Pradesh"],
+  ["AR", "Arunachal Pradesh"],
+  ["AS", "Assam"],
+  ["BR", "Bihar"],
+  ["CG", "Chhattisgarh"],
+  ["GA", "Goa"],
+  ["GJ", "Gujarat"],
+  ["HR", "Haryana"],
+  ["HP", "Himachal Pradesh"],
+  ["JH", "Jharkhand"],
+  ["KA", "Karnataka"],
+  ["KL", "Kerala"],
+  ["MP", "Madhya Pradesh"],
+  ["MH", "Maharashtra"],
+  ["MN", "Manipur"],
+  ["ML", "Meghalaya"],
+  ["MZ", "Mizoram"],
+  ["NL", "Nagaland"],
+  ["OD", "Odisha"],
+  ["PB", "Punjab"],
+  ["RJ", "Rajasthan"],
+  ["SK", "Sikkim"],
+  ["TN", "Tamil Nadu"],
+  ["TS", "Telangana"],
+  ["TR", "Tripura"],
+  ["UP", "Uttar Pradesh"],
+  ["UK", "Uttarakhand"],
+  ["WB", "West Bengal"],
+  ["AN", "Andaman and Nicobar Islands"],
+  ["CH", "Chandigarh"],
+  ["DN", "Dadra and Nagar Haveli and Daman and Diu"],
+  ["DL", "Delhi"],
+  ["JK", "Jammu and Kashmir"],
+  ["LA", "Ladakh"],
+  ["LD", "Lakshadweep"],
+  ["PY", "Puducherry"],
+].map(([code, name]) => ({ id: code, code, name, active: true }));
 
 interface AdditionalField {
   id: string;
@@ -97,7 +161,6 @@ function ValidatedField({
 
 interface FormData {
   entryType: string;
-  buildingName: string;
   propertyType: string;
   source: string;
   address: string;
@@ -126,7 +189,6 @@ interface FormData {
 
 const initialFormData: FormData = {
   entryType: "building",
-  buildingName: "",
   propertyType: "",
   source: "",
   address: "",
@@ -195,11 +257,14 @@ export default function NewPropertyPage() {
   };
 
   // Reference data
-  const { data: states = [] } = useStates();
-  const { data: propertyTypes = [] } = usePropertyTypes();
+  const { data: statesData = [] } = useStates();
+  const { data: propertyTypesData = [] } = usePropertyTypes();
   const { data: furnishingStatuses = [] } = useFurnishingStatuses();
   const { data: availabilityStatuses = [] } = useAvailabilityStatuses();
-  const { data: sources = [] } = useSources();
+  const { data: sourcesData = [] } = useSources();
+  const states = statesData.length > 0 ? statesData : FALLBACK_STATES;
+  const propertyTypes = propertyTypesData.length > 0 ? propertyTypesData : FALLBACK_PROPERTY_TYPES;
+  const sources = sourcesData.length > 0 ? sourcesData : FALLBACK_SOURCES;
 
   function updateField(field: string, value: string | null) {
     setFormData((prev) => ({ ...prev, [field]: value ?? "" }));
@@ -212,6 +277,19 @@ export default function NewPropertyPage() {
   function getCreatedBuildingId(response: unknown) {
     const maybeWrapped = response as { data?: { id?: string }; id?: string };
     return maybeWrapped.data?.id || maybeWrapped.id;
+  }
+
+  function isUuid(value: string) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  }
+
+  function derivePropertyName() {
+    const addressLine = formData.address.trim().split("\n")[0]?.trim();
+    return (
+      addressLine ||
+      [formData.locality, formData.city, formData.pincode].filter(Boolean).join(", ") ||
+      "New Property"
+    );
   }
 
   async function uploadPendingMedia(buildingId: string) {
@@ -262,7 +340,7 @@ export default function NewPropertyPage() {
     setIsSubmitting(true);
     try {
       const payload: Record<string, unknown> = {
-        name: formData.buildingName,
+        name: derivePropertyName(),
         fullAddress: formData.address || undefined,
         cityName: formData.city || undefined,
         localityName: formData.locality || undefined,
@@ -292,9 +370,24 @@ export default function NewPropertyPage() {
           value: field.value.trim(),
         }));
 
-      if (formData.propertyType) payload.propertyTypeId = formData.propertyType;
-      if (formData.state) payload.stateId = formData.state;
-      if (formData.source) payload.sourceId = formData.source;
+      const selectedPropertyType = findById(propertyTypes, formData.propertyType);
+      const selectedState = findById(states, formData.state);
+      const selectedSource = findById(sources, formData.source);
+      if (formData.propertyType) {
+        if (isUuid(formData.propertyType)) payload.propertyTypeId = formData.propertyType;
+        else payload.propertyTypeName = selectedPropertyType?.name || formData.propertyType;
+      }
+      if (formData.state) {
+        if (isUuid(formData.state)) payload.stateId = formData.state;
+        else {
+          payload.stateCode = selectedState?.code || formData.state;
+          payload.stateName = selectedState?.name || formData.state;
+        }
+      }
+      if (formData.source) {
+        if (isUuid(formData.source)) payload.sourceId = formData.source;
+        else payload.sourceName = selectedSource?.name || formData.source;
+      }
       if (formData.availabilityStatus) payload.availabilityStatusId = formData.availabilityStatus;
       if (formData.mapsUrl) payload.googleMapsUrl = formData.mapsUrl;
       if (formData.latitude) payload.latitude = parseFloat(formData.latitude);
@@ -332,7 +425,7 @@ export default function NewPropertyPage() {
   const validateStep = useCallback(
     (stepIndex: number): Record<string, string> | null => {
       const stepFields: Record<number, string[]> = {
-        0: ["entryType", "buildingName", "propertyType", "state", "city", "pincode", "mapsUrl", "totalArea", "availableArea", "rentPerSqFt"],
+        0: ["entryType", "propertyType", "state", "city", "pincode", "mapsUrl", "totalArea", "availableArea", "rentPerSqFt"],
       };
 
       const fields = stepFields[stepIndex];
@@ -480,14 +573,6 @@ export default function NewPropertyPage() {
                   <SelectItem value="unit">Unit</SelectItem>
                 </SelectContent>
               </Select>
-            </ValidatedField>
-
-            <ValidatedField label="Building Name" required field="buildingName">
-              <Input
-                placeholder="e.g. Phoenix Marketcity"
-                value={formData.buildingName}
-                onChange={(e) => updateField("buildingName", e.target.value)}
-              />
             </ValidatedField>
 
             <ValidatedField label="Property Type" required field="propertyType">
@@ -1032,8 +1117,6 @@ export default function NewPropertyPage() {
               <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
                 <span className="text-muted-foreground">Entry Type:</span>
                 <span>{formData.entryType.charAt(0).toUpperCase() + formData.entryType.slice(1)}</span>
-                <span className="text-muted-foreground">Building Name:</span>
-                <span>{formData.buildingName || "—"}</span>
                 <span className="text-muted-foreground">Property Type:</span>
                 <span>{findById(propertyTypes, formData.propertyType)?.name || "—"}</span>
                 <span className="text-muted-foreground">Source:</span>

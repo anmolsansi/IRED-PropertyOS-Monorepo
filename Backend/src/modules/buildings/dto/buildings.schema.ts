@@ -5,7 +5,10 @@ const uuid = z.string().uuid("Invalid UUID");
 export const CreateBuildingSchema = z.object({
   name: z.string().min(1, "Name is required"),
   propertyTypeId: uuid.optional(),
+  propertyTypeName: z.string().trim().min(1).max(120).optional(),
   stateId: uuid.optional(),
+  stateCode: z.string().trim().min(2).max(4).optional(),
+  stateName: z.string().trim().min(1).max(120).optional(),
   cityId: uuid.optional(),
   cityName: z.string().trim().min(1).max(120).optional(),
   zoneId: uuid.optional(),
@@ -24,6 +27,7 @@ export const CreateBuildingSchema = z.object({
   availabilityStatusId: uuid.optional(),
   verificationStatusId: uuid.optional(),
   sourceId: uuid.optional(),
+  sourceName: z.string().trim().min(1).max(120).optional(),
   parkingDetails: z.any().optional(),
   liftDetails: z.any().optional(),
   powerBackupDetails: z.any().optional(),

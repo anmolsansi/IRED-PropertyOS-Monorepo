@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 import { useClerk } from "@clerk/nextjs";
 import {
   api,
+  ApiError,
   storeTokens,
   clearTokens,
   getAccessToken,
@@ -140,24 +141,40 @@ export function useCurrentUser() {
   });
 
   const fetchUser = useCallback(async () => {
-    if (!getAccessToken() && !hasClerkTokenGetter()) return null;
+    if (!getAccessToken() && !hasClerkTokenGetter()) {
+      console.info("[auth] skipping /auth/me: no token source available");
+      return null;
+    }
     try {
       const response = await api.get<{ data: AuthUser }>("/auth/me");
       const data = response.data ?? response as unknown as AuthUser;
+      console.info("[auth] loaded current PropertyOS user", {
+        email: data.email,
+        role: data.role,
+        status: data.status,
+      });
       setUser(data);
       if (typeof window !== "undefined") {
         localStorage.setItem("auth-user", JSON.stringify(data));
       }
       return data;
-    } catch {
+    } catch (error) {
+      const status = error instanceof ApiError ? error.status : undefined;
+      console.warn("[auth] failed to load current PropertyOS user", {
+        status,
+        message: error instanceof Error ? error.message : "unknown",
+      });
       clearTokens();
       if (typeof window !== "undefined") {
         localStorage.removeItem("auth-user");
       }
       setUser(null);
+      if (status === 401 || status === 403) {
+        await signOut({ redirectUrl: "/sign-in" });
+      }
       return null;
     }
-  }, []);
+  }, [signOut]);
 
   useEffect(() => {
     if (!user) {

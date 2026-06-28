@@ -4,6 +4,7 @@ import {
   S3Client,
   CreateBucketCommand,
   HeadBucketCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   GetObjectCommand,
 } from "@aws-sdk/client-s3";
@@ -151,6 +152,13 @@ export class MediaService {
     const media = await this.prisma.media.findUnique({ where: { id } });
     if (!media) throw new NotFoundException("Media not found");
 
+    await this.s3.send(
+      new HeadObjectCommand({
+        Bucket: this.bucket,
+        Key: media.storageKey,
+      }),
+    );
+
     return this.prisma.media.update({
       where: { id },
       data: {
@@ -290,6 +298,9 @@ export class MediaService {
   private buildPublicUrl(storageKey: string) {
     const baseUrl = this.publicUrl.replace(/\/$/, "");
     if (!baseUrl) return storageKey;
+
+    const hostname = new URL(baseUrl).hostname;
+    if (hostname.endsWith(".r2.dev")) return `${baseUrl}/${storageKey}`;
 
     const bucketPath = `/${this.bucket}`;
     return baseUrl.endsWith(bucketPath)

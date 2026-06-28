@@ -7,10 +7,14 @@ describe("ReferenceService", () => {
   let prisma: any;
 
   beforeEach(async () => {
+    const referenceModel = (findManyValue: unknown[]) => ({
+      count: jest.fn().mockResolvedValue(1),
+      findMany: jest.fn().mockResolvedValue(findManyValue),
+      upsert: jest.fn().mockResolvedValue({}),
+    });
+
     prisma = {
-      state: {
-        findMany: jest.fn().mockResolvedValue([{ id: "s-1", name: "Delhi" }]),
-      },
+      state: referenceModel([{ id: "s-1", name: "Delhi" }]),
       city: {
         findMany: jest
           .fn()
@@ -22,13 +26,13 @@ describe("ReferenceService", () => {
           .mockResolvedValue([{ id: "l-1", name: "Connaught Place" }]),
       },
       microMarket: { findMany: jest.fn().mockResolvedValue([]) },
-      propertyType: { findMany: jest.fn().mockResolvedValue([]) },
-      furnishingStatus: { findMany: jest.fn().mockResolvedValue([]) },
-      availabilityStatus: { findMany: jest.fn().mockResolvedValue([]) },
-      verificationStatus: { findMany: jest.fn().mockResolvedValue([]) },
-      contactRole: { findMany: jest.fn().mockResolvedValue([]) },
-      documentCategory: { findMany: jest.fn().mockResolvedValue([]) },
-      source: { findMany: jest.fn().mockResolvedValue([]) },
+      propertyType: referenceModel([]),
+      furnishingStatus: referenceModel([]),
+      availabilityStatus: referenceModel([]),
+      verificationStatus: referenceModel([]),
+      contactRole: referenceModel([]),
+      documentCategory: referenceModel([]),
+      source: referenceModel([]),
       zone: { findMany: jest.fn().mockResolvedValue([]) },
     };
 
@@ -54,6 +58,7 @@ describe("ReferenceService", () => {
         where: { active: true },
         orderBy: { name: "asc" },
       });
+      expect(prisma.state.upsert).not.toHaveBeenCalled();
     });
   });
 
@@ -79,6 +84,10 @@ describe("ReferenceService", () => {
     it("should return property types", async () => {
       const result = await service.findAllPropertyTypes();
       expect(result).toEqual([]);
+      expect(prisma.propertyType.count).toHaveBeenCalledWith({
+        where: { active: true },
+      });
+      expect(prisma.propertyType.upsert).not.toHaveBeenCalled();
     });
   });
 

@@ -6,7 +6,7 @@ services:
     region: singapore
     rootDir: Backend
     buildCommand: npm ci --legacy-peer-deps && npx prisma generate && npm run build
-    preDeployCommand: npx prisma db push
+    preDeployCommand: node scripts/deploy-migrations.js
     startCommand: npm run start:prod
     healthCheckPath: /api/v1/health
     autoDeployTrigger: commit
@@ -17,8 +17,6 @@ services:
         value: production
       - key: APP_ENV
         value: production
-      - key: PORT
-        value: 10000
       - key: APP_PORT
         value: 10000
       - key: APP_NAME
