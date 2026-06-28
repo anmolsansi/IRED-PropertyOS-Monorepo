@@ -4,7 +4,7 @@
 
 // --- Auth & Users ---
 
-export type UserRole = "ADMIN" | "WORKER";
+export type UserRole = "ADMIN" | "WORKER" | "RIDER";
 
 export interface User {
   id: string;

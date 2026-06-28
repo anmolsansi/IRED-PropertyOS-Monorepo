@@ -6,7 +6,7 @@ export const InviteUserSchema = z.object({
   email: z.string().email("Invalid email address"),
   fullName: z.string().min(1, "Full name is required"),
   mobileNumber: z.string().min(10).optional(),
-  role: z.enum(["ADMIN", "WORKER"]),
+  role: z.enum(["ADMIN", "WORKER", "RIDER"]),
   stateIds: z.array(uuid).optional(),
   cityIds: z.array(uuid).optional(),
 });
@@ -19,7 +19,7 @@ export const UpdateUserSchema = z.object({
   email: z.string().email("Invalid email address").optional(),
   fullName: z.string().min(1, "Full name is required").optional(),
   mobileNumber: z.string().min(10).optional(),
-  role: z.enum(["ADMIN", "WORKER"]).optional(),
+  role: z.enum(["ADMIN", "WORKER", "RIDER"]).optional(),
   status: z.enum(["active", "inactive", "suspended"]).optional(),
 });
 
@@ -44,7 +44,7 @@ export const ReassignUnitsSchema = z.object({
 export const UserQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(250).default(20),
-  role: z.enum(["ADMIN", "WORKER"]).optional(),
+  role: z.enum(["ADMIN", "WORKER", "RIDER"]).optional(),
   status: z.enum(["active", "inactive", "suspended"]).optional(),
   search: z.string().optional(),
 });
