@@ -12,4 +12,4 @@ jobs:
       - name: Build Docker image
         run: docker build -f Backend/Dockerfile -t propertyos-backend:${{ github.sha }} . 
       - name: Run tests
-        run: docker compose -f docker-compose.test.yml up --abort-on-container-exit
+        run: docker compose -f Backend/docker-compose.test.yml up --abort-on-container-exit
