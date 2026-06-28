@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { Search, Bell, HelpCircle, ChevronDown, LogOut, User, Settings, Command, FileText } from "lucide-react";
+import { useRouter, usePathname } from "next/navigation";
+import { Search, Bell, HelpCircle, ChevronDown, LogOut, User, Settings, Command, FileText, Menu } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import {
@@ -13,6 +13,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuthSession } from "@/hooks/use-session";
+import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { SidebarContent } from "@/components/layout/Sidebar";
+import { useDataMode } from "@/providers/DataProvider";
+import { V1_NAV_ITEMS, V2_NAV_ITEMS } from "@/lib/constants";
+import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 
 const NAV_PAGES = [
   { label: "Dashboard", route: "/dashboard" },
@@ -25,9 +30,13 @@ const NAV_PAGES = [
   { label: "Settings", route: "/settings" },
 ];
 
-export function TopBar() {
+export function TopBar({ isV2 = false }: { isV2?: boolean }) {
   const { session, signOut } = useAuthSession();
   const router = useRouter();
+  const pathname = usePathname();
+  const { mode, toggleMode, isMaster } = useDataMode();
+  const navItems = isV2 ? V2_NAV_ITEMS : V1_NAV_ITEMS;
+
   const user = session?.user;
   const initials = user?.fullName
     ?.split(" ")
@@ -37,6 +46,12 @@ export function TopBar() {
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Close mobile menu on route change
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
 
   // ⌘K shortcut
   useEffect(() => {
@@ -66,57 +81,90 @@ export function TopBar() {
   return (
     <>
       <header role="banner" className="sticky top-0 z-30 h-16 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="flex h-full items-center gap-4 px-6">
+        <div className="flex h-full items-center gap-4 px-4 sm:px-6">
+          {/* Mobile Menu Trigger */}
+          <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+            <SheetTrigger
+              className="md:hidden p-2 -ml-2 rounded-lg hover:bg-muted transition-colors"
+              aria-label="Open navigation menu"
+            >
+              <Menu className="h-5 w-5" />
+            </SheetTrigger>
+            <SheetContent side="left" className="w-[280px] p-0 flex flex-col bg-sidebar text-sidebar-foreground border-sidebar-border">
+              <VisuallyHidden.Root>
+                <SheetTitle>Navigation Menu</SheetTitle>
+                <SheetDescription>Main navigation for the application</SheetDescription>
+              </VisuallyHidden.Root>
+              <SidebarContent
+                collapsed={false}
+                navItems={navItems}
+                pathname={pathname}
+                mode={mode}
+                isMaster={isMaster}
+                toggleMode={toggleMode}
+              />
+            </SheetContent>
+          </Sheet>
+
           {/* Welcome */}
-          <div className="flex-1">
-            <h1 className="text-lg font-semibold">
+          <div className="flex-1 min-w-0">
+            <h1 className="text-base sm:text-lg font-semibold truncate">
               Welcome back, {user?.fullName?.split(" ")[0] || "User"}{" "}
               <span className="inline-block">👋</span>
             </h1>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-xs sm:text-sm text-muted-foreground hidden sm:block truncate">
               Here&apos;s what&apos;s happening across your portfolio today.
             </p>
           </div>
 
-          {/* Search Trigger */}
+          {/* Mobile Search Trigger */}
+          <button
+            onClick={() => setSearchOpen(true)}
+            className="md:hidden p-2 rounded-lg hover:bg-muted transition-colors shrink-0"
+            aria-label="Search"
+          >
+            <Search className="h-5 w-5 text-muted-foreground" />
+          </button>
+
+          {/* Desktop Search Trigger */}
           <button
             onClick={() => setSearchOpen(true)}
             aria-label="Search (Ctrl+K)"
-            className="relative w-96 hidden md:flex items-center h-10 pl-10 pr-12 rounded-lg border bg-muted/50 text-sm text-muted-foreground hover:bg-muted transition-colors"
+            className="relative w-64 lg:w-96 hidden md:flex items-center h-10 pl-10 pr-12 rounded-lg border bg-muted/50 text-sm text-muted-foreground hover:bg-muted transition-colors shrink-0"
           >
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" />
-            <span>Search properties, clients, deals...</span>
+            <span className="truncate">Search properties, clients, deals...</span>
             <kbd className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
               <span className="text-xs">⌘</span>K
             </kbd>
           </button>
 
           {/* Right side */}
-          <div className="flex items-center gap-2">
-            {/* Notifications - hidden until backend support exists */}
-            <button className="relative p-2 rounded-lg hover:bg-muted transition-colors" aria-label="Notifications" disabled>
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+            {/* Notifications */}
+            <button className="relative p-2 rounded-lg hover:bg-muted transition-colors hidden sm:block" aria-label="Notifications" disabled>
               <Bell className="h-5 w-5 text-muted-foreground" />
             </button>
 
             <ThemeToggle />
 
-            <button className="p-2 rounded-lg hover:bg-muted transition-colors">
+            <button className="p-2 rounded-lg hover:bg-muted transition-colors hidden sm:block">
               <HelpCircle className="h-5 w-5" />
             </button>
 
             <DropdownMenu>
-              <DropdownMenuTrigger className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-muted transition-colors cursor-pointer">
+              <DropdownMenuTrigger className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-muted transition-colors cursor-pointer ml-1">
                   <Avatar className="h-8 w-8">
                     <AvatarImage src="" alt={user?.fullName || "User"} />
                     <AvatarFallback>{initials}</AvatarFallback>
                   </Avatar>
-                  <div className="text-left hidden sm:block">
-                    <p className="text-sm font-medium">{user?.fullName || "User"}</p>
+                  <div className="text-left hidden lg:block">
+                    <p className="text-sm font-medium truncate max-w-[120px]">{user?.fullName || "User"}</p>
                     <p className="text-xs text-muted-foreground capitalize">
                       {user?.role?.toLowerCase() || "worker"}
                     </p>
                   </div>
-                  <ChevronDown className="h-4 w-4 text-muted-foreground hidden sm:block" />
+                  <ChevronDown className="h-4 w-4 text-muted-foreground hidden lg:block shrink-0" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuItem onClick={() => router.push("/settings")}>
