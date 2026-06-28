@@ -34,6 +34,7 @@ RUN npm ci --legacy-peer-deps --workspace=ired-propertyos-backend && npm cache c
 COPY --from=prisma /app/node_modules/.prisma ./node_modules/.prisma
 COPY ./Backend/tsconfig.json ./Backend/tsconfig.build.json ./Backend/
 COPY ./Backend/src ./Backend/src
+COPY ./Backend/prisma ./Backend/prisma
 
 RUN npm run build -w ired-propertyos-backend
 

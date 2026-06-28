@@ -44,4 +44,4 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       NODE_ENV: test
-    command: npm test
+    command: npm run test:backend
