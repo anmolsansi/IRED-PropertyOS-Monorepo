@@ -16,7 +16,7 @@ import { useAuthSession } from "@/hooks/use-session";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { SidebarContent } from "@/components/layout/Sidebar";
 import { useDataMode } from "@/providers/DataProvider";
-import { V1_NAV_ITEMS, V2_NAV_ITEMS } from "@/lib/constants";
+import { V1_NAV_ITEMS, V2_NAV_ITEMS, RIDER_NAV_ITEMS } from "@/lib/constants";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 
 const NAV_PAGES = [
@@ -30,14 +30,21 @@ const NAV_PAGES = [
   { label: "Settings", route: "/settings" },
 ];
 
+const RIDER_NAV_PAGES = [
+  { label: "Add Property", route: "/properties/new" },
+  { label: "Settings", route: "/settings" },
+];
+
 export function TopBar({ isV2 = false }: { isV2?: boolean }) {
   const { session, signOut } = useAuthSession();
   const router = useRouter();
   const pathname = usePathname();
   const { mode, toggleMode, isMaster } = useDataMode();
-  const navItems = isV2 ? V2_NAV_ITEMS : V1_NAV_ITEMS;
-
+  
   const user = session?.user;
+  const isRider = user?.role === "RIDER";
+  const navItems = isRider ? RIDER_NAV_ITEMS : (isV2 ? V2_NAV_ITEMS : V1_NAV_ITEMS);
+  const activeNavPages = isRider ? RIDER_NAV_PAGES : NAV_PAGES;
   const initials = user?.fullName
     ?.split(" ")
     .map((n) => n[0])
@@ -71,7 +78,7 @@ export function TopBar({ isV2 = false }: { isV2?: boolean }) {
   }, []);
 
   const filteredPages = searchQuery.length > 0
-    ? NAV_PAGES.filter((p) => p.label.toLowerCase().includes(searchQuery.toLowerCase()))
+    ? activeNavPages.filter((p) => p.label.toLowerCase().includes(searchQuery.toLowerCase()))
     : [];
 
   function handlePageNav(route: string) {

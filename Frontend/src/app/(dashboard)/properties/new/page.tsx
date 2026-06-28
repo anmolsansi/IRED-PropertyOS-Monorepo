@@ -611,7 +611,7 @@ export default function NewPropertyPage() {
           <section className="space-y-4">
           <h3 className="text-sm font-semibold">Location</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <ValidatedField label="Full Address" field="address" className="col-span-2">
+            <ValidatedField label="Full Address" field="address" className="md:col-span-2">
               <Textarea
                 placeholder="Enter complete address (optional for new records)"
                 value={formData.address}
@@ -685,7 +685,7 @@ export default function NewPropertyPage() {
               />
             </FormField>
 
-            <div className="col-span-2">
+            <div className="md:col-span-2">
               <Button
                 type="button"
                 variant="outline"
@@ -702,7 +702,7 @@ export default function NewPropertyPage() {
               </Button>
             </div>
 
-            <FormField label="Maps URL" className="col-span-2">
+            <FormField label="Maps URL" className="md:col-span-2">
               <Input
                 placeholder="https://maps.google.com/..."
                 value={formData.mapsUrl}

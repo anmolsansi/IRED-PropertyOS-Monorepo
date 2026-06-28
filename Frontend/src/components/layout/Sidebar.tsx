@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { V1_NAV_ITEMS, V2_NAV_ITEMS, type NavItem } from "@/lib/constants";
+import { V1_NAV_ITEMS, V2_NAV_ITEMS, RIDER_NAV_ITEMS, type NavItem } from "@/lib/constants";
 import { Badge } from "@/components/ui/badge";
 import {
   Building2,
@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useDataMode } from "@/providers/DataProvider";
+import { useAuthSession } from "@/hooks/use-session";
 
 interface SidebarProps {
   isV2?: boolean;
@@ -157,7 +158,8 @@ export function Sidebar({ isV2 = false }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const { mode, toggleMode, isMaster } = useDataMode();
-  const navItems = isV2 ? V2_NAV_ITEMS : V1_NAV_ITEMS;
+  const { session } = useAuthSession();
+  const navItems = session?.user?.role === "RIDER" ? RIDER_NAV_ITEMS : (isV2 ? V2_NAV_ITEMS : V1_NAV_ITEMS);
 
   return (
     <aside

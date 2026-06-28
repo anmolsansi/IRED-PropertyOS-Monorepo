@@ -40,6 +40,11 @@ export const V1_NAV_ITEMS: NavItem[] = [
   { label: "Settings", href: "/settings", icon: Settings },
 ];
 
+export const RIDER_NAV_ITEMS: NavItem[] = [
+  { label: "Add Property", href: "/properties/new", icon: Building2 },
+  { label: "Settings", href: "/settings", icon: Settings },
+];
+
 export const V2_NAV_ITEMS: NavItem[] = [
   ...V1_NAV_ITEMS.slice(0, 5),
   { label: "Clients", href: "/clients", icon: Users },

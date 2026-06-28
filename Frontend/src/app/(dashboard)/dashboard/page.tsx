@@ -395,8 +395,10 @@ export default function DashboardPage() {
   useEffect(() => {
     if (status === "unauthenticated") {
       router.replace("/sign-in");
+    } else if (status === "authenticated" && role === "RIDER") {
+      router.replace("/properties/new");
     }
-  }, [router, status]);
+  }, [router, status, role]);
 
   if (status !== "authenticated" || !role) {
     return (

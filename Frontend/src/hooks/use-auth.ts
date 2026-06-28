@@ -18,7 +18,7 @@ export interface AuthUser {
   email: string;
   fullName: string;
   mobileNumber?: string;
-  role: "ADMIN" | "WORKER";
+  role: "ADMIN" | "WORKER" | "RIDER";
   status: string;
   geographicAssignments?: GeographicAssignment[];
 }
