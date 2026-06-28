@@ -46,6 +46,7 @@ RUN addgroup -g 1001 -S propertyos && \
     adduser -S propertyos -u 1001
 
 COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/Backend/node_modules ./Backend/node_modules
 COPY --from=prisma /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=build /app/Backend/dist ./dist
 
