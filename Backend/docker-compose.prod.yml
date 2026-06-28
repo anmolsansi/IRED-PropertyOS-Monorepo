@@ -21,8 +21,8 @@ services:
   # ─── Backend API (Blue) ──────────────────────────────────
   backend-blue:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: Backend/Dockerfile
     container_name: propertyos-backend-blue
     restart: unless-stopped
     ports:
@@ -76,8 +76,8 @@ services:
   # ─── Backend API (Green) ─────────────────────────────────
   backend-green:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: Backend/Dockerfile
     container_name: propertyos-backend-green
     restart: unless-stopped
     ports:

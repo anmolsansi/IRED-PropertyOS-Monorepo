@@ -27,8 +27,8 @@ services:
 
   backend-test:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: Backend/Dockerfile
       target: build
     container_name: propertyos-backend-test
     depends_on:
