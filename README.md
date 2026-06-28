@@ -19,6 +19,7 @@ The older `Backend/frontend/` folder is kept as legacy code and is not part of t
 
 ## First setup
 
+
 ```bash
 npm install
 cp .env.example Backend/.env
