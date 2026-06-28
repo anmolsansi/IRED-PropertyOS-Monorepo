@@ -18,8 +18,8 @@ COPY ./Backend/package.json ./Backend/package.json
 
 RUN npm ci --legacy-peer-deps --workspace=ired-propertyos-backend && npm cache clean --force
 
-COPY ./Backend/prisma ./prisma
-RUN ./node_modules/.bin/prisma generate
+COPY ./Backend/prisma ./Backend/prisma
+RUN ./node_modules/.bin/prisma generate --schema=Backend/prisma/schema.prisma
 
 
 # ─── Stage 3: Build application ────────────────────────────────
