@@ -82,7 +82,7 @@ const MAJOR_CITIES: Record<string, string[]> = {
   AN: ["Port Blair"],
   CH: ["Chandigarh"],
   DN: ["Daman", "Diu", "Silvassa"],
-  DL: ["New Delhi", "Delhi"],
+  DL: ["New Delhi", "Delhi", "Delhi NCR"],
   JK: ["Srinagar", "Jammu"],
   LA: ["Leh", "Kargil"],
   LD: ["Kavaratti"],
@@ -354,7 +354,7 @@ async function main() {
   console.log(`  ✅ ${INDIAN_STATES.length} states`);
 
   // ─── Cities ────────────────────────────────────────────
-  const cityMap = new Map<string, string>();
+  const cityMap = new Map<string, { cityId: string; stateId: string }>();
   let cityCount = 0;
   for (const [stateCode, cities] of Object.entries(MAJOR_CITIES)) {
     const stateId = stateMap.get(stateCode);
@@ -368,9 +368,9 @@ async function main() {
         const created = await prisma.city.create({
           data: { name: cityName, stateId },
         });
-        cityMap.set(cityName, created.id);
+        cityMap.set(cityName, { cityId: created.id, stateId });
       } else {
-        cityMap.set(cityName, existing.id);
+        cityMap.set(cityName, { cityId: existing.id, stateId });
       }
       cityCount++;
     }
@@ -380,7 +380,7 @@ async function main() {
   // ─── Localities for Major CRE Markets ─────────────────
   let localityCount = 0;
   for (const [cityName, localities] of Object.entries(LOCALITIES)) {
-    const cityId = cityMap.get(cityName);
+    const cityData = cityMap.get(cityName); const cityId = cityData ? cityData.cityId : undefined;
     if (!cityId) continue;
 
     for (const localityName of localities) {
@@ -548,8 +548,9 @@ async function main() {
 
   const buildingIds: string[] = [];
   for (const b of BUILDING_NAMES) {
-    const cityId = cityMap.get(b.city);
-    if (!cityId) continue;
+    const cityData = cityMap.get(b.city);
+    if (!cityData) continue;
+    const { cityId, stateId } = cityData;
 
     const building = await prisma.building.upsert({
       where: {
@@ -561,6 +562,7 @@ async function main() {
         name: b.name,
         propertyTypeId: officeType?.id,
         cityId,
+        stateId,
         localityId: null,
         totalFloors: b.floors,
         totalUnits: b.units,

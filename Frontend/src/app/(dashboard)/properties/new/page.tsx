@@ -352,6 +352,7 @@ export default function NewPropertyPage() {
       const payload: Record<string, unknown> = {
         name: derivePropertyName(),
         fullAddress: formData.address || undefined,
+        stateName: formData.state || undefined,
         cityName: formData.city || undefined,
         localityName: formData.locality || undefined,
         pincode: formData.pincode || undefined,
