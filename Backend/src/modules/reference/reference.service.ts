@@ -363,17 +363,89 @@ export class ReferenceService {
   }
 
   async findCitiesByState(stateId: string) {
-    return this.prisma.city.findMany({
+    const refCities = await this.prisma.city.findMany({
       where: { stateId, active: true },
       orderBy: { name: "asc" },
     });
+
+    const buildingCities = await this.prisma.building.findMany({
+      where: { stateId, cityName: { not: null } },
+      select: { cityName: true },
+      distinct: ['cityName'],
+    });
+
+    const existingNames = new Set(refCities.map((c) => c.name.toLowerCase()));
+
+    buildingCities.forEach((b) => {
+      if (b.cityName && !existingNames.has(b.cityName.toLowerCase())) {
+        refCities.push({
+          id: b.cityName,
+          name: b.cityName,
+          code: null,
+          stateId: stateId,
+          active: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+        existingNames.add(b.cityName.toLowerCase());
+      }
+    });
+
+    return refCities.sort((a, b) => a.name.localeCompare(b.name));
   }
 
   async findLocalitiesByCity(cityId: string) {
-    return this.prisma.locality.findMany({
-      where: { cityId, active: true },
-      orderBy: { name: "asc" },
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(cityId);
+    
+    let refLocalities: any[] = [];
+    let cityNameForFallback: string | null = null;
+
+    if (isUuid) {
+      refLocalities = await this.prisma.locality.findMany({
+        where: { cityId, active: true },
+        orderBy: { name: "asc" },
+      });
+      const city = await this.prisma.city.findUnique({ where: { id: cityId } });
+      if (city) cityNameForFallback = city.name;
+    } else {
+      cityNameForFallback = cityId;
+    }
+
+    const buildingWhere: any = { localityName: { not: null } };
+    if (isUuid && cityNameForFallback) {
+      buildingWhere.OR = [
+        { cityId: cityId },
+        { cityName: { equals: cityNameForFallback, mode: "insensitive" } }
+      ];
+    } else if (cityNameForFallback) {
+      buildingWhere.cityName = { equals: cityNameForFallback, mode: "insensitive" };
+    } else if (isUuid) {
+      buildingWhere.cityId = cityId;
+    }
+
+    const buildingLocalities = await this.prisma.building.findMany({
+      where: buildingWhere,
+      select: { localityName: true },
+      distinct: ['localityName'],
     });
+
+    const existingNames = new Set(refLocalities.map((l) => l.name.toLowerCase()));
+    
+    buildingLocalities.forEach((b) => {
+      if (b.localityName && !existingNames.has(b.localityName.toLowerCase())) {
+        refLocalities.push({
+          id: b.localityName,
+          name: b.localityName,
+          cityId: isUuid ? cityId : null,
+          active: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+        existingNames.add(b.localityName.toLowerCase());
+      }
+    });
+
+    return refLocalities.sort((a, b) => a.name.localeCompare(b.name));
   }
 
   async findMicroMarketsByLocality(localityId: string) {
