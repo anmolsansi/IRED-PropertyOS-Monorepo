@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@clerk/nextjs";
 import { api } from "@/lib/api/client";
 
 // --- Types ---
@@ -44,8 +45,11 @@ function flattenMetrics(raw: Record<string, unknown>): Record<string, number> {
 // --- Hooks ---
 
 export function useAdminDashboard() {
+  const { isLoaded, isSignedIn } = useAuth();
+  
   return useQuery({
     queryKey: ["dashboard", "admin"],
+    enabled: isLoaded && !!isSignedIn,
     queryFn: async (): Promise<AdminDashboardData> => {
       const raw = await api.get<Record<string, unknown>>("/dashboard/admin");
       const m = flattenMetrics(raw as Record<string, unknown>);
@@ -69,8 +73,11 @@ export function useAdminDashboard() {
 }
 
 export function useWorkerDashboard() {
+  const { isLoaded, isSignedIn } = useAuth();
+
   return useQuery({
     queryKey: ["dashboard", "worker"],
+    enabled: isLoaded && !!isSignedIn,
     queryFn: async (): Promise<WorkerDashboardData> => {
       const raw = await api.get<Record<string, unknown>>("/dashboard/worker");
       const m = flattenMetrics(raw as Record<string, unknown>);
@@ -126,8 +133,11 @@ function normalizeActivityItem(item: BackendActivityItem, index: number): Activi
 }
 
 export function useActivity(limit = 20) {
+  const { isLoaded, isSignedIn } = useAuth();
+
   return useQuery({
     queryKey: ["dashboard", "activity", limit],
+    enabled: isLoaded && !!isSignedIn,
     queryFn: async (): Promise<ActivityItem[]> => {
       const response = await api.get<{ data: BackendActivityItem[] }>(`/dashboard/activity?limit=${limit}`);
       const data = (response.data ?? response) as BackendActivityItem[];
