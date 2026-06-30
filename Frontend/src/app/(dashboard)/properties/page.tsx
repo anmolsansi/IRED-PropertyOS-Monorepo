@@ -48,11 +48,10 @@ import {
   PROPERTY_TYPE_LABELS,
   FURNISHING_LABELS,
   AVAILABILITY_LABELS,
-  INDIAN_STATES,
-  MAJOR_CITIES,
 } from "@/lib/constants";
 import { useProperties } from "@/hooks/use-properties";
 import { useDeleteProperty } from "@/hooks/use-properties";
+import { useStates, useCities, useLocalities } from "@/hooks/use-reference";
 import type { FilterParams } from "@/types";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
@@ -72,6 +71,10 @@ export default function PropertiesPage() {
   const properties = data?.data || [];
   const total = data?.total || 0;
   const totalPages = data?.totalPages || 1;
+
+  const { data: states = [] } = useStates();
+  const { data: cities = [] } = useCities(filters.state);
+  const { data: localities = [] } = useLocalities(filters.city);
 
   const updateFilter = useCallback((key: keyof FilterParams, value: string | number | undefined) => {
     setFilters((prev) => {
@@ -169,16 +172,25 @@ export default function PropertiesPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
             <Select
               value={filters.state || "all"}
-              onValueChange={(v) => updateFilter("state", v || undefined)}
+              onValueChange={(v) => {
+                setFilters((prev) => ({
+                  ...prev,
+                  state: v === "all" ? undefined : v,
+                  city: undefined,
+                  locality: undefined,
+                  page: 1,
+                }));
+                setSelectedRows([]);
+              }}
             >
               <SelectTrigger>
                 <SelectValue placeholder="All States" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All States</SelectItem>
-                {INDIAN_STATES.map((state) => (
-                  <SelectItem key={state} value={state}>
-                    {state}
+                {states.map((state) => (
+                  <SelectItem key={state.id} value={state.id}>
+                    {state.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -186,33 +198,50 @@ export default function PropertiesPage() {
 
             <Select
               value={filters.city || "all"}
-              onValueChange={(v) => updateFilter("city", v || undefined)}
+              onValueChange={(v) => {
+                setFilters((prev) => ({
+                  ...prev,
+                  city: v === "all" ? undefined : v,
+                  locality: undefined,
+                  page: 1,
+                }));
+                setSelectedRows([]);
+              }}
+              disabled={!filters.state}
             >
               <SelectTrigger>
                 <SelectValue placeholder="All Cities" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Cities</SelectItem>
-                {(MAJOR_CITIES[filters.state || ""] || []).map((city) => (
-                  <SelectItem key={city} value={city}>
-                    {city}
+                {cities.map((city) => (
+                  <SelectItem key={city.id} value={city.id}>
+                    {city.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
 
             <Select
-              value={filters.propertyType || "all"}
-              onValueChange={(v) => updateFilter("propertyType", v || undefined)}
+              value={filters.locality || "all"}
+              onValueChange={(v) => {
+                setFilters((prev) => ({
+                  ...prev,
+                  locality: v === "all" ? undefined : v,
+                  page: 1,
+                }));
+                setSelectedRows([]);
+              }}
+              disabled={!filters.city}
             >
               <SelectTrigger>
-                <SelectValue placeholder="All Types" />
+                <SelectValue placeholder="All Localities" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                {Object.entries(PROPERTY_TYPE_LABELS).map(([key, label]) => (
-                  <SelectItem key={key} value={key}>
-                    {label}
+                <SelectItem value="all">All Localities</SelectItem>
+                {localities.map((locality) => (
+                  <SelectItem key={locality.id} value={locality.id}>
+                    {locality.name}
                   </SelectItem>
                 ))}
               </SelectContent>
