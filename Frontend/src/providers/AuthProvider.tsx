@@ -1,11 +1,12 @@
 "use client";
 
 import { ClerkProvider, useAuth } from "@clerk/nextjs";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { setClerkTokenGetter } from "@/lib/api/client";
 
 function ClerkTokenBridge({ children }: { children: React.ReactNode }) {
   const { getToken, isLoaded, isSignedIn } = useAuth();
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     if (!isLoaded) {
@@ -15,14 +16,15 @@ function ClerkTokenBridge({ children }: { children: React.ReactNode }) {
     if (!isSignedIn) {
       console.info("[auth] Clerk loaded without an active session");
       setClerkTokenGetter(null);
-      return;
+    } else {
+      console.info("[auth] Clerk loaded with an active session");
+      setClerkTokenGetter(() => getToken());
     }
-
-    console.info("[auth] Clerk loaded with an active session");
-    setClerkTokenGetter(() => getToken());
+    
+    setReady(true);
   }, [getToken, isLoaded, isSignedIn]);
 
-  if (!isLoaded) {
+  if (!ready) {
     return null;
   }
 
