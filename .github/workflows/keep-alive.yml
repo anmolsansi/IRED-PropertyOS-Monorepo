@@ -1,0 +1,14 @@
+name: Keep API Alive
+
+on:
+  schedule:
+    # Run every 10 minutes to prevent the Render free tier from sleeping
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping API Health Endpoint
+        run: curl -f https://ired-propertyos-api.onrender.com/api/v1/health || exit 0

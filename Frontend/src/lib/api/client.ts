@@ -1,4 +1,5 @@
 import type { FilterParams, PaginatedResponse } from "@/types";
+import { toast } from "sonner";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api/v1";
 const AUTH_DEBUG =
@@ -134,7 +135,14 @@ async function request<T>(
 ): Promise<T> {
   const url = `${BASE_URL}${endpoint}`;
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 15_000);
+  const timeout = window.setTimeout(() => controller.abort(), 60_000);
+
+  let toastId: string | number | undefined;
+  const coldStartTimeout = window.setTimeout(() => {
+    toastId = toast.loading("Waking up server, this may take a moment...", {
+      description: "Render free tier takes ~30s to start.",
+    });
+  }, 3000);
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -166,6 +174,10 @@ async function request<T>(
     throw error;
   } finally {
     window.clearTimeout(timeout);
+    window.clearTimeout(coldStartTimeout);
+    if (toastId) {
+      toast.dismiss(toastId);
+    }
   }
 
   // If 401, try refresh once
