@@ -1,6 +1,7 @@
 "use client";
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from "@tanstack/react-query";
+import * as Sentry from "@sentry/nextjs";
 import { useState } from "react";
 
 export function QueryProvider({ children }: { children: React.ReactNode }) {
@@ -15,6 +16,20 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
             refetchOnWindowFocus: false,
           },
         },
+        queryCache: new QueryCache({
+          onError: (error) => {
+            Sentry.captureException(error, {
+              tags: { context: "ReactQuery_Query" },
+            });
+          },
+        }),
+        mutationCache: new MutationCache({
+          onError: (error) => {
+            Sentry.captureException(error, {
+              tags: { context: "ReactQuery_Mutation" },
+            });
+          },
+        }),
       })
   );
 
