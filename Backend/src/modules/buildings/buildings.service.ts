@@ -68,26 +68,60 @@ export class BuildingsService {
 
     const geoWhere = buildGeographyWhere(geographicScope);
 
-    const where = {
-      deletedAt: null,
-      ...geoWhere,
-      ...(filters.stateId && { stateId: filters.stateId }),
-      ...(filters.cityId && { cityId: filters.cityId }),
-      ...(filters.localityId && { localityId: filters.localityId }),
-      ...(filters.propertyTypeId && { propertyTypeId: filters.propertyTypeId }),
-      ...(filters.availabilityStatusId && {
-        availabilityStatusId: filters.availabilityStatusId,
-      }),
-      ...(search && {
+    const andConditions: any[] = [];
+
+    if (filters.stateId) andConditions.push({ stateId: filters.stateId });
+    if (filters.propertyTypeId) andConditions.push({ propertyTypeId: filters.propertyTypeId });
+    if (filters.availabilityStatusId) andConditions.push({ availabilityStatusId: filters.availabilityStatusId });
+
+    if (filters.cityId) {
+      const cityForFilter = await this.prisma.city.findUnique({ where: { id: filters.cityId } });
+      if (cityForFilter) {
+        andConditions.push({
+          OR: [
+            { cityId: filters.cityId },
+            { cityName: { equals: cityForFilter.name, mode: "insensitive" as const } },
+          ]
+        });
+      } else {
+        andConditions.push({ cityId: filters.cityId });
+      }
+    }
+
+    if (filters.localityId) {
+      const localityForFilter = await this.prisma.locality.findUnique({ where: { id: filters.localityId } });
+      if (localityForFilter) {
+        andConditions.push({
+          OR: [
+            { localityId: filters.localityId },
+            { localityName: { equals: localityForFilter.name, mode: "insensitive" as const } },
+          ]
+        });
+      } else {
+        andConditions.push({ localityId: filters.localityId });
+      }
+    }
+
+    if (search) {
+      andConditions.push({
         OR: [
           { name: { contains: search, mode: "insensitive" as const } },
           { buildingCode: { contains: search, mode: "insensitive" as const } },
           { fullAddress: { contains: search, mode: "insensitive" as const } },
           { cityName: { contains: search, mode: "insensitive" as const } },
           { localityName: { contains: search, mode: "insensitive" as const } },
-        ],
-      }),
+        ]
+      });
+    }
+
+    const where: any = {
+      deletedAt: null,
+      ...geoWhere,
     };
+
+    if (andConditions.length > 0) {
+      where.AND = andConditions;
+    }
 
     const [data, total] = await Promise.all([
       this.prisma.building.findMany({
