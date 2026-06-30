@@ -1,0 +1,6 @@
+{
+  "buildCommand": "npm run build -w ired-propertyos",
+  "installCommand": "npm ci --include=optional",
+  "outputDirectory": "Frontend/.next",
+  "framework": "nextjs"
+}
