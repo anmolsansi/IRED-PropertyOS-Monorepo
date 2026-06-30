@@ -65,10 +65,8 @@ async function hasClerkUserIdColumn() {
 }
 
 async function baselineExistingSchemaIfNeeded() {
-  const [migrationRowCount, userTableCount] = await Promise.all([
-    getMigrationRowCount(),
-    getUserTableCount(),
-  ]);
+  const migrationRowCount = await getMigrationRowCount();
+  const userTableCount = await getUserTableCount();
 
   if (migrationRowCount > 0 || userTableCount === 0) return;
 
