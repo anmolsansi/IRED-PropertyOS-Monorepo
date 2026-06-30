@@ -40,6 +40,156 @@ const INDIAN_STATES = [
   { name: "Puducherry", code: "PY" },
 ];
 
+const MAJOR_CITIES: Record<string, string[]> = {
+  AP: ["Visakhapatnam", "Vijayawada", "Guntur", "Nellore", "Tirupati"],
+  AR: ["Itanagar", "Tawang", "Pasighat"],
+  AS: ["Guwahati", "Silchar", "Dibrugarh", "Jorhat"],
+  BR: ["Patna", "Gaya", "Bhagalpur", "Muzaffarpur"],
+  CG: ["Raipur", "Bhilai", "Bilaspur"],
+  GA: ["Panaji", "Vasco da Gama", "Mapusa"],
+  GJ: ["Ahmedabad", "Surat", "Vadodara", "Rajkot", "Gandhinagar"],
+  HR: ["Gurugram", "Faridabad", "Panipat", "Ambala"],
+  HP: ["Shimla", "Manali", "Dharamsala"],
+  JH: ["Ranchi", "Jamshedpur", "Dhanbad", "Bokaro"],
+  KA: ["Bengaluru", "Mysuru", "Hubli-Dharwad", "Mangaluru", "Belgaum"],
+  KL: ["Thiruvananthapuram", "Kochi", "Kozhikode", "Thrissur"],
+  MP: ["Bhopal", "Indore", "Gwalior", "Jabalpur", "Ujjain"],
+  MH: ["Mumbai", "Pune", "Nagpur", "Thane", "Nashik", "Aurangabad"],
+  MN: ["Imphal"],
+  ML: ["Shillong", "Tura"],
+  MZ: ["Aizawl"],
+  NL: ["Kohima", "Dimapur"],
+  OD: ["Bhubaneswar", "Cuttack", "Rourkela", "Berhampur"],
+  PB: ["Chandigarh", "Ludhiana", "Amritsar", "Jalandhar", "Patiala"],
+  RJ: ["Jaipur", "Jodhpur", "Udaipur", "Kota", "Ajmer"],
+  SK: ["Gangtok"],
+  TN: ["Chennai", "Coimbatore", "Madurai", "Tiruchirappalli", "Salem"],
+  TS: ["Hyderabad", "Warangal", "Karimnagar", "Nizamabad"],
+  TR: ["Agartala"],
+  UP: ["Lucknow", "Noida", "Ghaziabad", "Agra", "Varanasi", "Kanpur"],
+  UK: ["Dehradun", "Haridwar", "Haldwani"],
+  WB: ["Kolkata", "Howrah", "Durgapur", "Siliguri", "Asansol"],
+  AN: ["Port Blair"],
+  CH: ["Chandigarh"],
+  DN: ["Daman", "Diu", "Silvassa"],
+  DL: ["New Delhi", "Delhi", "Delhi NCR"],
+  JK: ["Srinagar", "Jammu"],
+  LA: ["Leh", "Kargil"],
+  LD: ["Kavaratti"],
+  PY: ["Puducherry", "Karaikal"],
+};
+
+const LOCALITIES: Record<string, string[]> = {
+  Mumbai: [
+    "Andheri",
+    "Bandra",
+    "BKC",
+    "Lower Parel",
+    "Worli",
+    "Nariman Point",
+    "Fort",
+    "Colaba",
+    "Powai",
+    "Goregaon",
+    "Malad",
+    "Borivali",
+    "Thane",
+    "Navi Mumbai",
+    "Kurla",
+    "Chembur",
+  ],
+  Pune: [
+    "Hinjewadi",
+    "Kharadi",
+    "Wakad",
+    "Baner",
+    "Aundh",
+    "Kothrud",
+    "Viman Nagar",
+    "Koregaon Park",
+    "Hadapsar",
+    "Magarpatta",
+    "Swargate",
+    "Shivajinagar",
+  ],
+  Bengaluru: [
+    "Whitefield",
+    "Electronic City",
+    "Outer Ring Road",
+    "Koramangala",
+    "Indiranagar",
+    "HSR Layout",
+    "BTM Layout",
+    "Marathahalli",
+    "Bellandur",
+    "Sarjapur Road",
+    "Hebbal",
+    "Yelahanka",
+  ],
+  Hyderabad: [
+    "HITEC City",
+    "Gachibowli",
+    "Madhapur",
+    "Kondapur",
+    "Jubilee Hills",
+    "Banjara Hills",
+    "Secunderabad",
+    "Kukatpally",
+    "Financial District",
+    "Nanakramguda",
+  ],
+  "Delhi NCR": [
+    "Connaught Place",
+    "Nehru Place",
+    "Saket",
+    "Dwarka",
+    "Rohini",
+    "Gurugram DLF",
+    "Gurugram Cyber Hub",
+    "Noida Sector 62",
+    "Noida Sector 18",
+    "Faridabad",
+    "Ghaziabad",
+    "Lajpat Nagar",
+    "Karol Bagh",
+    "Janakpuri",
+  ],
+  Chennai: [
+    "T. Nagar",
+    "Anna Nagar",
+    "Adyar",
+    "OMR",
+    "Porur",
+    "Sholinganallur",
+    "Thoraipakkam",
+    "Velachery",
+    "Guindy",
+    "Ambattur",
+  ],
+  Kolkata: [
+    "Salt Lake",
+    "New Town",
+    "Park Street",
+    "BBD Bagh",
+    "EM Bypass",
+    "Sector V",
+    "Rajarhat",
+    "Howrah",
+    "Durgapur",
+  ],
+  Ahmedabad: [
+    "SG Highway",
+    "CG Road",
+    "Vastrapur",
+    "Satellite",
+    "Paldi",
+    "Ashram Road",
+    "Science City Road",
+    "Gota",
+    "Thaltej",
+  ],
+};
+
 const PROPERTY_TYPES = [
   "Office",
   "Retail",
@@ -156,6 +306,54 @@ export class ReferenceService {
     }
   }
 
+  private async ensureCities(stateId: string) {
+    const activeCount = await this.prisma.city.count({
+      where: { stateId, active: true },
+    });
+    if (activeCount > 0) return;
+
+    const state = await this.prisma.state.findUnique({ where: { id: stateId } });
+    if (!state || !state.code) return;
+
+    const citiesToCreate = MAJOR_CITIES[state.code];
+    if (!citiesToCreate) return;
+
+    for (const cityName of citiesToCreate) {
+      const existing = await this.prisma.city.findFirst({
+        where: { name: cityName, stateId },
+      });
+      if (!existing) {
+        await this.prisma.city.create({
+          data: { name: cityName, stateId },
+        });
+      }
+    }
+  }
+
+  private async ensureLocalities(cityId: string) {
+    const activeCount = await this.prisma.locality.count({
+      where: { cityId, active: true },
+    });
+    if (activeCount > 0) return;
+
+    const city = await this.prisma.city.findUnique({ where: { id: cityId } });
+    if (!city || !city.name) return;
+
+    const localitiesToCreate = LOCALITIES[city.name];
+    if (!localitiesToCreate) return;
+
+    for (const localityName of localitiesToCreate) {
+      const existing = await this.prisma.locality.findFirst({
+        where: { name: localityName, cityId },
+      });
+      if (!existing) {
+        await this.prisma.locality.create({
+          data: { name: localityName, cityId },
+        });
+      }
+    }
+  }
+
   async findAllStates() {
     await this.ensureStates();
     return this.prisma.state.findMany({
@@ -165,6 +363,7 @@ export class ReferenceService {
   }
 
   async findCitiesByState(stateId: string) {
+    await this.ensureCities(stateId);
     return this.prisma.city.findMany({
       where: { stateId, active: true },
       orderBy: { name: "asc" },
@@ -172,6 +371,7 @@ export class ReferenceService {
   }
 
   async findLocalitiesByCity(cityId: string) {
+    await this.ensureLocalities(cityId);
     return this.prisma.locality.findMany({
       where: { cityId, active: true },
       orderBy: { name: "asc" },
