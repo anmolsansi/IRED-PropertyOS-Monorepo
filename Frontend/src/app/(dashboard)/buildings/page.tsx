@@ -42,6 +42,7 @@ import {
 } from "lucide-react";
 import { useProperties } from "@/hooks/use-properties";
 import { useStates, useCities, useLocalities } from "@/hooks/use-reference";
+import { PROPERTY_TYPE_LABELS } from "@/lib/constants";
 import type { FilterParams } from "@/types";
 import Link from "next/link";
 
@@ -291,7 +292,7 @@ export default function BuildingsPage() {
                         </TableCell>
                         <TableCell>{building.locality}</TableCell>
                         <TableCell>
-                          {PROPERTY_TYPE_LABELS[building.propertyType]}
+                          {PROPERTY_TYPE_LABELS[building.propertyType] ?? building.propertyType}
                         </TableCell>
                         <TableCell className="text-right">
                           {floorsCount}
