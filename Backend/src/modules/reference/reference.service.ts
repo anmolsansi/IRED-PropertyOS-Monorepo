@@ -363,7 +363,6 @@ export class ReferenceService {
   }
 
   async findCitiesByState(stateId: string) {
-    await this.ensureCities(stateId);
     return this.prisma.city.findMany({
       where: { stateId, active: true },
       orderBy: { name: "asc" },
@@ -371,7 +370,6 @@ export class ReferenceService {
   }
 
   async findLocalitiesByCity(cityId: string) {
-    await this.ensureLocalities(cityId);
     return this.prisma.locality.findMany({
       where: { cityId, active: true },
       orderBy: { name: "asc" },
