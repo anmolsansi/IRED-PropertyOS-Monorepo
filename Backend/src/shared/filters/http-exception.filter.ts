@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/node";
 import {
   ExceptionFilter,
   Catch,
@@ -40,6 +41,16 @@ export class AllExceptionsFilter implements ExceptionFilter {
         `Unhandled exception: ${exception.message}`,
         exception.stack,
       );
+    }
+
+    // Send 500+ errors or unhandled exceptions to Sentry
+    if (status >= 500) {
+      Sentry.withScope((scope) => {
+        scope.setTag("requestId", String(requestId));
+        scope.setTag("path", request.url);
+        scope.setTag("method", request.method);
+        Sentry.captureException(exception);
+      });
     }
 
     response.status(status).json({

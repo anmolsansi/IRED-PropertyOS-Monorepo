@@ -5,11 +5,23 @@ import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { AppModule } from "./app.module";
 import { AllExceptionsFilter } from "./shared/filters/http-exception.filter";
 import { VersionHeaderInterceptor } from "./shared/interceptors/version-header.interceptor";
-import { createLoggerFactory } from "./shared/logger/json.logger";
-
+import * as Sentry from "@sentry/node";
+import { nodeProfilingIntegration } from "@sentry/profiling-node";
+import { WinstonModule } from "nest-winston";
+import { winstonConfig } from "./shared/logger/winston.config";
+import { LoggingInterceptor } from "./shared/logger/logging.interceptor";
 async function bootstrap() {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    integrations: [
+      nodeProfilingIntegration(),
+    ],
+    tracesSampleRate: process.env.NODE_ENV === "production" ? 0.2 : 1.0,
+    profilesSampleRate: process.env.NODE_ENV === "production" ? 0.2 : 1.0,
+  });
+
   const app = await NestFactory.create(AppModule, {
-    logger: createLoggerFactory(process.env.APP_ENV || "development")(),
+    logger: WinstonModule.createLogger(winstonConfig),
   });
 
   const configService = app.get(ConfigService);
@@ -59,7 +71,10 @@ async function bootstrap() {
   );
 
   app.useGlobalFilters(new AllExceptionsFilter());
-  app.useGlobalInterceptors(new VersionHeaderInterceptor());
+  app.useGlobalInterceptors(
+    new VersionHeaderInterceptor(),
+    new LoggingInterceptor()
+  );
 
   if (configService.get<string>("app.env") !== "production") {
     const config = new DocumentBuilder()
