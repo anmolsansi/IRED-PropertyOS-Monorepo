@@ -16,11 +16,13 @@ describe("ReferenceService", () => {
     prisma = {
       state: referenceModel([{ id: "s-1", name: "Delhi" }]),
       city: {
+        count: jest.fn().mockResolvedValue(1),
         findMany: jest
           .fn()
           .mockResolvedValue([{ id: "c-1", name: "New Delhi" }]),
       },
       locality: {
+        count: jest.fn().mockResolvedValue(1),
         findMany: jest
           .fn()
           .mockResolvedValue([{ id: "l-1", name: "Connaught Place" }]),
