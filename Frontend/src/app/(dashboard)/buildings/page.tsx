@@ -41,7 +41,7 @@ import {
   CheckCircle,
 } from "lucide-react";
 import { useProperties } from "@/hooks/use-properties";
-import { PROPERTY_TYPE_LABELS, INDIAN_STATES, MAJOR_CITIES } from "@/lib/constants";
+import { useStates, useCities, useLocalities } from "@/hooks/use-reference";
 import type { FilterParams } from "@/types";
 import Link from "next/link";
 
@@ -49,7 +49,7 @@ export default function BuildingsPage() {
   const [search, setSearch] = useState("");
   const [stateFilter, setStateFilter] = useState<string | undefined>();
   const [cityFilter, setCityFilter] = useState<string | undefined>();
-  const [typeFilter, setTypeFilter] = useState<string | undefined>();
+  const [localityFilter, setLocalityFilter] = useState<string | undefined>();
   const [page, setPage] = useState(1);
   const pageSize = 10;
 
@@ -60,10 +60,14 @@ export default function BuildingsPage() {
       search: search || undefined,
       state: stateFilter,
       city: cityFilter,
-      propertyType: typeFilter as FilterParams["propertyType"],
+      locality: localityFilter,
     }),
-    [page, search, stateFilter, cityFilter, typeFilter]
+    [page, search, stateFilter, cityFilter, localityFilter]
   );
+
+  const { data: states = [] } = useStates();
+  const { data: cities = [] } = useCities(stateFilter);
+  const { data: localities = [] } = useLocalities(cityFilter);
 
   const { data, isLoading } = useProperties(filters);
 
@@ -166,8 +170,9 @@ export default function BuildingsPage() {
             <Select
               value={stateFilter || "all"}
               onValueChange={(v) => {
-                setStateFilter(v === "all" ? undefined : v ?? undefined);
+                setStateFilter(v === "all" ? undefined : v);
                 setCityFilter(undefined);
+                setLocalityFilter(undefined);
                 setPage(1);
               }}
             >
@@ -176,9 +181,9 @@ export default function BuildingsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All States</SelectItem>
-                {INDIAN_STATES.map((state) => (
-                  <SelectItem key={state} value={state}>
-                    {state}
+                {states.map((state) => (
+                  <SelectItem key={state.id} value={state.id}>
+                    {state.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -186,37 +191,40 @@ export default function BuildingsPage() {
             <Select
               value={cityFilter || "all"}
               onValueChange={(v) => {
-                setCityFilter(v === "all" ? undefined : v ?? undefined);
+                setCityFilter(v === "all" ? undefined : v);
+                setLocalityFilter(undefined);
                 setPage(1);
               }}
+              disabled={!stateFilter}
             >
               <SelectTrigger>
                 <SelectValue placeholder="All Cities" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Cities</SelectItem>
-                {(MAJOR_CITIES[stateFilter || ""] || []).map((city) => (
-                  <SelectItem key={city} value={city}>
-                    {city}
+                {cities.map((city) => (
+                  <SelectItem key={city.id} value={city.id}>
+                    {city.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <Select
-              value={typeFilter || "all"}
+              value={localityFilter || "all"}
               onValueChange={(v) => {
-                setTypeFilter(v === "all" ? undefined : v ?? undefined);
+                setLocalityFilter(v === "all" ? undefined : v);
                 setPage(1);
               }}
+              disabled={!cityFilter}
             >
               <SelectTrigger>
-                <SelectValue placeholder="All Types" />
+                <SelectValue placeholder="All Localities" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                {Object.entries(PROPERTY_TYPE_LABELS).map(([key, label]) => (
-                  <SelectItem key={key} value={key}>
-                    {label}
+                <SelectItem value="all">All Localities</SelectItem>
+                {localities.map((locality) => (
+                  <SelectItem key={locality.id} value={locality.id}>
+                    {locality.name}
                   </SelectItem>
                 ))}
               </SelectContent>
