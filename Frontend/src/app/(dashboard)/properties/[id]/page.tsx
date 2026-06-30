@@ -245,6 +245,15 @@ export default function PropertyDetailPage({
         )}
       </div>
 
+      {/* Media */}
+      <MediaGallery
+        media={media}
+        canDelete={true}
+        onDeleteComplete={() => {
+          queryClient.invalidateQueries({ queryKey: ["media", { buildingId: id }] });
+        }}
+      />
+
       {/* Key Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
@@ -549,14 +558,7 @@ export default function PropertyDetailPage({
       {/* Contacts */}
       <ContactCard contacts={property.contacts || []} />
 
-      {/* Media */}
-      <MediaGallery
-        media={media}
-        canDelete={true}
-        onDeleteComplete={() => {
-          queryClient.invalidateQueries({ queryKey: ["media", { buildingId: id }] });
-        }}
-      />
+
 
       {/* Add Floor Dialog */}
       <Dialog open={addFloorOpen} onOpenChange={setAddFloorOpen}>
