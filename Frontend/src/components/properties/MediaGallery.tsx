@@ -177,19 +177,44 @@ export function MediaGallery({
                     {items.length}
                   </Badge>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                  {items.map((item) => (
+                <div className="relative group/carousel">
+                  <Button
+                    variant="secondary"
+                    size="icon"
+                    className="absolute left-2 top-1/2 -translate-y-1/2 z-10 opacity-0 group-hover/carousel:opacity-100 transition-opacity rounded-full shadow-md"
+                    onClick={(e) => {
+                      const container = e.currentTarget.parentElement?.querySelector(".scroll-container");
+                      if (container) {
+                        container.scrollBy({ left: -600, behavior: "smooth" });
+                      }
+                    }}
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </Button>
+
+                  <div 
+                    className="scroll-container flex overflow-x-auto gap-4 snap-x snap-mandatory pb-4 hide-scrollbar"
+                    onWheel={(e) => {
+                      if (e.deltaY !== 0) {
+                        e.currentTarget.scrollLeft += e.deltaY;
+                        // To perfectly prevent default vertical scroll, we might need a ref + passive: false,
+                        // but React's onWheel might suffice for simple cases. 
+                        // It's usually better to just let native trackpad deltaX work too.
+                      }
+                    }}
+                  >
+                    {items.map((item) => (
                     <div
                       key={item.id}
-                      className="group relative aspect-square rounded-lg border bg-muted flex items-center justify-center overflow-hidden cursor-pointer"
+                      className="group relative flex-none w-[600px] h-[450px] snap-center rounded-lg border bg-muted flex items-center justify-center overflow-hidden cursor-pointer"
                       onClick={() => openPreview(item)}
                     >
                       {isImage(item) && item.fileUrl ? (
                         <Image
                           src={item.fileUrl}
                           alt={item.caption || item.fileName}
-                          width={200}
-                          height={200}
+                          width={600}
+                          height={450}
                           unoptimized
                           className="w-full h-full object-cover"
                         />
@@ -232,6 +257,21 @@ export function MediaGallery({
                       </div>
                     </div>
                   ))}
+                  </div>
+
+                  <Button
+                    variant="secondary"
+                    size="icon"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 z-10 opacity-0 group-hover/carousel:opacity-100 transition-opacity rounded-full shadow-md"
+                    onClick={(e) => {
+                      const container = e.currentTarget.parentElement?.querySelector(".scroll-container");
+                      if (container) {
+                        container.scrollBy({ left: 600, behavior: "smooth" });
+                      }
+                    }}
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </Button>
                 </div>
               </div>
             ))}
