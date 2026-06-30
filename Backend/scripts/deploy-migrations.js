@@ -83,8 +83,35 @@ async function baselineExistingSchemaIfNeeded() {
   }
 }
 
+async function killZombieLocks() {
+  console.log("Checking for stale Prisma advisory locks...");
+  try {
+    const locks = await prisma.$queryRaw`
+      SELECT pid 
+      FROM pg_locks 
+      WHERE locktype = 'advisory' 
+        AND objid = 72707369
+        AND granted = true;
+    `;
+    
+    if (locks && locks.length > 0) {
+      console.log(`Found ${locks.length} stale lock(s). Terminating holding connections...`);
+      for (const lock of locks) {
+        await prisma.$queryRawUnsafe(\`SELECT pg_terminate_backend(\${lock.pid})\`);
+        console.log(`Terminated PID \${lock.pid}`);
+      }
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    } else {
+      console.log("No stale locks found.");
+    }
+  } catch (err) {
+    console.error("Could not clear locks (safe to ignore):", err.message);
+  }
+}
+
 async function main() {
   await baselineExistingSchemaIfNeeded();
+  await killZombieLocks();
   runPrisma(["migrate", "deploy"]);
 }
 
