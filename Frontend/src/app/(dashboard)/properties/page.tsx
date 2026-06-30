@@ -73,8 +73,8 @@ export default function PropertiesPage() {
   const totalPages = data?.totalPages || 1;
 
   const { data: states = [] } = useStates();
-  const { data: cities = [] } = useCities(filters.state);
-  const { data: localities = [] } = useLocalities(filters.city);
+  const { data: cities = [], isLoading: isCitiesLoading } = useCities(filters.state);
+  const { data: localities = [], isLoading: isLocalitiesLoading } = useLocalities(filters.city);
 
   const updateFilter = useCallback((key: keyof FilterParams, value: string | number | undefined) => {
     setFilters((prev) => {
@@ -207,10 +207,18 @@ export default function PropertiesPage() {
                 }));
                 setSelectedRows([]);
               }}
-              disabled={!filters.state}
+              disabled={!filters.state || isCitiesLoading}
             >
               <SelectTrigger>
-                <SelectValue placeholder="All Cities" />
+                <SelectValue
+                  placeholder={
+                    !filters.state
+                      ? "Select State First"
+                      : isCitiesLoading
+                        ? "Loading Cities..."
+                        : "All Cities"
+                  }
+                />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Cities</SelectItem>
@@ -232,10 +240,18 @@ export default function PropertiesPage() {
                 }));
                 setSelectedRows([]);
               }}
-              disabled={!filters.city}
+              disabled={!filters.city || isLocalitiesLoading}
             >
               <SelectTrigger>
-                <SelectValue placeholder="All Localities" />
+                <SelectValue
+                  placeholder={
+                    !filters.city
+                      ? "Select City First"
+                      : isLocalitiesLoading
+                        ? "Loading Localities..."
+                        : "All Localities"
+                  }
+                />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Localities</SelectItem>
