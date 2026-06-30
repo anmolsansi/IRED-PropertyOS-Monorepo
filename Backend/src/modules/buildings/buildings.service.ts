@@ -240,6 +240,34 @@ export class BuildingsService {
       normalizedData.sourceId = source.id;
     }
 
+    if (normalizedData.cityName && !normalizedData.cityId && normalizedData.stateId) {
+      const city = await this.prisma.city.findFirst({
+        where: { name: normalizedData.cityName, stateId: normalizedData.stateId },
+      });
+      if (city) {
+        normalizedData.cityId = city.id;
+      } else {
+        const newCity = await this.prisma.city.create({
+          data: { name: normalizedData.cityName, stateId: normalizedData.stateId },
+        });
+        normalizedData.cityId = newCity.id;
+      }
+    }
+
+    if (normalizedData.localityName && !normalizedData.localityId && normalizedData.cityId) {
+      const locality = await this.prisma.locality.findFirst({
+        where: { name: normalizedData.localityName, cityId: normalizedData.cityId },
+      });
+      if (locality) {
+        normalizedData.localityId = locality.id;
+      } else {
+        const newLocality = await this.prisma.locality.create({
+          data: { name: normalizedData.localityName, cityId: normalizedData.cityId },
+        });
+        normalizedData.localityId = newLocality.id;
+      }
+    }
+
     return normalizedData;
   }
 
