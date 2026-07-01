@@ -3,6 +3,7 @@ import { ProposalExportService } from "../proposal-export.service";
 import { PrismaService } from "../../../prisma/prisma.service";
 import { NotFoundException } from "@nestjs/common";
 import { Role } from "../../../shared/decorators/roles.decorator";
+import { MediaService } from "../../media/media.service";
 
 describe("ProposalExportService", () => {
   let service: ProposalExportService;
@@ -23,6 +24,10 @@ describe("ProposalExportService", () => {
       providers: [
         ProposalExportService,
         { provide: PrismaService, useValue: prisma },
+        {
+          provide: MediaService,
+          useValue: { buildPublicUrl: jest.fn((key: string) => `mock-url/${key}`) },
+        },
       ],
     }).compile();
 
