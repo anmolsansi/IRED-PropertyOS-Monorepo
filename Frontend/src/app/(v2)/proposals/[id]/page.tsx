@@ -2,6 +2,7 @@
 
 import { use, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { 
   useProposal, 
   useUpdateProposal, 
@@ -269,6 +270,14 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
       return `${val.toLocaleString("en-IN")} sqft`;
     }
     
+    if ((key === "buildingName" || key === "buildingCode") && b?.id) {
+      return (
+        <Link href={`/properties/${b.id}`} className="text-blue-600 hover:underline" target="_blank" rel="noopener noreferrer">
+          {String(val)}
+        </Link>
+      );
+    }
+
     return String(val);
   }
 
