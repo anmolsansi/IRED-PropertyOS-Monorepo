@@ -38,6 +38,7 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -356,7 +357,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56 max-h-[400px] overflow-y-auto">
                 {Object.entries(groupedFields).map(([group, fields]) => (
-                  <div key={group}>
+                  <DropdownMenuGroup key={group}>
                     <DropdownMenuLabel>{group}</DropdownMenuLabel>
                     {fields.map(f => (
                       <DropdownMenuCheckboxItem
@@ -369,7 +370,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
                       </DropdownMenuCheckboxItem>
                     ))}
                     <DropdownMenuSeparator />
-                  </div>
+                  </DropdownMenuGroup>
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
