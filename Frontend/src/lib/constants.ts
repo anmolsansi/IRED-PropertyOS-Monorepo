@@ -52,13 +52,7 @@ export const V2_NAV_ITEMS: NavItem[] = [
   { label: "Clients", href: "/clients", icon: Users },
   { label: "Proposals", href: "/proposals", icon: FileText },
   { label: "Approvals", href: "/approvals", icon: CheckCircle, adminOnly: true },
-  { label: "Tasks", href: "/tasks", icon: ClipboardList },
-  { label: "Site Visits", href: "/site-visits", icon: CalendarCheck },
-  { label: "Deals", href: "/deals", icon: Handshake },
-  { label: "Commissions", href: "/commissions", icon: DollarSign },
-  { label: "Invoices", href: "/invoices", icon: Receipt },
   { label: "Media", href: "/media", icon: Image },
-  { label: "Reports", href: "/reports", icon: BarChart3 },
   { label: "Users", href: "/settings/users", icon: UserCog, adminOnly: true },
   { label: "Settings", href: "/settings", icon: Settings },
 ];
