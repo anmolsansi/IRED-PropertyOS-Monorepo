@@ -14,18 +14,24 @@ describe("ReferenceService", () => {
     });
 
     prisma = {
-      state: referenceModel([{ id: "s-1", name: "Delhi" }]),
+      state: referenceModel([{ id: "123e4567-e89b-12d3-a456-426614174000", name: "Delhi" }]),
       city: {
         count: jest.fn().mockResolvedValue(1),
         findMany: jest
           .fn()
-          .mockResolvedValue([{ id: "c-1", name: "New Delhi" }]),
+          .mockResolvedValue([{ id: "123e4567-e89b-12d3-a456-426614174001", name: "New Delhi" }]),
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ id: "123e4567-e89b-12d3-a456-426614174001", name: "New Delhi" }),
+      },
+      building: {
+        findMany: jest.fn().mockResolvedValue([]),
       },
       locality: {
         count: jest.fn().mockResolvedValue(1),
         findMany: jest
           .fn()
-          .mockResolvedValue([{ id: "l-1", name: "Connaught Place" }]),
+          .mockResolvedValue([{ id: "123e4567-e89b-12d3-a456-426614174002", name: "Connaught Place" }]),
       },
       microMarket: { findMany: jest.fn().mockResolvedValue([]) },
       propertyType: referenceModel([]),
@@ -66,10 +72,10 @@ describe("ReferenceService", () => {
 
   describe("findCitiesByState", () => {
     it("should return cities for a state", async () => {
-      const result = await service.findCitiesByState("s-1");
+      const result = await service.findCitiesByState("123e4567-e89b-12d3-a456-426614174000");
       expect(result).toHaveLength(1);
       expect(prisma.city.findMany).toHaveBeenCalledWith({
-        where: { stateId: "s-1", active: true },
+        where: { stateId: "123e4567-e89b-12d3-a456-426614174000", active: true },
         orderBy: { name: "asc" },
       });
     });
@@ -77,7 +83,7 @@ describe("ReferenceService", () => {
 
   describe("findLocalitiesByCity", () => {
     it("should return localities for a city", async () => {
-      const result = await service.findLocalitiesByCity("c-1");
+      const result = await service.findLocalitiesByCity("123e4567-e89b-12d3-a456-426614174001");
       expect(result).toHaveLength(1);
     });
   });
