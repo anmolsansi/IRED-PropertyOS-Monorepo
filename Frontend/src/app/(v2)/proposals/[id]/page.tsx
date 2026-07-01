@@ -86,7 +86,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
       setSelectedFields(proposal.fieldsConfig.selectedFields);
     } else if (exportFields.length > 0 && selectedFields.length === 0) {
       // Use defaults if nothing saved
-      const defaults = ["buildingName", "propertyType", "address", "city", "locality", "availableArea", "rentPerSqFt", "monthlyRent", "furnishingStatus", "availabilityStatus"];
+      const defaults = exportFields.filter(f => !f.restricted).map(f => f.key);
       setSelectedFields(defaults);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
