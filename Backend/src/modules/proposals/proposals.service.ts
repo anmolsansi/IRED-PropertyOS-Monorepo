@@ -1,11 +1,26 @@
-import { Injectable, NotFoundException, ForbiddenException, Logger, ConflictException } from "@nestjs/common";
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  Logger,
+  ConflictException,
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PrismaService } from "../../prisma/prisma.service";
 import { ProposalStatus, ProposalEntityType } from "@prisma/client";
 import PDFDocument from "pdfkit";
-import { buildProposalGeographyWhere, GeographicScope } from "../../shared/utils/geography-filter";
+import {
+  buildProposalGeographyWhere,
+  GeographicScope,
+} from "../../shared/utils/geography-filter";
 import { verifyEntityGeography } from "../../shared/utils/verify-entity-geography";
-import { CreateProposalDto, UpdateProposalDto, AddProposalItemDto, UpdateProposalFieldsDto } from "./dto/proposals.schema";
+import {
+  CreateProposalDto,
+  UpdateProposalDto,
+  AddProposalItemDto,
+  UpdateProposalFieldsDto,
+} from "./dto/proposals.schema";
 import { DEFAULT_SELECTED_FIELDS } from "./constants/proposal-export-fields";
 
 @Injectable()
@@ -20,14 +35,32 @@ export class ProposalsService {
   async create(data: CreateProposalDto, userId: string) {
     const client = await this.prisma.client.findUnique({
       where: { id: data.clientId },
+      select: { id: true, name: true, organizationId: true },
     });
     if (!client) throw new NotFoundException("Client not found");
 
+    if (data.requirementId) {
+      const requirement = await this.prisma.requirement.findUnique({
+        where: { id: data.requirementId },
+        select: { id: true, clientId: true },
+      });
+
+      if (!requirement) throw new NotFoundException("Requirement not found");
+      if (requirement.clientId !== data.clientId) {
+        throw new BadRequestException(
+          "Requirement does not belong to the selected client",
+        );
+      }
+    }
+
     const proposal = await this.prisma.proposal.create({
       data: {
+        organizationId: client.organizationId,
         clientId: data.clientId,
         requirementId: data.requirementId,
-        title: data.title || `${client.name} - Property Proposal - ${new Date().toLocaleDateString()}`,
+        title:
+          data.title ||
+          `${client.name} - Property Proposal - ${new Date().toLocaleDateString()}`,
         notes: data.notes,
         createdBy: userId,
         status: ProposalStatus.draft,
@@ -38,12 +71,21 @@ export class ProposalsService {
       },
     });
 
-    this.logger.log(`Proposal ${proposal.id} created for client ${client.name}`);
+    this.logger.log(
+      `Proposal ${proposal.id} created for client ${client.name}`,
+    );
     return proposal;
   }
 
   async findAll(
-    query: { page?: number; limit?: number; clientId?: string; status?: string; search?: string; createdBy?: string },
+    query: {
+      page?: number;
+      limit?: number;
+      clientId?: string;
+      status?: string;
+      search?: string;
+      createdBy?: string;
+    },
     geographicScope?: GeographicScope,
   ) {
     const { page = 1, limit = 20, clientId, status, search, createdBy } = query;
@@ -57,15 +99,15 @@ export class ProposalsService {
     };
 
     if (geographicScope) {
-       // Worker sees proposals they created OR proposals with items in their geography
-       where.OR = [
-         { createdBy: (geographicScope as any).userId },
-         ...(geoWhere.OR || []),
-       ].filter(Boolean);
-       
-       if (where.OR.length === 0) {
-         delete where.OR; // fallback if no OR conditions
-       }
+      // Worker sees proposals they created OR proposals with items in their geography
+      where.OR = [
+        { createdBy: (geographicScope as any).userId },
+        ...(geoWhere.OR || []),
+      ].filter(Boolean);
+
+      if (where.OR.length === 0) {
+        delete where.OR; // fallback if no OR conditions
+      }
     } else if (createdBy) {
       where.createdBy = createdBy;
     }
@@ -90,13 +132,13 @@ export class ProposalsService {
         include: {
           client: true,
           creator: { select: { id: true, fullName: true } },
-          _count: { select: { items: { where: { removedAt: null } } } }
+          _count: { select: { items: { where: { removedAt: null } } } },
         },
       }),
       this.prisma.proposal.count({ where }),
     ]);
 
-    const transformedData = data.map(p => ({
+    const transformedData = data.map((p) => ({
       ...p,
       itemCount: p._count.items,
       _count: undefined,
@@ -114,29 +156,39 @@ export class ProposalsService {
       include: {
         client: true,
         creator: { select: { id: true, fullName: true } },
-        _count: { select: { items: { where: { removedAt: null } } } }
+        _count: { select: { items: { where: { removedAt: null } } } },
       },
     });
-    
+
     if (!proposal) throw new NotFoundException("Proposal not found");
 
-    if (geographicScope && proposal.createdBy !== (geographicScope as any).userId) {
+    if (
+      geographicScope &&
+      proposal.createdBy !== (geographicScope as any).userId
+    ) {
       // Must have items in assigned geography
       const items = await this.prisma.proposalItem.findMany({
         where: { proposalId: id, buildingId: { not: null } },
         select: { buildingId: true },
       });
-      const buildingIds = [...new Set(items.map((i) => i.buildingId).filter(Boolean))];
+      const buildingIds = [
+        ...new Set(items.map((i) => i.buildingId).filter(Boolean)),
+      ];
       if (buildingIds.length > 0) {
         const buildings = await this.prisma.building.findMany({
           where: { id: { in: buildingIds as string[] } },
           select: { id: true, stateId: true, cityId: true, localityId: true },
         });
-        
+
         let hasAccess = false;
         for (const b of buildings) {
           try {
-            await verifyEntityGeography(this.prisma, geographicScope, b, "Proposal");
+            await verifyEntityGeography(
+              this.prisma,
+              geographicScope,
+              b,
+              "Proposal",
+            );
             hasAccess = true;
             break;
           } catch {
@@ -144,13 +196,17 @@ export class ProposalsService {
           }
         }
         if (!hasAccess) {
-          throw new ForbiddenException("Proposal not found in your assigned geography");
+          throw new ForbiddenException(
+            "Proposal not found in your assigned geography",
+          );
         }
       } else {
-        throw new ForbiddenException("Proposal not found in your assigned geography");
+        throw new ForbiddenException(
+          "Proposal not found in your assigned geography",
+        );
       }
     }
-    
+
     return {
       ...proposal,
       itemCount: proposal._count.items,
@@ -158,7 +214,11 @@ export class ProposalsService {
     };
   }
 
-  async update(id: string, data: UpdateProposalDto, geographicScope?: GeographicScope) {
+  async update(
+    id: string,
+    data: UpdateProposalDto,
+    geographicScope?: GeographicScope,
+  ) {
     await this.findOne(id, geographicScope); // Verify access
     return this.prisma.proposal.update({
       where: { id },
@@ -168,13 +228,27 @@ export class ProposalsService {
 
   // --- Proposal Items ---
 
-  async addItem(proposalId: string, data: AddProposalItemDto, userId: string, geographicScope?: GeographicScope) {
+  async addItem(
+    proposalId: string,
+    data: AddProposalItemDto,
+    userId: string,
+    geographicScope?: GeographicScope,
+  ) {
     await this.findOne(proposalId, geographicScope); // Verify access to proposal
 
     if (data.entityType === "building" && data.buildingId) {
-      const building = await this.prisma.building.findUnique({ where: { id: data.buildingId }, select: { id: true, stateId: true, cityId: true, localityId: true } });
+      const building = await this.prisma.building.findUnique({
+        where: { id: data.buildingId },
+        select: { id: true, stateId: true, cityId: true, localityId: true },
+      });
       if (!building) throw new NotFoundException("Building not found");
-      if (geographicScope) await verifyEntityGeography(this.prisma, geographicScope, building, "Building");
+      if (geographicScope)
+        await verifyEntityGeography(
+          this.prisma,
+          geographicScope,
+          building,
+          "Building",
+        );
     }
 
     const existingItem = await this.prisma.proposalItem.findFirst({
@@ -184,17 +258,19 @@ export class ProposalsService {
         buildingId: data.buildingId || null,
         floorId: data.floorId || null,
         unitId: data.unitId || null,
-      }
+      },
     });
 
     if (existingItem) {
       if (existingItem.removedAt === null) {
-        throw new ConflictException("This property is already added to this proposal.");
+        throw new ConflictException(
+          "This property is already added to this proposal.",
+        );
       } else {
         // Restore soft-deleted item
         return this.prisma.proposalItem.update({
           where: { id: existingItem.id },
-          data: { removedAt: null, addedBy: userId, addedAt: new Date() }
+          data: { removedAt: null, addedBy: userId, addedAt: new Date() },
         });
       }
     }
@@ -202,7 +278,7 @@ export class ProposalsService {
     // Get max display order
     const maxOrderRes = await this.prisma.proposalItem.aggregate({
       where: { proposalId },
-      _max: { displayOrder: true }
+      _max: { displayOrder: true },
     });
     const displayOrder = (maxOrderRes._max.displayOrder || 0) + 1;
 
@@ -216,13 +292,17 @@ export class ProposalsService {
         notes: data.notes,
         addedBy: userId,
         displayOrder,
-      }
+      },
     });
   }
 
-  async getItems(proposalId: string, query: { page?: number; limit?: number; search?: string }, geographicScope?: GeographicScope) {
+  async getItems(
+    proposalId: string,
+    query: { page?: number; limit?: number; search?: string },
+    geographicScope?: GeographicScope,
+  ) {
     await this.findOne(proposalId, geographicScope); // Verify access
-    
+
     const { page = 1, limit = 50, search } = query;
     const skip = (page - 1) * limit;
 
@@ -250,9 +330,9 @@ export class ProposalsService {
               availabilityStatus: true,
               propertyType: true,
               floor: true,
-            }
+            },
           },
-        }
+        },
       }),
       this.prisma.proposalItem.count({ where }),
     ]);
@@ -263,33 +343,44 @@ export class ProposalsService {
     };
   }
 
-  async removeItem(proposalId: string, itemId: string, geographicScope?: GeographicScope) {
+  async removeItem(
+    proposalId: string,
+    itemId: string,
+    geographicScope?: GeographicScope,
+  ) {
     await this.findOne(proposalId, geographicScope); // Verify access
-    
-    const item = await this.prisma.proposalItem.findUnique({ where: { id: itemId } });
+
+    const item = await this.prisma.proposalItem.findUnique({
+      where: { id: itemId },
+    });
     if (!item || item.proposalId !== proposalId) {
       throw new NotFoundException("Proposal item not found");
     }
 
     await this.prisma.proposalItem.update({
       where: { id: itemId },
-      data: { removedAt: new Date() }
+      data: { removedAt: new Date() },
     });
     return { success: true };
   }
 
   // --- Field Config ---
 
-  async updateFieldsConfig(proposalId: string, data: UpdateProposalFieldsDto, userRole: string, geographicScope?: GeographicScope) {
+  async updateFieldsConfig(
+    proposalId: string,
+    data: UpdateProposalFieldsDto,
+    userRole: string,
+    geographicScope?: GeographicScope,
+  ) {
     await this.findOne(proposalId, geographicScope);
 
-    // Backend validation for restricted fields would normally go here (or in export service), 
+    // Backend validation for restricted fields would normally go here (or in export service),
     // we just store the config but could validate here too.
     return this.prisma.proposal.update({
       where: { id: proposalId },
       data: {
-        fieldsConfig: { selectedFields: data.selectedFields }
-      }
+        fieldsConfig: { selectedFields: data.selectedFields },
+      },
     });
   }
 
@@ -315,7 +406,11 @@ export class ProposalsService {
     return this.renderPdf(proposal.client, units, proposal.notes || undefined);
   }
 
-  private renderPdf(client: any, units: any[], notes?: string): Promise<Buffer> {
+  private renderPdf(
+    client: any,
+    units: any[],
+    notes?: string,
+  ): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({ size: "A4", margin: 50 });
       const chunks: Buffer[] = [];
