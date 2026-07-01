@@ -58,6 +58,7 @@ export class ProposalsService {
         organizationId: client.organizationId,
         clientId: data.clientId,
         requirementId: data.requirementId,
+        unitIds: [],
         title:
           data.title ||
           `${client.name} - Property Proposal - ${new Date().toLocaleDateString()}`,

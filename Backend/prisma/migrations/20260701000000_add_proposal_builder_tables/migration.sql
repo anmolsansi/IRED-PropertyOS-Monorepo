@@ -35,6 +35,9 @@ ALTER TABLE "proposals" ADD COLUMN IF NOT EXISTS "fields_config" JSONB;
 ALTER TABLE "proposals" ADD COLUMN IF NOT EXISTS "pdf_storage_key" TEXT;
 ALTER TABLE "proposals" ADD COLUMN IF NOT EXISTS "exported_at" TIMESTAMP(3);
 
+UPDATE "proposals" SET "unit_ids" = '[]'::jsonb WHERE "unit_ids" IS NULL;
+ALTER TABLE "proposals" ALTER COLUMN "unit_ids" DROP NOT NULL;
+
 DO $$ BEGIN
   ALTER TABLE "proposals" ADD CONSTRAINT "proposals_client_id_fkey"
     FOREIGN KEY ("client_id") REFERENCES "clients"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

@@ -110,6 +110,7 @@ describe("ProposalsService", () => {
             organizationId: "org-1",
             clientId: "cl-1",
             createdBy: "user-1",
+            unitIds: [],
           }),
         }),
       );
