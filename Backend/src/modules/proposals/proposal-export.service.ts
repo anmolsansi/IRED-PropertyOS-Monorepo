@@ -64,6 +64,8 @@ export class ProposalExportService {
           include: {
             furnishingStatus: true,
             availabilityStatus: true,
+            propertyType: true,
+            floor: true,
           }
         },
       }

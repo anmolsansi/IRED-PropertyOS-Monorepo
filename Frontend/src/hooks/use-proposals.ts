@@ -74,8 +74,9 @@ export function useCreateProposal() {
       requirementId?: string;
       title?: string;
       notes?: string;
-    }) => {
-      return api.post<{ data: Proposal }>("/proposals", data);
+    }): Promise<Proposal> => {
+      const response = await api.post<{ data: Proposal }>("/proposals", data);
+      return (response.data ?? response) as unknown as Proposal;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["proposals"] });
@@ -117,12 +118,25 @@ export function useProposalItems(proposalId: string, filters: { page?: number; l
 export function useAddProposalItem() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: { entityType: string; buildingId?: string; floorId?: string; unitId?: string; notes?: string } }) => {
-      return api.post<{ data: ProposalItem }>(`/proposals/${id}/items`, data);
+    mutationFn: async ({ id, data }: { id: string; data: { entityType: string; buildingId?: string; floorId?: string; unitId?: string; notes?: string } }): Promise<ProposalItem> => {
+      const response = await api.post<{ data: ProposalItem }>(`/proposals/${id}/items`, data);
+      return (response.data ?? response) as unknown as ProposalItem;
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["proposals", variables.id, "items"] });
       queryClient.invalidateQueries({ queryKey: ["proposals", variables.id] });
+    },
+  });
+}
+
+export function useDeleteProposal() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      return api.delete(`/proposals/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["proposals"] });
     },
   });
 }
