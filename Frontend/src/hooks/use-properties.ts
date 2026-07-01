@@ -47,6 +47,11 @@ interface BackendBuilding {
   liftDetails?: Record<string, unknown>;
   commercialTerms?: Record<string, unknown>;
   additionalFields?: Record<string, unknown>;
+  landlordName?: string;
+  telecallerStatus?: string;
+  starRating?: number;
+  facingOption?: string;
+  unitAccessLocation?: string;
   notes?: string;
   createdBy?: string;
   createdAt: string;
@@ -96,6 +101,17 @@ function adaptBuildingToProperty(building: BackendBuilding): Property & { contac
     camCharges: (building.commercialTerms?.camCharges as number) || 0,
     maintenanceCharges: (building.commercialTerms?.maintenanceCharges as number) || 0,
     securityDeposit: (building.commercialTerms?.securityDeposit as number) || 0,
+    leaseTerms: (building.commercialTerms?.leaseTerms as string) || "",
+    escalationDetails: (building.commercialTerms?.escalationDetails as string) || "",
+    brokerage: (building.commercialTerms?.brokerage as string) || "",
+    availabilityDate: (building.commercialTerms?.availabilityDate as string) || "",
+    possessionDate: (building.commercialTerms?.possessionDate as string) || "",
+    landlordName: building.landlordName || "",
+    telecallerStatus: building.telecallerStatus || "",
+    starRating: building.starRating || 0,
+    facingOption: building.facingOption || "",
+    unitAccessLocation: building.unitAccessLocation || "",
+    additionalFields: building.additionalFields || [],
     assignedWorkerId: building.createdBy || "",
     source: (building.source?.name?.toLowerCase().replace(/\s+/g, "_") as Property["source"]) || "field",
     notes: building.notes,
