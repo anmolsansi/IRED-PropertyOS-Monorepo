@@ -323,7 +323,17 @@ export class ProposalsService {
         take: limit,
         orderBy: { displayOrder: "asc" },
         include: {
-          building: true,
+          building: {
+            include: {
+              state: true,
+              city: true,
+              locality: true,
+              propertyType: true,
+              availabilityStatus: true,
+              verificationStatus: true,
+              source: true,
+            }
+          },
           floor: true,
           unit: {
             include: {

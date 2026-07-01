@@ -205,25 +205,71 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
     return acc;
   }, {} as Record<string, typeof exportFields>);
 
-  // Render cell value dynamically (naive mapper for frontend preview)
+  // Render cell value dynamically
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function renderCellValue(item: any, key: string): React.ReactNode {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const building = (item.building as any) || {};
+    const b = (item.building as any) || {};
+    const u = (item.unit as any) || {};
+    const f = (item.floor as any) || {};
     
-    // Naive mapping. In a real app, backend handles the exact CSV transform.
-    // Here we just want to preview what is shown.
-    if (key === "buildingName") return String(building.name || "N/A");
-    if (key === "buildingCode") return String(building.propertyId || "N/A");
-    if (key === "address") return String(building.address || "N/A");
-    if (key === "city") return String(building.city || "N/A");
-    if (key === "propertyType") return String(building.propertyType || "N/A");
-    if (key === "rentPerSqFt") return building.rentPerSqFt ? `₹${building.rentPerSqFt}` : "N/A";
-    if (key === "availableArea") return building.availableArea ? `${building.availableArea} sqft` : "N/A";
-    if (key === "furnishingStatus") return String(building.furnishingStatus || "N/A");
-    if (key === "availabilityStatus") return String(building.availabilityStatus || "N/A");
+    let val: any = "";
     
-    return "—"; // Fallback for fields not easily resolved on FE without full relation
+    switch (key) {
+      case "buildingName": val = b?.name; break;
+      case "buildingCode": val = b?.buildingCode; break;
+      case "propertyType": val = b?.propertyType?.name || u?.propertyType?.name; break;
+      case "source": val = b?.source?.name; break;
+      case "starRating": val = b?.starRating; break;
+      case "verificationStatus": val = b?.verificationStatus?.name; break;
+      case "address": val = b?.fullAddress; break;
+      case "state": val = b?.state?.name; break;
+      case "city": val = b?.city?.name; break;
+      case "locality": val = b?.locality?.name; break;
+      case "pincode": val = b?.pincode; break;
+      case "latitude": val = b?.latitude; break;
+      case "longitude": val = b?.longitude; break;
+      case "googleMapsUrl": val = b?.googleMapsUrl; break;
+      
+      case "carpetArea": val = u?.carpetArea; break;
+      case "builtUpArea": val = u?.builtUpArea; break;
+      case "chargeableArea": val = u?.chargeableArea; break;
+      case "superBuiltUpArea": val = u?.superBuiltUpArea; break;
+      case "availableArea": val = u?.chargeableArea || b?.totalBuildingArea; break;
+
+      case "rentPerSqFt": val = u?.rentPerSqftMonth; break;
+      case "monthlyRent": val = u?.monthlyRent; break;
+      case "maintenanceCharges": val = u?.maintenanceCharges; break;
+      case "securityDeposit": val = u?.securityDeposit; break;
+      case "lockInPeriod": val = u?.lockInPeriodMonths; break;
+      case "leaseTenure": val = u?.leaseTermMonths; break;
+
+      case "floorNumber": val = f?.floorNumber || u?.floor?.floorNumber; break;
+      case "unitNumber": val = u?.unitNumber; break;
+      case "unitStatus": val = u?.availabilityStatus?.name; break;
+      case "unitArea": val = u?.chargeableArea; break;
+
+      case "availabilityStatus": val = u?.availabilityStatus?.name || b?.availabilityStatus?.name; break;
+      case "availableFromDate": val = u?.availabilityDate ? new Date(u.availabilityDate).toLocaleDateString() : ""; break;
+      
+      case "furnishingStatus": val = u?.furnishingStatus?.name; break;
+
+      case "proposalItemNote": val = item.notes; break;
+      case "publicNotes": val = b?.notes || u?.notes; break;
+      case "internalNotes": val = b?.additionalFields ? JSON.stringify(b.additionalFields) : ""; break;
+    }
+
+    if (val === null || val === undefined || val === "") return "—";
+    
+    // Formatting
+    if (key === "rentPerSqFt" || key === "monthlyRent" || key === "maintenanceCharges" || key === "securityDeposit") {
+      return `₹${val.toLocaleString("en-IN")}`;
+    }
+    if (key.toLowerCase().includes("area")) {
+      return `${val.toLocaleString("en-IN")} sqft`;
+    }
+    
+    return String(val);
   }
 
   return (
