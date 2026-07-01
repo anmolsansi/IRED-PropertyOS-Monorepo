@@ -34,6 +34,7 @@ export const V1_NAV_ITEMS: NavItem[] = [
   { label: "Buildings", href: "/buildings", icon: Building2 },
   { label: "Floors", href: "/floors", icon: Layers },
   { label: "Units", href: "/units", icon: Layers },
+  { label: "Proposals", href: "/proposals", icon: FileText },
   { label: "Approvals", href: "/approvals", icon: CheckCircle, adminOnly: true },
   { label: "Media", href: "/media", icon: Image },
   { label: "Activity", href: "/activity", icon: Activity, adminOnly: true },
