@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { InfoSection } from "@/components/properties/InfoSection";
 import { ContactCard } from "@/components/properties/ContactCard";
 import { MediaGallery } from "@/components/properties/MediaGallery";
+import { AddToProposalDialog } from "@/components/proposals/AddToProposalDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -194,6 +195,7 @@ export default function PropertyDetailPage({
             Back
           </Button>
         </Link>
+        <AddToProposalDialog buildingId={id} />
         <Link href={`/properties/${property.id}/edit`}>
           <Button variant="outline" size="sm">
             <Pencil className="h-4 w-4 mr-2" />

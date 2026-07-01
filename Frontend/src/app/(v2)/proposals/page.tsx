@@ -35,20 +35,13 @@ import {
 } from "@/components/ui/select";
 import { useProposals, useCreateProposal } from "@/hooks/use-proposals";
 import { useClients } from "@/hooks/use-clients";
-import { useUnits } from "@/hooks/use-properties";
 import { toast } from "sonner";
-import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight, FileText } from "lucide-react";
 import type { FilterParams } from "@/types";
 
 const INITIAL_FORM = {
   title: "",
-  dealId: "",
   clientId: "",
-  rentValue: "",
-  leaseTerms: "",
-  validUntil: "",
-  camCharges: "",
-  securityDeposit: "",
   notes: "",
 };
 
@@ -64,31 +57,18 @@ export default function ProposalsPage() {
   const { data: clientsData } = useClients({ pageSize: 200 });
   const clients = clientsData?.data || [];
 
-  const { data: unitsData } = useUnits({ pageSize: 200 });
-  const units = unitsData?.data || [];
-
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState(INITIAL_FORM);
-  const [selectedUnitIds, setSelectedUnitIds] = useState<string[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const totalValue = proposals.reduce((sum, p) => sum + (p.rentValue ?? 0), 0);
-
-  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
     if (errors[name]) setErrors((prev) => ({ ...prev, [name]: "" }));
   }
 
-  function toggleUnit(unitId: string) {
-    setSelectedUnitIds((prev) =>
-      prev.includes(unitId) ? prev.filter((id) => id !== unitId) : [...prev, unitId]
-    );
-  }
-
   function resetForm() {
     setForm(INITIAL_FORM);
-    setSelectedUnitIds([]);
     setErrors({});
   }
 
@@ -99,26 +79,11 @@ export default function ProposalsPage() {
       toast.error("Please select a client.");
       return;
     }
-    if (!form.title) {
-      setErrors({ title: "Title is required" });
-      toast.error("Please enter a title.");
-      return;
-    }
-    if (selectedUnitIds.length === 0) {
-      toast.error("Please select at least one unit.");
-      return;
-    }
+    
     try {
       await createProposal.mutateAsync({
         clientId: form.clientId,
-        unitIds: selectedUnitIds,
         title: form.title || undefined,
-        dealId: form.dealId || undefined,
-        rentValue: form.rentValue ? Number(form.rentValue) : undefined,
-        camCharges: form.camCharges ? Number(form.camCharges) : undefined,
-        securityDeposit: form.securityDeposit ? Number(form.securityDeposit) : undefined,
-        leaseTerms: form.leaseTerms || undefined,
-        validUntil: form.validUntil || undefined,
         notes: form.notes || undefined,
       });
       toast.success("Proposal created successfully!");
@@ -133,21 +98,24 @@ export default function ProposalsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Proposals"
-        description="Create and manage lease proposals for clients."
+        description="Create and manage client proposals and shortlists."
       >
         <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm(); }}>
-          <DialogTrigger render={<Button size="sm" />}>
-            <Plus className="h-4 w-4 mr-2" />
-            New Proposal
+          <DialogTrigger asChild>
+            <Button size="sm">
+              <Plus className="h-4 w-4 mr-2" />
+              New Proposal
+            </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>Create Proposal</DialogTitle>
-              <DialogDescription>Fill in the details to create a new lease proposal.</DialogDescription>
+              <DialogDescription>Create a new proposal for a client to start adding properties.</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <FormField label="Title" required error={errors.title}>
-                <Input name="title" value={form.title} onChange={handleChange} placeholder="Proposal title" />
+              <FormField label="Proposal Title" error={errors.title}>
+                <Input name="title" value={form.title} onChange={handleChange} placeholder="e.g. Bandra Office Shortlist" />
+                <p className="text-xs text-muted-foreground mt-1">Leave blank to auto-generate from client name.</p>
               </FormField>
 
               <FormField label="Client" required error={errors.clientId}>
@@ -163,60 +131,8 @@ export default function ProposalsPage() {
                 </Select>
               </FormField>
 
-              <FormField label="Units" required>
-                <div className="border rounded-lg p-3 max-h-40 overflow-y-auto space-y-1">
-                  {units.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No units available.</p>
-                  ) : (
-                    units.map((u) => (
-                      <label key={u.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/50 rounded px-1 py-0.5">
-                        <input
-                          type="checkbox"
-                          checked={selectedUnitIds.includes(u.id)}
-                          onChange={() => toggleUnit(u.id)}
-                          className="h-4 w-4 rounded border-gray-300"
-                        />
-                        <span>{u.unitNumber || u.unitCode || u.id}</span>
-                        <span className="text-muted-foreground text-xs ml-auto">
-                          {u.monthlyRent ? `₹${u.monthlyRent.toLocaleString()}/mo` : ""}
-                        </span>
-                      </label>
-                    ))
-                  )}
-                </div>
-                {selectedUnitIds.length > 0 && (
-                  <p className="text-xs text-muted-foreground mt-1">{selectedUnitIds.length} unit(s) selected</p>
-                )}
-              </FormField>
-
-              <FormField label="Deal ID" error={errors.dealId}>
-                <Input name="dealId" value={form.dealId} onChange={handleChange} placeholder="Optional deal reference" />
-              </FormField>
-
-              <div className="grid grid-cols-2 gap-4">
-                <FormField label="Rent Value" error={errors.rentValue}>
-                  <Input name="rentValue" type="number" value={form.rentValue} onChange={handleChange} placeholder="Monthly rent" />
-                </FormField>
-                <FormField label="CAM Charges" error={errors.camCharges}>
-                  <Input name="camCharges" type="number" value={form.camCharges} onChange={handleChange} placeholder="Optional" />
-                </FormField>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <FormField label="Security Deposit" error={errors.securityDeposit}>
-                  <Input name="securityDeposit" type="number" value={form.securityDeposit} onChange={handleChange} placeholder="Optional" />
-                </FormField>
-                <FormField label="Valid Until" error={errors.validUntil}>
-                  <Input name="validUntil" type="date" value={form.validUntil} onChange={handleChange} />
-                </FormField>
-              </div>
-
-              <FormField label="Lease Terms" error={errors.leaseTerms}>
-                <Input name="leaseTerms" value={form.leaseTerms} onChange={handleChange} placeholder="e.g. 11 months" />
-              </FormField>
-
               <FormField label="Notes" error={errors.notes}>
-                <Input name="notes" value={form.notes} onChange={handleChange} placeholder="Optional notes" />
+                <Input name="notes" value={form.notes} onChange={handleChange} placeholder="Optional notes about this proposal" />
               </FormField>
 
               <DialogFooter>
@@ -235,16 +151,27 @@ export default function ProposalsPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4">
-            <p className="text-2xl font-bold">{data?.total || proposals.length}</p>
-            <p className="text-xs text-muted-foreground">Total Proposals</p>
+            <div className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-muted-foreground" />
+              <p className="text-2xl font-bold">{data?.total || proposals.length}</p>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Total Proposals</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-2xl font-bold text-yellow-600">
+              {proposals.filter((p) => p.status === "draft").length}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">Drafts</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
             <p className="text-2xl font-bold text-blue-600">
-              {proposals.filter((p) => p.status === "sent").length}
+              {proposals.filter((p) => p.status === "exported").length}
             </p>
-            <p className="text-xs text-muted-foreground">Awaiting Response</p>
+            <p className="text-xs text-muted-foreground mt-1">Exported</p>
           </CardContent>
         </Card>
         <Card>
@@ -252,13 +179,7 @@ export default function ProposalsPage() {
             <p className="text-2xl font-bold text-green-600">
               {proposals.filter((p) => p.status === "accepted").length}
             </p>
-            <p className="text-xs text-muted-foreground">Accepted</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-2xl font-bold">₹{(totalValue / 100000).toFixed(1)}L</p>
-            <p className="text-xs text-muted-foreground">Total Monthly Value</p>
+            <p className="text-xs text-muted-foreground mt-1">Accepted</p>
           </CardContent>
         </Card>
       </div>
@@ -267,7 +188,7 @@ export default function ProposalsPage() {
         <CardContent className="p-4">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
             <Input
-              placeholder="Search proposals..."
+              placeholder="Search proposals by title or client..."
               className="max-w-sm"
               value={filters.search || ""}
               onChange={(e) =>
@@ -286,10 +207,11 @@ export default function ProposalsPage() {
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
                 <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="exported">Exported</SelectItem>
                 <SelectItem value="sent">Sent</SelectItem>
                 <SelectItem value="accepted">Accepted</SelectItem>
                 <SelectItem value="rejected">Rejected</SelectItem>
-                <SelectItem value="expired">Expired</SelectItem>
+                <SelectItem value="archived">Archived</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -315,8 +237,8 @@ export default function ProposalsPage() {
                     <CardContent className="p-4 space-y-2">
                       <div className="flex items-start justify-between">
                         <div>
-                          <p className="font-medium text-sm">{p.title}</p>
-                          <p className="text-xs text-muted-foreground">{p.leaseTerms}</p>
+                          <p className="font-medium text-sm">{p.title || `Proposal - ${p.client?.name}`}</p>
+                          <p className="text-xs text-muted-foreground">{new Date(p.createdAt).toLocaleDateString("en-IN")}</p>
                         </div>
                         <StatusBadge type="proposal" value={p.status} />
                       </div>
@@ -326,28 +248,10 @@ export default function ProposalsPage() {
                           <p>{p.client?.name || p.clientId}</p>
                         </div>
                         <div>
-                          <p className="text-muted-foreground">Units</p>
-                          <p>{p.unitIds.length} unit(s)</p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground">Rent/mo</p>
-                          <p className="font-medium">₹{(p.rentValue ?? 0).toLocaleString()}</p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground">Deposit</p>
-                          <p>₹{(p.securityDeposit ?? 0).toLocaleString()}</p>
+                          <p className="text-muted-foreground">Items</p>
+                          <p>{p.itemCount || 0} property(s)</p>
                         </div>
                       </div>
-                      {p.validUntil && (
-                        <p className="text-xs text-muted-foreground">
-                          Valid until{" "}
-                          {new Date(p.validUntil).toLocaleDateString("en-IN", {
-                            day: "numeric",
-                            month: "short",
-                            year: "numeric",
-                          })}
-                        </p>
-                      )}
                     </CardContent>
                   </Card>
                 </Link>
@@ -361,19 +265,17 @@ export default function ProposalsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Proposal</TableHead>
+                    <TableHead>Title</TableHead>
                     <TableHead>Client</TableHead>
-                    <TableHead>Units</TableHead>
-                    <TableHead>Rent/mo</TableHead>
-                    <TableHead>Deposit</TableHead>
-                    <TableHead>Valid Until</TableHead>
+                    <TableHead>Items</TableHead>
+                    <TableHead>Created</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {proposals.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                      <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
                         No proposals found.
                       </TableCell>
                     </TableRow>
@@ -385,25 +287,14 @@ export default function ProposalsPage() {
                         onClick={() => window.location.href = `/proposals/${p.id}`}
                       >
                         <TableCell>
-                          <div>
-                            <p className="font-medium text-sm">{p.title}</p>
-                            <p className="text-xs text-muted-foreground">{p.leaseTerms}</p>
-                          </div>
+                          <p className="font-medium text-sm">{p.title || `Proposal - ${p.client?.name}`}</p>
                         </TableCell>
                         <TableCell className="text-sm">{p.client?.name || p.clientId}</TableCell>
-                        <TableCell className="text-sm">{p.unitIds.length} unit(s)</TableCell>
-                        <TableCell className="text-sm font-medium">
-                          ₹{(p.rentValue ?? 0).toLocaleString()}
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          ₹{(p.securityDeposit ?? 0).toLocaleString()}
-                        </TableCell>
+                        <TableCell className="text-sm">{p.itemCount || 0}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          {p.validUntil
-                            ? new Date(p.validUntil).toLocaleDateString("en-IN", {
-                                day: "numeric", month: "short", year: "numeric",
-                              })
-                            : "—"}
+                          {new Date(p.createdAt).toLocaleDateString("en-IN", {
+                            day: "numeric", month: "short", year: "numeric",
+                          })}
                         </TableCell>
                         <TableCell>
                           <StatusBadge type="proposal" value={p.status} />

@@ -14,6 +14,7 @@ import {
   DollarSign,
   Receipt,
   UserCog,
+  FileText,
   type LucideIcon,
 } from "lucide-react";
 
@@ -48,6 +49,7 @@ export const RIDER_NAV_ITEMS: NavItem[] = [
 export const V2_NAV_ITEMS: NavItem[] = [
   ...V1_NAV_ITEMS.slice(0, 5),
   { label: "Clients", href: "/clients", icon: Users },
+  { label: "Proposals", href: "/proposals", icon: FileText },
   { label: "Approvals", href: "/approvals", icon: CheckCircle, adminOnly: true },
   { label: "Tasks", href: "/tasks", icon: ClipboardList },
   { label: "Site Visits", href: "/site-visits", icon: CalendarCheck },

@@ -9,73 +9,37 @@ export interface Proposal {
   clientId: string;
   client?: { id: string; name: string };
   requirementId?: string;
-  unitIds: string[];
-  units?: { id: string; unitNumber: string; unitCode?: string; building?: { id: string; name: string } }[];
-  status: string;
   title?: string;
-  clientName?: string;
-  propertyName?: string;
-  propertyId?: string;
-  rentValue?: number;
-  leaseTerms?: string;
-  securityDeposit?: number;
-  validUntil?: string;
-  camCharges?: number;
-  dealId?: string;
   notes?: string;
-  pdfStorageKey?: string;
+  status: string;
+  fieldsConfig?: { selectedFields: string[] };
+  itemCount?: number;
+  exportedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
 
-interface BackendProposal {
+export interface ProposalItem {
   id: string;
-  clientId: string;
-  client?: { id: string; name: string };
-  requirementId?: string;
-  unitIds: string[];
-  units?: { id: string; unitNumber: string; unitCode?: string; building?: { id: string; name: string } }[];
-  status: string;
-  title?: string;
-  clientName?: string;
-  propertyName?: string;
-  propertyId?: string;
-  rentValue?: number;
-  leaseTerms?: string;
-  securityDeposit?: number;
-  validUntil?: string;
-  camCharges?: number;
-  dealId?: string;
+  proposalId: string;
+  entityType: "building" | "floor" | "unit";
+  buildingId?: string | null;
+  floorId?: string | null;
+  unitId?: string | null;
   notes?: string;
-  pdfStorageKey?: string;
+  displayOrder: number;
+  building?: { id: string; name: string };
+  floor?: { id: string; floorNumber: string; floorName?: string };
+  unit?: { id: string; unitNumber: string; unitCode: string; chargeableArea: number; rentPerSqftMonth: number; monthlyRent: number };
   createdAt: string;
   updatedAt: string;
 }
 
-function adaptProposal(p: BackendProposal): Proposal {
-  return {
-    id: p.id,
-    clientId: p.clientId,
-    client: p.client,
-    requirementId: p.requirementId,
-    unitIds: p.unitIds || [],
-    units: p.units,
-    status: p.status,
-    title: p.title,
-    clientName: p.clientName,
-    propertyName: p.propertyName,
-    propertyId: p.propertyId,
-    rentValue: p.rentValue,
-    leaseTerms: p.leaseTerms,
-    securityDeposit: p.securityDeposit,
-    validUntil: p.validUntil,
-    camCharges: p.camCharges,
-    dealId: p.dealId,
-    notes: p.notes,
-    pdfStorageKey: p.pdfStorageKey,
-    createdAt: p.createdAt,
-    updatedAt: p.updatedAt,
-  };
+export interface ExportField {
+  key: string;
+  label: string;
+  group: string;
+  restricted: boolean;
 }
 
 export function useProposals(filters: FilterParams = {}) {
@@ -84,8 +48,8 @@ export function useProposals(filters: FilterParams = {}) {
     queryFn: async (): Promise<PaginatedResponse<Proposal>> => {
       const params = buildFilterQuery(filters);
       if (filters.status) params.status = filters.status;
-      const response = await api.getPaginated<BackendProposal>("/proposals", params);
-      return { ...response, data: response.data.map(adaptProposal) };
+      const response = await api.getPaginated<Proposal>("/proposals", params);
+      return response;
     },
     staleTime: 2 * 60 * 1000,
   });
@@ -95,9 +59,8 @@ export function useProposal(id: string) {
   return useQuery({
     queryKey: ["proposals", id],
     queryFn: async (): Promise<Proposal> => {
-      const response = await api.get<{ data: BackendProposal }>(`/proposals/${id}`);
-      const proposal = (response.data ?? response) as unknown as BackendProposal;
-      return adaptProposal(proposal);
+      const response = await api.get<{ data: Proposal }>(`/proposals/${id}`);
+      return (response.data ?? response) as unknown as Proposal;
     },
     enabled: !!id,
   });
@@ -108,17 +71,11 @@ export function useCreateProposal() {
   return useMutation({
     mutationFn: async (data: {
       clientId: string;
-      unitIds: string[];
-      notes?: string;
+      requirementId?: string;
       title?: string;
-      dealId?: string;
-      rentValue?: number;
-      camCharges?: number;
-      securityDeposit?: number;
-      leaseTerms?: string;
-      validUntil?: string;
+      notes?: string;
     }) => {
-      return api.post<{ data: BackendProposal }>("/proposals", data);
+      return api.post<{ data: Proposal }>("/proposals", data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["proposals"] });
@@ -129,54 +86,107 @@ export function useCreateProposal() {
 export function useUpdateProposal() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Record<string, unknown> }) => {
-      return api.patch<{ data: BackendProposal }>(`/proposals/${id}`, data);
+    mutationFn: async ({ id, data }: { id: string; data: Partial<Proposal> }) => {
+      return api.patch<{ data: Proposal }>(`/proposals/${id}`, data);
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["proposals"] });
+      queryClient.invalidateQueries({ queryKey: ["proposals", variables.id] });
     },
   });
 }
 
-export function useDeleteProposal() {
+// --- Proposal Items Hooks ---
+
+export function useProposalItems(proposalId: string, filters: { page?: number; limit?: number; search?: string } = {}) {
+  return useQuery({
+    queryKey: ["proposals", proposalId, "items", filters],
+    queryFn: async (): Promise<PaginatedResponse<ProposalItem>> => {
+      const searchParams = new URLSearchParams();
+      if (filters.page) searchParams.set("page", String(filters.page));
+      if (filters.limit) searchParams.set("limit", String(filters.limit));
+      if (filters.search) searchParams.set("search", filters.search);
+      
+      const queryString = searchParams.toString() ? `?${searchParams.toString()}` : "";
+      return api.getPaginated<ProposalItem>(`/proposals/${proposalId}/items${queryString}`);
+    },
+    enabled: !!proposalId,
+  });
+}
+
+export function useAddProposalItem() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
-      return api.delete(`/proposals/${id}`);
+    mutationFn: async ({ id, data }: { id: string; data: { entityType: string; buildingId?: string; floorId?: string; unitId?: string; notes?: string } }) => {
+      return api.post<{ data: ProposalItem }>(`/proposals/${id}/items`, data);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["proposals"] });
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["proposals", variables.id, "items"] });
+      queryClient.invalidateQueries({ queryKey: ["proposals", variables.id] });
     },
   });
 }
 
-export function useUpdateProposalStatus() {
+export function useRemoveProposalItem() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      return api.patch<{ data: BackendProposal }>(`/proposals/${id}/status`, { status });
+    mutationFn: async ({ id, itemId }: { id: string; itemId: string }) => {
+      return api.delete(`/proposals/${id}/items/${itemId}`);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["proposals"] });
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["proposals", variables.id, "items"] });
+      queryClient.invalidateQueries({ queryKey: ["proposals", variables.id] });
     },
   });
 }
 
-export function useGeneratePdf() {
+// --- Export Configuration Hooks ---
+
+export function useExportFields() {
+  return useQuery({
+    queryKey: ["proposals", "export-fields"],
+    queryFn: async (): Promise<ExportField[]> => {
+      const response = await api.get<{ data: ExportField[] }>("/proposals/export-fields");
+      return (response.data ?? response) as unknown as ExportField[];
+    },
+    staleTime: 60 * 60 * 1000, // 1 hour
+  });
+}
+
+export function useUpdateProposalFields() {
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string): Promise<Blob> => {
-      const url = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api/v1"}/proposals/${id}/generate-pdf`;
+    mutationFn: async ({ id, selectedFields }: { id: string; selectedFields: string[] }) => {
+      return api.patch<{ data: Proposal }>(`/proposals/${id}/fields`, { selectedFields });
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["proposals", variables.id] });
+    },
+  });
+}
+
+export function useExportProposalCsv() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, selectedFields }: { id: string; selectedFields?: string[] }): Promise<Blob> => {
+      const url = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api/v1"}/proposals/${id}/export`;
       const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
       const response = await fetch(url, {
         method: "POST",
         headers: {
+          "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
+        body: JSON.stringify({ selectedFields }),
       });
       if (!response.ok) {
-        throw new Error("Failed to generate PDF");
+        throw new Error("Failed to export proposal to CSV");
       }
       return response.blob();
     },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["proposals", variables.id] });
+      queryClient.invalidateQueries({ queryKey: ["proposals"] });
+    }
   });
 }

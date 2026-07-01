@@ -114,7 +114,7 @@ export function buildProposalGeographyWhere(
   if (!scope) return {};
 
   if (scope.denyAll) {
-    return { units: { some: { building: { id: NO_MATCH_ID } } } };
+    return { items: { some: { building: { id: NO_MATCH_ID } } } };
   }
 
   const hasStateScope = scope.stateIds.length > 0;
@@ -127,19 +127,19 @@ export function buildProposalGeographyWhere(
 
   if (hasLocalityScope) {
     orConditions.push({
-      units: { some: { building: { localityId: { in: scope.localityIds } } } },
+      items: { some: { building: { localityId: { in: scope.localityIds } } } },
     });
   }
 
   if (hasCityScope) {
     orConditions.push({
-      units: { some: { building: { cityId: { in: scope.cityIds } } } },
+      items: { some: { building: { cityId: { in: scope.cityIds } } } },
     });
   }
 
   if (hasStateScope) {
     orConditions.push({
-      units: { some: { building: { stateId: { in: scope.stateIds } } } },
+      items: { some: { building: { stateId: { in: scope.stateIds } } } },
     });
   }
 

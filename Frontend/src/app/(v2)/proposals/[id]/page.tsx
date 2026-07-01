@@ -1,13 +1,22 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useProposal, useUpdateProposalStatus, useDeleteProposal, useGeneratePdf } from "@/hooks/use-proposals";
+import { 
+  useProposal, 
+  useUpdateProposalStatus, 
+  useDeleteProposal,
+  useProposalItems,
+  useRemoveProposalItem,
+  useExportFields,
+  useUpdateProposalFields,
+  useExportProposalCsv
+} from "@/hooks/use-proposals";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { LoadingSkeleton } from "@/components/shared/LoadingSkeleton";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -16,6 +25,23 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -25,25 +51,46 @@ import {
   XCircle,
   Download,
   Trash2,
-  Clock,
   Building2,
-  MapPin,
-  IndianRupee,
+  Columns,
+  Loader2,
+  Save
 } from "lucide-react";
 
 export default function ProposalDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  
   const { data: proposal, isLoading, error } = useProposal(id);
+  const { data: itemsData, isLoading: itemsLoading } = useProposalItems(id, { limit: 100 });
+  const { data: exportFields = [], isLoading: fieldsLoading } = useExportFields();
+  
   const updateStatus = useUpdateProposalStatus();
   const deleteProposal = useDeleteProposal();
-  const generatePdf = useGeneratePdf();
+  const removeItem = useRemoveProposalItem();
+  const updateFields = useUpdateProposalFields();
+  const exportCsv = useExportProposalCsv();
+
+  const items = itemsData?.data || [];
 
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [newStatus, setNewStatus] = useState("");
 
-  if (isLoading) {
+  const [selectedFields, setSelectedFields] = useState<string[]>([]);
+  const [isDirty, setIsDirty] = useState(false);
+
+  useEffect(() => {
+    if (proposal?.fieldsConfig?.selectedFields && proposal.fieldsConfig.selectedFields.length > 0) {
+      setSelectedFields(proposal.fieldsConfig.selectedFields);
+    } else if (exportFields.length > 0 && selectedFields.length === 0) {
+      // Use defaults if nothing saved
+      const defaults = ["buildingName", "propertyType", "address", "city", "locality", "availableArea", "rentPerSqFt", "monthlyRent", "furnishingStatus", "availabilityStatus"];
+      setSelectedFields(defaults);
+    }
+  }, [proposal, exportFields]);
+
+  if (isLoading || fieldsLoading) {
     return (
       <div className="space-y-6">
         <LoadingSkeleton type="table" />
@@ -102,21 +149,77 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
     }
   }
 
-  async function handleDownloadPdf() {
+  async function handleRemoveItem(itemId: string) {
     try {
-      const blob = await generatePdf.mutateAsync(id);
+      await removeItem.mutateAsync({ id, itemId });
+      toast.success("Property removed from proposal");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to remove property");
+    }
+  }
+
+  function handleToggleField(fieldKey: string, checked: boolean) {
+    setSelectedFields(prev => {
+      if (checked) {
+        return [...prev, fieldKey];
+      } else {
+        return prev.filter(k => k !== fieldKey);
+      }
+    });
+    setIsDirty(true);
+  }
+
+  async function handleSaveColumns() {
+    try {
+      await updateFields.mutateAsync({ id, selectedFields });
+      setIsDirty(false);
+      toast.success("Column configuration saved");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save columns");
+    }
+  }
+
+  async function handleDownloadCsv() {
+    try {
+      const blob = await exportCsv.mutateAsync({ id, selectedFields });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${proposal?.title || "proposal"}-${id.slice(0, 8)}.pdf`;
+      a.download = `${proposal?.title || "proposal"}-${id.slice(0, 8)}.csv`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      toast.success("PDF downloaded successfully");
+      toast.success("CSV downloaded successfully");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to generate PDF");
+      toast.error(err instanceof Error ? err.message : "Failed to generate CSV");
     }
+  }
+
+  // Group fields for dropdown
+  const groupedFields = exportFields.reduce((acc, field) => {
+    if (!acc[field.group]) acc[field.group] = [];
+    acc[field.group].push(field);
+    return acc;
+  }, {} as Record<string, typeof exportFields>);
+
+  // Render cell value dynamically (naive mapper for frontend preview)
+  function renderCellValue(item: any, key: string) {
+    const building = item.building || {};
+    
+    // Naive mapping. In a real app, backend handles the exact CSV transform.
+    // Here we just want to preview what is shown.
+    if (key === "buildingName") return building.name || "N/A";
+    if (key === "buildingCode") return building.propertyId || "N/A";
+    if (key === "address") return building.address || "N/A";
+    if (key === "city") return building.city || "N/A";
+    if (key === "propertyType") return building.propertyType || "N/A";
+    if (key === "rentPerSqFt") return building.rentPerSqFt ? `₹${building.rentPerSqFt}` : "N/A";
+    if (key === "availableArea") return building.availableArea ? `${building.availableArea} sqft` : "N/A";
+    if (key === "furnishingStatus") return building.furnishingStatus || "N/A";
+    if (key === "availabilityStatus") return building.availabilityStatus || "N/A";
+    
+    return "—"; // Fallback for fields not easily resolved on FE without full relation
   }
 
   return (
@@ -126,9 +229,13 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
         description={`Created ${new Date(proposal.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}`}
       >
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleDownloadPdf} disabled={generatePdf.isPending}>
+          <Button variant="outline" size="sm" onClick={() => router.push("/proposals")}>
+            <ArrowLeft className="h-4 w-4 mr-1" />
+            Back
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleDownloadCsv} disabled={exportCsv.isPending}>
             <Download className="h-4 w-4 mr-1" />
-            {generatePdf.isPending ? "Generating..." : "Download PDF"}
+            {exportCsv.isPending ? "Generating..." : "Export CSV"}
           </Button>
           <Button variant="outline" size="sm" onClick={() => setDeleteDialogOpen(true)}>
             <Trash2 className="h-4 w-4 mr-1" />
@@ -137,22 +244,15 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
         </div>
       </PageHeader>
 
-      {/* Status bar */}
       <Card>
         <CardContent className="p-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <StatusBadge type="proposal" value={proposal.status} />
-              {proposal.validUntil && (
-                <span className="text-sm text-muted-foreground">
-                  Valid until{" "}
-                  {new Date(proposal.validUntil).toLocaleDateString("en-IN", {
-                    day: "numeric",
-                    month: "short",
-                    year: "numeric",
-                  })}
-                </span>
-              )}
+              <span className="text-sm text-muted-foreground flex items-center gap-1">
+                <FileText className="h-4 w-4" />
+                Client: <span className="font-medium text-foreground">{proposal.client?.name || proposal.clientId}</span>
+              </span>
             </div>
             <div className="flex items-center gap-2">
               {availableActions.map((action) => (
@@ -171,147 +271,110 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
         </CardContent>
       </Card>
 
-      {/* Details grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Client info */}
-        <Card>
-          <CardContent className="p-5">
-            <h3 className="font-semibold text-sm mb-4 flex items-center gap-2">
-              <FileText className="h-4 w-4 text-muted-foreground" />
-              Client Details
-            </h3>
-            <dl className="space-y-3 text-sm">
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Client</dt>
-                <dd className="font-medium">{proposal.client?.name || proposal.clientId}</dd>
-              </div>
-              {proposal.dealId && (
-                <div className="flex justify-between">
-                  <dt className="text-muted-foreground">Deal ID</dt>
-                  <dd className="font-medium">{proposal.dealId}</dd>
-                </div>
-              )}
-            </dl>
-          </CardContent>
-        </Card>
-
-        {/* Financial details */}
-        <Card>
-          <CardContent className="p-5">
-            <h3 className="font-semibold text-sm mb-4 flex items-center gap-2">
-              <IndianRupee className="h-4 w-4 text-muted-foreground" />
-              Financial Terms
-            </h3>
-            <dl className="space-y-3 text-sm">
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Monthly Rent</dt>
-                <dd className="font-medium">₹{(proposal.rentValue ?? 0).toLocaleString()}</dd>
-              </div>
-              {proposal.camCharges != null && proposal.camCharges > 0 && (
-                <div className="flex justify-between">
-                  <dt className="text-muted-foreground">CAM Charges</dt>
-                  <dd className="font-medium">₹{proposal.camCharges.toLocaleString()}</dd>
-                </div>
-              )}
-              {proposal.securityDeposit != null && proposal.securityDeposit > 0 && (
-                <div className="flex justify-between">
-                  <dt className="text-muted-foreground">Security Deposit</dt>
-                  <dd className="font-medium">₹{proposal.securityDeposit.toLocaleString()}</dd>
-                </div>
-              )}
-            </dl>
-          </CardContent>
-        </Card>
-
-        {/* Lease terms */}
-        <Card>
-          <CardContent className="p-5">
-            <h3 className="font-semibold text-sm mb-4 flex items-center gap-2">
-              <Clock className="h-4 w-4 text-muted-foreground" />
-              Lease Terms
-            </h3>
-            <dl className="space-y-3 text-sm">
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Duration</dt>
-                <dd className="font-medium">{proposal.leaseTerms || "—"}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Valid Until</dt>
-                <dd className="font-medium">
-                  {proposal.validUntil
-                    ? new Date(proposal.validUntil).toLocaleDateString("en-IN", {
-                        day: "numeric",
-                        month: "long",
-                        year: "numeric",
-                      })
-                    : "—"}
-                </dd>
-              </div>
-            </dl>
-          </CardContent>
-        </Card>
-
-        {/* Units */}
-        <Card>
-          <CardContent className="p-5">
-            <h3 className="font-semibold text-sm mb-4 flex items-center gap-2">
-              <Building2 className="h-4 w-4 text-muted-foreground" />
-              Units ({proposal.unitIds.length})
-            </h3>
-            {proposal.units && proposal.units.length > 0 ? (
-              <ul className="space-y-2">
-                {proposal.units.map((u) => (
-                  <li key={u.id} className="flex items-center justify-between text-sm py-1 border-b last:border-0">
-                    <span className="font-medium">{u.unitNumber || u.unitCode || u.id}</span>
-                    {u.building && (
-                      <span className="text-muted-foreground flex items-center gap-1">
-                        <MapPin className="h-3 w-3" />
-                        {u.building.name}
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <ul className="space-y-2">
-                {proposal.unitIds.map((uid) => (
-                  <li key={uid} className="text-sm text-muted-foreground py-1 border-b last:border-0">
-                    Unit ID: {uid}
-                  </li>
-                ))}
-              </ul>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Building2 className="h-5 w-5 text-muted-foreground" />
+            Shortlisted Properties
+          </CardTitle>
+          <div className="flex items-center gap-2">
+            {isDirty && (
+              <Button size="sm" variant="default" onClick={handleSaveColumns} disabled={updateFields.isPending}>
+                {updateFields.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
+                Save Configuration
+              </Button>
             )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Notes */}
-      {proposal.notes && (
-        <Card>
-          <CardContent className="p-5">
-            <h3 className="font-semibold text-sm mb-2">Notes</h3>
-            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{proposal.notes}</p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Status change dialog */}
-      <Dialog open={statusDialogOpen} onOpenChange={setStatusDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Update Proposal Status</DialogTitle>
-            <DialogDescription>
-              Mark this proposal as <strong>{newStatus}</strong>?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setStatusDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleStatusChange} disabled={updateStatus.isPending}>
-              {updateStatus.isPending ? "Updating..." : "Confirm"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Columns className="h-4 w-4 mr-2" />
+                  Columns
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 max-h-[400px] overflow-y-auto">
+                {Object.entries(groupedFields).map(([group, fields]) => (
+                  <div key={group}>
+                    <DropdownMenuLabel>{group}</DropdownMenuLabel>
+                    {fields.map(f => (
+                      <DropdownMenuCheckboxItem
+                        key={f.key}
+                        checked={selectedFields.includes(f.key)}
+                        onCheckedChange={(c) => handleToggleField(f.key, c)}
+                        disabled={f.restricted}
+                      >
+                        {f.label}
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                    <DropdownMenuSeparator />
+                  </div>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-md border overflow-x-auto">
+            <Table className="min-w-max">
+              <TableHeader>
+                <TableRow>
+                  {/* Render headers based on selectedFields */}
+                  {selectedFields.map(key => {
+                    const fieldDef = exportFields.find(f => f.key === key);
+                    return (
+                      <TableHead key={key} className="whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <Checkbox 
+                            checked={true}
+                            onCheckedChange={(c) => handleToggleField(key, !!c)}
+                          />
+                          <span>{fieldDef?.label || key}</span>
+                        </div>
+                      </TableHead>
+                    );
+                  })}
+                  <TableHead className="w-[80px]">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {itemsLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={selectedFields.length + 1} className="h-24 text-center">
+                      <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
+                    </TableCell>
+                  </TableRow>
+                ) : items.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={selectedFields.length + 1} className="h-24 text-center text-muted-foreground">
+                      No properties added yet. Go to a building and click "Add to Proposal".
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  items.map(item => (
+                    <TableRow key={item.id}>
+                      {selectedFields.map(key => (
+                        <TableCell key={`${item.id}-${key}`} className="whitespace-nowrap">
+                          {renderCellValue(item, key)}
+                        </TableCell>
+                      ))}
+                      <TableCell>
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => handleRemoveItem(item.id)}
+                          title="Remove from Proposal"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Delete confirmation dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -326,6 +389,24 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
             <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
             <Button variant="destructive" onClick={handleDelete} disabled={deleteProposal.isPending}>
               {deleteProposal.isPending ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Status change dialog */}
+      <Dialog open={statusDialogOpen} onOpenChange={setStatusDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Update Proposal Status</DialogTitle>
+            <DialogDescription>
+              Mark this proposal as <strong>{newStatus}</strong>?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStatusDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleStatusChange} disabled={updateStatus.isPending}>
+              {updateStatus.isPending ? "Updating..." : "Confirm"}
             </Button>
           </DialogFooter>
         </DialogContent>
