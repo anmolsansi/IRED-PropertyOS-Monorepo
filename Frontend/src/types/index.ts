@@ -96,6 +96,9 @@ export interface Property {
   additionalFields?: any;
   assignedWorkerId: string;
   assignedWorker?: User;
+  assignedWorkerName?: string;
+  lastAssignedWorkerName?: string;
+  createdByName?: string;
   source?: string;
   notes?: string;
   duplicateWarning?: boolean;
