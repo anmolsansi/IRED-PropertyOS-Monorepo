@@ -177,15 +177,13 @@ export class ProposalsService {
       if (geographicScope) await verifyEntityGeography(this.prisma, geographicScope, building, "Building");
     }
 
-    const existingItem = await this.prisma.proposalItem.findUnique({
+    const existingItem = await this.prisma.proposalItem.findFirst({
       where: {
-        proposalId_entityType_buildingId_floorId_unitId: {
-          proposalId,
-          entityType: data.entityType as ProposalEntityType,
-          buildingId: data.buildingId || null,
-          floorId: data.floorId || null,
-          unitId: data.unitId || null,
-        }
+        proposalId,
+        entityType: data.entityType as ProposalEntityType,
+        buildingId: data.buildingId || null,
+        floorId: data.floorId || null,
+        unitId: data.unitId || null,
       }
     });
 
@@ -246,7 +244,14 @@ export class ProposalsService {
         include: {
           building: true,
           floor: true,
-          unit: true,
+          unit: {
+            include: {
+              furnishingStatus: true,
+              availabilityStatus: true,
+              propertyType: true,
+              floor: true,
+            }
+          },
         }
       }),
       this.prisma.proposalItem.count({ where }),

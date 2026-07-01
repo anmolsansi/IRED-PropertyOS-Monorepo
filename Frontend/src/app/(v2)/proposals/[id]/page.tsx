@@ -4,7 +4,7 @@ import { use, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { 
   useProposal, 
-  useUpdateProposalStatus, 
+  useUpdateProposal, 
   useDeleteProposal,
   useProposalItems,
   useRemoveProposalItem,
@@ -65,7 +65,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
   const { data: itemsData, isLoading: itemsLoading } = useProposalItems(id, { limit: 100 });
   const { data: exportFields = [], isLoading: fieldsLoading } = useExportFields();
   
-  const updateStatus = useUpdateProposalStatus();
+  const updateProposal = useUpdateProposal();
   const deleteProposal = useDeleteProposal();
   const removeItem = useRemoveProposalItem();
   const updateFields = useUpdateProposalFields();
@@ -82,12 +82,14 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
 
   useEffect(() => {
     if (proposal?.fieldsConfig?.selectedFields && proposal.fieldsConfig.selectedFields.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedFields(proposal.fieldsConfig.selectedFields);
     } else if (exportFields.length > 0 && selectedFields.length === 0) {
       // Use defaults if nothing saved
       const defaults = ["buildingName", "propertyType", "address", "city", "locality", "availableArea", "rentPerSqFt", "monthlyRent", "furnishingStatus", "availabilityStatus"];
       setSelectedFields(defaults);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [proposal, exportFields]);
 
   if (isLoading || fieldsLoading) {
@@ -130,7 +132,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
   async function handleStatusChange() {
     if (!newStatus) return;
     try {
-      await updateStatus.mutateAsync({ id, status: newStatus });
+      await updateProposal.mutateAsync({ id, data: { status: newStatus } });
       toast.success(`Proposal marked as ${newStatus}`);
       setStatusDialogOpen(false);
       setNewStatus("");
@@ -204,20 +206,22 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
   }, {} as Record<string, typeof exportFields>);
 
   // Render cell value dynamically (naive mapper for frontend preview)
-  function renderCellValue(item: any, key: string) {
-    const building = item.building || {};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function renderCellValue(item: any, key: string): React.ReactNode {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const building = (item.building as any) || {};
     
     // Naive mapping. In a real app, backend handles the exact CSV transform.
     // Here we just want to preview what is shown.
-    if (key === "buildingName") return building.name || "N/A";
-    if (key === "buildingCode") return building.propertyId || "N/A";
-    if (key === "address") return building.address || "N/A";
-    if (key === "city") return building.city || "N/A";
-    if (key === "propertyType") return building.propertyType || "N/A";
+    if (key === "buildingName") return String(building.name || "N/A");
+    if (key === "buildingCode") return String(building.propertyId || "N/A");
+    if (key === "address") return String(building.address || "N/A");
+    if (key === "city") return String(building.city || "N/A");
+    if (key === "propertyType") return String(building.propertyType || "N/A");
     if (key === "rentPerSqFt") return building.rentPerSqFt ? `₹${building.rentPerSqFt}` : "N/A";
     if (key === "availableArea") return building.availableArea ? `${building.availableArea} sqft` : "N/A";
-    if (key === "furnishingStatus") return building.furnishingStatus || "N/A";
-    if (key === "availabilityStatus") return building.availabilityStatus || "N/A";
+    if (key === "furnishingStatus") return String(building.furnishingStatus || "N/A");
+    if (key === "availabilityStatus") return String(building.availabilityStatus || "N/A");
     
     return "—"; // Fallback for fields not easily resolved on FE without full relation
   }
@@ -285,11 +289,9 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
               </Button>
             )}
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Columns className="h-4 w-4 mr-2" />
-                  Columns
-                </Button>
+              <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
+                <Columns className="h-4 w-4 mr-2" />
+                Columns
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56 max-h-[400px] overflow-y-auto">
                 {Object.entries(groupedFields).map(([group, fields]) => (
@@ -345,7 +347,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
                 ) : items.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={selectedFields.length + 1} className="h-24 text-center text-muted-foreground">
-                      No properties added yet. Go to a building and click "Add to Proposal".
+                      No properties added yet. Go to a building and click &quot;Add to Proposal&quot;.
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -405,8 +407,8 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setStatusDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleStatusChange} disabled={updateStatus.isPending}>
-              {updateStatus.isPending ? "Updating..." : "Confirm"}
+            <Button onClick={handleStatusChange} disabled={updateProposal.isPending}>
+              {updateProposal.isPending ? "Updating..." : "Confirm"}
             </Button>
           </DialogFooter>
         </DialogContent>

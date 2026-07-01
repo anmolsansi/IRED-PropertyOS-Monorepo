@@ -101,11 +101,9 @@ export default function ProposalsPage() {
         description="Create and manage client proposals and shortlists."
       >
         <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm(); }}>
-          <DialogTrigger asChild>
-            <Button size="sm">
-              <Plus className="h-4 w-4 mr-2" />
-              New Proposal
-            </Button>
+          <DialogTrigger render={<Button size="sm" />}>
+            <Plus className="h-4 w-4 mr-2" />
+            New Proposal
           </DialogTrigger>
           <DialogContent className="max-w-md">
             <DialogHeader>

@@ -99,14 +99,14 @@ export function AddToProposalDialog({ buildingId, trigger }: AddToProposalDialog
 
   return (
     <Dialog open={open} onOpenChange={(val) => { setOpen(val); if (!val) resetForm(); }}>
-      <DialogTrigger asChild>
-        {trigger || (
-          <Button variant="outline" size="sm">
-            <FileText className="h-4 w-4 mr-2" />
-            Add to Proposal
-          </Button>
-        )}
-      </DialogTrigger>
+      {trigger ? (
+        <DialogTrigger render={trigger as React.ReactElement} />
+      ) : (
+        <DialogTrigger render={<Button variant="outline" size="sm" />}>
+          <FileText className="h-4 w-4 mr-2" />
+          Add to Proposal
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Add to Proposal</DialogTitle>
