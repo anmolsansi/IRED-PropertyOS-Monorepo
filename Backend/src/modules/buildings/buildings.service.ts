@@ -201,13 +201,27 @@ export class BuildingsService {
       data.buildingCode || (await this.generateBuildingCode());
     const normalizedData = await this.resolveReferenceNames(data);
 
+    const { contacts, ...restData } = normalizedData;
+
+    const createPayload: any = {
+      ...restData,
+      buildingCode,
+      createdBy: userId,
+      updatedBy: userId,
+    };
+
+    if (contacts && Array.isArray(contacts)) {
+      createPayload.contacts = {
+        create: contacts.map((c: any) => ({
+          fullName: c.name,
+          mobileNumber: c.phone || null,
+          email: c.email || null,
+        })),
+      };
+    }
+
     return this.prisma.building.create({
-      data: {
-        ...normalizedData,
-        buildingCode,
-        createdBy: userId,
-        updatedBy: userId,
-      },
+      data: createPayload,
     });
   }
 
@@ -301,9 +315,23 @@ export class BuildingsService {
     if (!building) throw new NotFoundException("Building not found");
 
     if (isAdmin) {
+      const { contacts, ...restData } = data;
+      const updatePayload: any = { ...restData, updatedBy: userId };
+      
+      if (contacts && Array.isArray(contacts)) {
+        updatePayload.contacts = {
+          deleteMany: {},
+          create: contacts.map((c: any) => ({
+            fullName: c.name,
+            mobileNumber: c.phone || null,
+            email: c.email || null,
+          })),
+        };
+      }
+
       return this.prisma.building.update({
         where: { id },
-        data: { ...data, updatedBy: userId },
+        data: updatePayload,
       });
     }
 

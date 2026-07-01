@@ -413,6 +413,9 @@ export default function NewPropertyPage() {
         payload.commercialTerms = commercialTerms;
       }
       if (extraFields.length > 0) payload.additionalFields = extraFields;
+      if (contacts && contacts.length > 0) {
+        payload.contacts = contacts;
+      }
 
       const createdProperty = await createProperty.mutateAsync(payload);
       const buildingId = getCreatedBuildingId(createdProperty);

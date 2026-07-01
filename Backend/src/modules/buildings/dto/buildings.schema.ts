@@ -44,6 +44,7 @@ export const CreateBuildingSchema = z.object({
   facingOption: z.enum(["FRONT", "REAR"]).optional(),
   unitAccessLocation: z.enum(["MAIN_ROAD", "INSIDE"]).optional(),
   notes: z.string().optional(),
+  contacts: z.array(z.any()).optional(),
 });
 
 export const UpdateBuildingSchema = CreateBuildingSchema.partial().extend({
