@@ -54,6 +54,7 @@ interface BackendBuilding {
   floors?: unknown[];
   units?: unknown[];
   contacts?: BackendContact[];
+  source?: { id: string; name: string };
 }
 
 function adaptBackendContact(contact: BackendContact): import("@/types").Contact {
@@ -85,18 +86,18 @@ function adaptBuildingToProperty(building: BackendBuilding): Property & { contac
     latitude: building.latitude,
     longitude: building.longitude,
     mapsUrl: building.googleMapsUrl,
-    propertyType: (building.propertyType?.code as Property["propertyType"]) || "mixed_use",
-    furnishingStatus: "unfurnished",
+    propertyType: (building.propertyType?.code || building.propertyType?.name?.toLowerCase().replace(/\s+/g, "_") || "mixed_use") as Property["propertyType"],
+    furnishingStatus: ((building.commercialTerms?.furnishingStatusId as string)?.toLowerCase().replace(/\s+/g, "_") || "unfurnished") as Property["furnishingStatus"],
     availabilityStatus: (building.availabilityStatus?.name?.toLowerCase().replace(/\s+/g, "_") as Property["availabilityStatus"]) || "available",
     verificationStatus: (building.verificationStatus?.name?.toLowerCase().replace(/\s+/g, "_") as Property["verificationStatus"]) || "pending_verification",
-    availableArea: 0,
+    availableArea: (building.commercialTerms?.availableArea as number) || 0,
     totalArea: building.totalBuildingArea || 0,
-    rentPerSqFt: 0,
-    camCharges: 0,
-    maintenanceCharges: 0,
-    securityDeposit: 0,
+    rentPerSqFt: (building.commercialTerms?.rentPerSqFt as number) || 0,
+    camCharges: (building.commercialTerms?.camCharges as number) || 0,
+    maintenanceCharges: (building.commercialTerms?.maintenanceCharges as number) || 0,
+    securityDeposit: (building.commercialTerms?.securityDeposit as number) || 0,
     assignedWorkerId: building.createdBy || "",
-    source: "field",
+    source: (building.source?.name?.toLowerCase().replace(/\s+/g, "_") as Property["source"]) || "field",
     notes: building.notes,
     createdAt: building.createdAt,
     updatedAt: building.updatedAt,
