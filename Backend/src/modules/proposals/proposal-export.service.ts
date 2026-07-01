@@ -2,12 +2,16 @@ import { Injectable, Logger, ForbiddenException, NotFoundException } from "@nest
 import { PrismaService } from "../../prisma/prisma.service";
 import { PROPOSAL_EXPORT_FIELDS } from "./constants/proposal-export-fields";
 import { ProposalStatus } from "@prisma/client";
+import { MediaService } from "../media/media.service";
 
 @Injectable()
 export class ProposalExportService {
   private readonly logger = new Logger(ProposalExportService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private mediaService: MediaService,
+  ) {}
 
   async exportCsv(
     proposalId: string,
@@ -57,6 +61,7 @@ export class ProposalExportService {
             availabilityStatus: true,
             verificationStatus: true,
             source: true,
+            media: true,
           }
         },
         floor: true,
@@ -66,6 +71,7 @@ export class ProposalExportService {
             availabilityStatus: true,
             propertyType: true,
             floor: true,
+            media: true,
           }
         },
       }
@@ -73,6 +79,7 @@ export class ProposalExportService {
 
     // Build CSV Content
     const headers = validFields.map(f => f.label);
+    headers.push("Images");
     const rows = [headers.join(",")];
 
     for (const item of items) {
@@ -138,6 +145,22 @@ export class ProposalExportService {
         }
         return strVal;
       });
+
+      // Append Images column
+      const images: string[] = [];
+      if (b?.media) {
+        images.push(...b.media.map(m => this.mediaService.buildPublicUrl(m.storageKey)));
+      }
+      if (u?.media) {
+        images.push(...u.media.map(m => this.mediaService.buildPublicUrl(m.storageKey)));
+      }
+      
+      const imagesStr = images.join("; ");
+      let escapedImagesStr = imagesStr;
+      if (escapedImagesStr.includes(",") || escapedImagesStr.includes('"') || escapedImagesStr.includes("\n")) {
+        escapedImagesStr = `"${escapedImagesStr.replace(/"/g, '""')}"`;
+      }
+      rowValues.push(escapedImagesStr);
 
       rows.push(rowValues.join(","));
     }
