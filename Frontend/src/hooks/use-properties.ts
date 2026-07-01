@@ -60,6 +60,8 @@ interface BackendBuilding {
   units?: unknown[];
   contacts?: BackendContact[];
   source?: { id: string; name: string };
+  creator?: { id: string; fullName: string };
+  updater?: { id: string; fullName: string };
 }
 
 function adaptBackendContact(contact: BackendContact): import("@/types").Contact {
@@ -113,6 +115,9 @@ function adaptBuildingToProperty(building: BackendBuilding): Property & { contac
     unitAccessLocation: building.unitAccessLocation || "",
     additionalFields: building.additionalFields || [],
     assignedWorkerId: building.createdBy || "",
+    assignedWorkerName: building.creator?.fullName || "",
+    lastAssignedWorkerName: building.updater?.fullName || "",
+    createdByName: building.creator?.fullName || "",
     source: (building.source?.name?.toLowerCase().replace(/\s+/g, "_") as Property["source"]) || "field",
     notes: building.notes,
     createdAt: building.createdAt,

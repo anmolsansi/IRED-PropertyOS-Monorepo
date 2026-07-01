@@ -416,8 +416,9 @@ export default function PropertyDetailPage({
                 year: "numeric",
               }),
             },
-            { label: "Created By", value: property.createdBy },
-            { label: "Assigned Worker", value: property.assignedWorkerId },
+            { label: "Created By", value: property.createdByName || property.createdBy },
+            { label: "Assigned Worker", value: property.assignedWorkerName || property.assignedWorkerId },
+            { label: "Last Assigned Worker", value: property.lastAssignedWorkerName || "N/A" },
           ]}
         />
       </div>

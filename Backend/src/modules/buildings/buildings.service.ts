@@ -148,6 +148,8 @@ export class BuildingsService {
           propertyType: true,
           availabilityStatus: true,
           verificationStatus: true,
+          creator: true,
+          updater: true,
         },
       }),
       this.prisma.building.count({ where }),
@@ -177,6 +179,8 @@ export class BuildingsService {
         availabilityStatus: true,
         verificationStatus: true,
         source: true,
+        creator: true,
+        updater: true,
         floors: {
           where: { deletedAt: null },
           orderBy: { floorNumber: "asc" },
