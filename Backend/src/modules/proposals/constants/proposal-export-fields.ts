@@ -78,15 +78,4 @@ export const PROPOSAL_EXPORT_FIELDS: ProposalExportField[] = [
   { key: "changeRequestHistory", label: "Change Request History", group: "Audit", restricted: true },
 ];
 
-export const DEFAULT_SELECTED_FIELDS = [
-  "buildingName",
-  "propertyType",
-  "address",
-  "city",
-  "locality",
-  "availableArea",
-  "rentPerSqFt",
-  "monthlyRent",
-  "furnishingStatus",
-  "availabilityStatus"
-];
+export const DEFAULT_SELECTED_FIELDS = PROPOSAL_EXPORT_FIELDS.filter(f => !f.restricted).map(f => f.key);
