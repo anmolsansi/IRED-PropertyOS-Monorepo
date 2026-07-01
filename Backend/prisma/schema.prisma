@@ -80,6 +80,7 @@ model User {
   processedImports           Import[]                       @relation("ImportProcessor")
   otpRecords                 OtpRecord[]
   createdProposals           Proposal[]
+  addedProposalItems         ProposalItem[]
 
   @@map("users")
 }
@@ -386,6 +387,7 @@ model Building {
   tasks     Task[]
   siteVisits SiteVisit[]
   deals     Deal[]
+  proposalItems ProposalItem[]
 
   @@index([stateId])
   @@index([cityId])
@@ -423,6 +425,7 @@ model Floor {
   units    Unit[]
   contacts Contact[]
   media    Media[]
+  proposalItems ProposalItem[]
 
   @@index([buildingId])
   @@index([deletedAt])
@@ -478,6 +481,7 @@ model Unit {
   contacts Contact[]
   media    Media[]
   deals    Deal[]
+  proposalItems ProposalItem[]
 
   @@index([buildingId])
   @@index([floorId])
@@ -926,9 +930,11 @@ model Proposal {
   requirementId String? @map("requirement_id") @db.Uuid
   title        String?
   notes        String?
-  unitIds      Json     @map("unit_ids")
+  unitIds      Json?    @map("unit_ids")
+  fieldsConfig Json?    @map("fields_config")
   pdfStorageKey String? @map("pdf_storage_key")
   status       ProposalStatus @default(draft)
+  exportedAt   DateTime? @map("exported_at")
   createdBy    String?  @map("created_by") @db.Uuid
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
@@ -936,12 +942,45 @@ model Proposal {
   client       Client  @relation(fields: [clientId], references: [id])
   organization Organization? @relation(fields: [organizationId], references: [id])
   creator      User?   @relation(fields: [createdBy], references: [id])
+  items        ProposalItem[]
 
   @@index([clientId])
   @@index([createdBy])
   @@index([organizationId])
   @@index([status])
   @@map("proposals")
+}
+
+model ProposalItem {
+  id          String   @id @default(uuid()) @db.Uuid
+  proposalId  String   @map("proposal_id") @db.Uuid
+
+  entityType  ProposalEntityType @map("entity_type")
+  buildingId  String?  @map("building_id") @db.Uuid
+  floorId     String?  @map("floor_id") @db.Uuid
+  unitId      String?  @map("unit_id") @db.Uuid
+
+  displayOrder Int     @default(0) @map("display_order")
+  notes        String?
+  snapshotJson Json?   @map("snapshot_json")
+
+  addedBy      String? @map("added_by") @db.Uuid
+  addedAt      DateTime @default(now()) @map("added_at")
+  removedAt    DateTime? @map("removed_at")
+
+  proposal     Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  building     Building? @relation(fields: [buildingId], references: [id])
+  floor        Floor? @relation(fields: [floorId], references: [id])
+  unit         Unit? @relation(fields: [unitId], references: [id])
+  user         User? @relation(fields: [addedBy], references: [id])
+
+  @@index([proposalId])
+  @@index([buildingId])
+  @@index([floorId])
+  @@index([unitId])
+  @@index([addedBy])
+  @@unique([proposalId, entityType, buildingId, floorId, unitId])
+  @@map("proposal_items")
 }
 
 // ─── OTP Records ────────────────────────────────────────────────
@@ -1105,8 +1144,16 @@ enum ImportStatus {
 
 enum ProposalStatus {
   draft
+  exported
   sent
   accepted
   rejected
   expired
+  archived
+}
+
+enum ProposalEntityType {
+  building
+  floor
+  unit
 }
