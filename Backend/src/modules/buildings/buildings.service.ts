@@ -74,31 +74,43 @@ export class BuildingsService {
     if (filters.propertyTypeId) andConditions.push({ propertyTypeId: filters.propertyTypeId });
     if (filters.availabilityStatusId) andConditions.push({ availabilityStatusId: filters.availabilityStatusId });
 
+    const isUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val);
+
     if (filters.cityId) {
-      const cityForFilter = await this.prisma.city.findUnique({ where: { id: filters.cityId } });
-      if (cityForFilter) {
-        andConditions.push({
-          OR: [
-            { cityId: filters.cityId },
-            { cityName: { equals: cityForFilter.name, mode: "insensitive" as const } },
-          ]
-        });
+      if (isUuid(filters.cityId)) {
+        const cityForFilter = await this.prisma.city.findUnique({ where: { id: filters.cityId } });
+        if (cityForFilter) {
+          andConditions.push({
+            OR: [
+              { cityId: filters.cityId },
+              { cityName: { equals: cityForFilter.name, mode: "insensitive" as const } },
+            ]
+          });
+        } else {
+          andConditions.push({ cityId: filters.cityId });
+        }
       } else {
-        andConditions.push({ cityId: filters.cityId });
+        // It's a raw string name, not a UUID
+        andConditions.push({ cityName: { equals: filters.cityId, mode: "insensitive" as const } });
       }
     }
 
     if (filters.localityId) {
-      const localityForFilter = await this.prisma.locality.findUnique({ where: { id: filters.localityId } });
-      if (localityForFilter) {
-        andConditions.push({
-          OR: [
-            { localityId: filters.localityId },
-            { localityName: { equals: localityForFilter.name, mode: "insensitive" as const } },
-          ]
-        });
+      if (isUuid(filters.localityId)) {
+        const localityForFilter = await this.prisma.locality.findUnique({ where: { id: filters.localityId } });
+        if (localityForFilter) {
+          andConditions.push({
+            OR: [
+              { localityId: filters.localityId },
+              { localityName: { equals: localityForFilter.name, mode: "insensitive" as const } },
+            ]
+          });
+        } else {
+          andConditions.push({ localityId: filters.localityId });
+        }
       } else {
-        andConditions.push({ localityId: filters.localityId });
+        // It's a raw string name, not a UUID
+        andConditions.push({ localityName: { equals: filters.localityId, mode: "insensitive" as const } });
       }
     }
 

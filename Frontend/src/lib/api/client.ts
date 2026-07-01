@@ -307,11 +307,13 @@ export function logout() {
 // --- Filter Query Builder ---
 
 export function buildFilterQuery(filters: FilterParams): Record<string, string> {
+  const isUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
+
   const params: Record<string, string> = {};
   if (filters.search) params.search = filters.search;
-  if (filters.state) params.stateId = filters.state;
-  if (filters.city) params.cityId = filters.city;
-  if (filters.locality) params.localityId = filters.locality;
+  if (isUuid(filters.state)) params.stateId = filters.state!;
+  if (isUuid(filters.city)) params.cityId = filters.city!;
+  if (isUuid(filters.locality)) params.localityId = filters.locality!;
   if (filters.propertyType) params.propertyTypeId = filters.propertyType;
   if (filters.furnishingStatus) params.furnishingStatusId = filters.furnishingStatus;
   if (filters.availabilityStatus) params.availabilityStatusId = filters.availabilityStatus;
