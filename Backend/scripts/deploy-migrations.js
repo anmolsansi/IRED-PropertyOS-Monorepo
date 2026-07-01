@@ -97,7 +97,7 @@ async function killZombieLocks() {
     if (locks && locks.length > 0) {
       console.log(`Found ${locks.length} stale lock(s). Terminating holding connections...`);
       for (const lock of locks) {
-        await prisma.$queryRaw`SELECT pg_terminate_backend(CAST(${Number(lock.pid)} AS integer))`;
+        await prisma.$executeRawUnsafe(`SELECT pg_terminate_backend($1::int)`, Number(lock.pid));
         console.log(`Terminated PID ${lock.pid}`);
       }
       await new Promise(resolve => setTimeout(resolve, 2000));
