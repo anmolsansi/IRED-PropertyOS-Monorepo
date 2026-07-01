@@ -97,7 +97,7 @@ async function refreshAccessToken(): Promise<string | null> {
   }
 }
 
-async function getValidAccessToken(): Promise<string | null> {
+export async function getValidAccessToken(): Promise<string | null> {
   if (clerkTokenGetter) {
     try {
       const token = await clerkTokenGetter();

@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, buildFilterQuery } from "@/lib/api/client";
+import { api, buildFilterQuery, getValidAccessToken } from "@/lib/api/client";
 import type { PaginatedResponse, FilterParams } from "@/types";
 
 export interface Proposal {
@@ -184,7 +184,7 @@ export function useExportProposalCsv() {
   return useMutation({
     mutationFn: async ({ id, selectedFields }: { id: string; selectedFields?: string[] }): Promise<Blob> => {
       const url = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api/v1"}/proposals/${id}/export`;
-      const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+      const token = await getValidAccessToken();
       const response = await fetch(url, {
         method: "POST",
         headers: {
