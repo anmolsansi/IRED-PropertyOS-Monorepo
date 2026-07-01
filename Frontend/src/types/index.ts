@@ -88,6 +88,12 @@ export interface Property {
   availabilityDate?: string;
   possessionDate?: string;
   brokerage?: string;
+  landlordName?: string;
+  telecallerStatus?: string;
+  starRating?: number;
+  facingOption?: string;
+  unitAccessLocation?: string;
+  additionalFields?: any;
   assignedWorkerId: string;
   assignedWorker?: User;
   source?: string;
