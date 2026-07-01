@@ -220,6 +220,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
       case "buildingName": val = b?.name; break;
       case "buildingCode": val = b?.buildingCode; break;
       case "propertyType": val = b?.propertyType?.name || u?.propertyType?.name; break;
+      case "entityType": val = item.unit ? "Unit" : "Building"; break;
       case "source": val = b?.source?.name; break;
       case "starRating": val = b?.starRating; break;
       case "verificationStatus": val = b?.verificationStatus?.name; break;
@@ -236,7 +237,8 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
       case "builtUpArea": val = u?.builtUpArea; break;
       case "chargeableArea": val = u?.chargeableArea; break;
       case "superBuiltUpArea": val = u?.superBuiltUpArea; break;
-      case "availableArea": val = u?.chargeableArea || b?.totalBuildingArea; break;
+      case "availableArea": val = u?.chargeableArea || b?.commercialTerms?.availableArea; break;
+      case "totalArea": val = u?.carpetArea || b?.totalBuildingArea; break;
 
       case "rentPerSqFt": val = u?.rentPerSqftMonth || b?.commercialTerms?.rentPerSqFt; break;
       case "monthlyRent": val = u?.monthlyRent || (b?.commercialTerms?.rentPerSqFt && b?.commercialTerms?.availableArea ? b.commercialTerms.rentPerSqFt * b.commercialTerms.availableArea : undefined); break;
@@ -244,11 +246,15 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
       case "securityDeposit": val = u?.securityDeposit || b?.commercialTerms?.securityDeposit; break;
       case "lockInPeriod": val = u?.lockInPeriodMonths; break;
       case "leaseTenure": val = u?.leaseTermMonths || b?.commercialTerms?.leaseTerms; break;
+      case "otherCharges": val = b?.commercialTerms?.otherCharges; break;
+      case "escalation": val = b?.commercialTerms?.escalationDetails; break;
+      case "brokerage": val = b?.commercialTerms?.brokerage; break;
 
       case "floorNumber": val = f?.floorNumber || u?.floor?.floorNumber; break;
       case "unitNumber": val = u?.unitNumber; break;
       case "unitStatus": val = u?.availabilityStatus?.name; break;
       case "unitArea": val = u?.chargeableArea; break;
+      case "landlordName": val = b?.landlordName; break;
 
       case "availabilityStatus": val = u?.availabilityStatus?.name || b?.availabilityStatus?.name; break;
       case "availableFromDate": val = u?.availabilityDate ? new Date(u.availabilityDate).toLocaleDateString() : (b?.commercialTerms?.availabilityDate ? new Date(b.commercialTerms.availabilityDate).toLocaleDateString() : ""); break;

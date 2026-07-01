@@ -10,6 +10,7 @@ export const PROPOSAL_EXPORT_FIELDS: ProposalExportField[] = [
   { key: "buildingName", label: "Building Name", group: "Basic", restricted: false },
   { key: "buildingCode", label: "Building Code", group: "Basic", restricted: false },
   { key: "propertyType", label: "Property Type", group: "Basic", restricted: false },
+  { key: "entityType", label: "Entity Type", group: "Basic", restricted: false },
   { key: "source", label: "Source", group: "Basic", restricted: false },
   { key: "starRating", label: "Star Rating", group: "Basic", restricted: false },
   { key: "verificationStatus", label: "Verification Status", group: "Basic", restricted: false },
@@ -30,6 +31,7 @@ export const PROPOSAL_EXPORT_FIELDS: ProposalExportField[] = [
   { key: "chargeableArea", label: "Chargeable Area", group: "Area", restricted: false },
   { key: "superBuiltUpArea", label: "Super Built-up Area", group: "Area", restricted: false },
   { key: "availableArea", label: "Available Area", group: "Area", restricted: false },
+  { key: "totalArea", label: "Total Area", group: "Area", restricted: false },
 
   // Commercial Fields
   { key: "rentPerSqFt", label: "Rent per Sq Ft", group: "Commercial", restricted: false },
@@ -38,6 +40,9 @@ export const PROPOSAL_EXPORT_FIELDS: ProposalExportField[] = [
   { key: "securityDeposit", label: "Security Deposit", group: "Commercial", restricted: false },
   { key: "lockInPeriod", label: "Lock-in Period", group: "Commercial", restricted: false },
   { key: "leaseTenure", label: "Lease Tenure", group: "Commercial", restricted: false },
+  { key: "otherCharges", label: "Other Charges", group: "Commercial", restricted: false },
+  { key: "escalation", label: "Escalation", group: "Commercial", restricted: false },
+  { key: "brokerage", label: "Brokerage", group: "Commercial", restricted: false },
 
   // Floor and Unit Fields
   { key: "floorNumber", label: "Floor Number", group: "Floor & Unit", restricted: false },
@@ -60,6 +65,7 @@ export const PROPOSAL_EXPORT_FIELDS: ProposalExportField[] = [
   { key: "contactRole", label: "Contact Role", group: "Contact", restricted: false },
   { key: "contactPhone", label: "Contact Phone", group: "Contact", restricted: false },
   { key: "contactEmail", label: "Contact Email", group: "Contact", restricted: false },
+  { key: "landlordName", label: "Landlord Name", group: "Contact", restricted: false },
 
   // Notes
   { key: "publicNotes", label: "Public Notes", group: "Notes", restricted: false },
