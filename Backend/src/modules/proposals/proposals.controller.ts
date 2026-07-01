@@ -106,6 +106,17 @@ export class ProposalsController {
     return this.proposalsService.update(id, dto, scope);
   }
 
+  @Delete(":id")
+  @GeographyScope()
+  @ApiOperation({ summary: "Delete a proposal" })
+  async remove(
+    @Param("id") id: string,
+    @CurrentUser("geographicScope") scope: any,
+  ) {
+    await this.proposalsService.remove(id, scope);
+    return { success: true };
+  }
+
   @Post(":id/items")
   @GeographyScope()
   @ApiOperation({ summary: "Add an item to the proposal" })

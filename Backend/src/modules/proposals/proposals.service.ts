@@ -227,6 +227,13 @@ export class ProposalsService {
     });
   }
 
+  async remove(id: string, geographicScope?: GeographicScope) {
+    await this.findOne(id, geographicScope); // Verify access
+    return this.prisma.proposal.delete({
+      where: { id },
+    });
+  }
+
   // --- Proposal Items ---
 
   async addItem(
