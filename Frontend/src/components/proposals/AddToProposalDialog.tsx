@@ -176,7 +176,7 @@ export function AddToProposalDialog({ buildingId, trigger }: AddToProposalDialog
                 type="submit" 
                 disabled={createProposal.isPending || addItem.isPending || (tab === "existing" && proposals.length === 0)}
               >
-                {createProposal.isPending || addItem.isPending ? "Adding..." : "Add Property"}
+                {createProposal.isPending || addItem.isPending ? "Adding..." : "Add to Proposal"}
               </Button>
             </DialogFooter>
           </form>
