@@ -2,6 +2,7 @@
 
 import { use, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { 
   useProposal, 
   useUpdateProposal, 
@@ -237,12 +238,12 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
       case "superBuiltUpArea": val = u?.superBuiltUpArea; break;
       case "availableArea": val = u?.chargeableArea || b?.totalBuildingArea; break;
 
-      case "rentPerSqFt": val = u?.rentPerSqftMonth; break;
-      case "monthlyRent": val = u?.monthlyRent; break;
-      case "maintenanceCharges": val = u?.maintenanceCharges; break;
-      case "securityDeposit": val = u?.securityDeposit; break;
+      case "rentPerSqFt": val = u?.rentPerSqftMonth || b?.commercialTerms?.rentPerSqFt; break;
+      case "monthlyRent": val = u?.monthlyRent || (b?.commercialTerms?.rentPerSqFt && b?.commercialTerms?.availableArea ? b.commercialTerms.rentPerSqFt * b.commercialTerms.availableArea : undefined); break;
+      case "maintenanceCharges": val = u?.maintenanceCharges || b?.commercialTerms?.maintenanceCharges; break;
+      case "securityDeposit": val = u?.securityDeposit || b?.commercialTerms?.securityDeposit; break;
       case "lockInPeriod": val = u?.lockInPeriodMonths; break;
-      case "leaseTenure": val = u?.leaseTermMonths; break;
+      case "leaseTenure": val = u?.leaseTermMonths || b?.commercialTerms?.leaseTerms; break;
 
       case "floorNumber": val = f?.floorNumber || u?.floor?.floorNumber; break;
       case "unitNumber": val = u?.unitNumber; break;
@@ -250,9 +251,9 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
       case "unitArea": val = u?.chargeableArea; break;
 
       case "availabilityStatus": val = u?.availabilityStatus?.name || b?.availabilityStatus?.name; break;
-      case "availableFromDate": val = u?.availabilityDate ? new Date(u.availabilityDate).toLocaleDateString() : ""; break;
+      case "availableFromDate": val = u?.availabilityDate ? new Date(u.availabilityDate).toLocaleDateString() : (b?.commercialTerms?.availabilityDate ? new Date(b.commercialTerms.availabilityDate).toLocaleDateString() : ""); break;
       
-      case "furnishingStatus": val = u?.furnishingStatus?.name; break;
+      case "furnishingStatus": val = u?.furnishingStatus?.name || (b?.commercialTerms?.furnishingStatusId ? "Provided" : ""); break;
 
       case "proposalItemNote": val = item.notes; break;
       case "publicNotes": val = b?.notes || u?.notes; break;
@@ -269,6 +270,14 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
       return `${val.toLocaleString("en-IN")} sqft`;
     }
     
+    if ((key === "buildingName" || key === "buildingCode") && b?.id) {
+      return (
+        <Link href={`/properties/${b.id}`} className="text-blue-600 hover:underline" target="_blank" rel="noopener noreferrer">
+          {String(val)}
+        </Link>
+      );
+    }
+
     return String(val);
   }
 
