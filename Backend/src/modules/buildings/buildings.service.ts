@@ -216,6 +216,7 @@ export class BuildingsService {
           fullName: c.name,
           mobileNumber: c.phone || null,
           email: c.email || null,
+          notes: [c.contactType ? `Type: ${c.contactType}` : null, c.designation ? `Designation: ${c.designation}` : null, c.isPrimary ? 'Primary Contact' : null].filter(Boolean).join(", "),
         })),
       };
     }
@@ -325,6 +326,7 @@ export class BuildingsService {
             fullName: c.name,
             mobileNumber: c.phone || null,
             email: c.email || null,
+            notes: [c.contactType ? `Type: ${c.contactType}` : null, c.designation ? `Designation: ${c.designation}` : null, c.isPrimary ? 'Primary Contact' : null].filter(Boolean).join(", "),
           })),
         };
       }
