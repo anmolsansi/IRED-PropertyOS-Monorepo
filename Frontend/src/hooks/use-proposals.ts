@@ -194,7 +194,7 @@ export function useExportProposalCsv() {
         body: JSON.stringify({ selectedFields }),
       });
       if (!response.ok) {
-        throw new Error("Failed to export proposal to CSV");
+        throw new Error("Failed to export proposal to Excel");
       }
       return response.blob();
     },

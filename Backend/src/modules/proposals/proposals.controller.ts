@@ -168,22 +168,22 @@ export class ProposalsController {
   }
 
   @Post(":id/export")
-  @ApiOperation({ summary: "Export proposal to CSV" })
+  @ApiOperation({ summary: "Export proposal to Excel" })
   @UsePipes(new ZodValidationPipe(ExportProposalSchema))
-  async exportCsv(
+  async exportExcel(
     @Param("id") id: string,
     @Body() dto: ExportProposalDto,
     @CurrentUser("id") userId: string,
     @CurrentUser("role") role: string,
     @Res() res: Response,
   ) {
-    const csvContent = await this.exportService.exportCsv(id, userId, role, dto.selectedFields);
-    const fileName = `proposal-${id}.csv`;
+    const excelBuffer = await this.exportService.exportExcel(id, userId, role, dto.selectedFields);
+    const fileName = `proposal-${id}.xlsx`;
     res.set({
-      "Content-Type": "text/csv",
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "Content-Disposition": `attachment; filename="${fileName}"`,
     });
-    res.send(csvContent);
+    res.send(excelBuffer);
   }
 
   // Legacy PDF support

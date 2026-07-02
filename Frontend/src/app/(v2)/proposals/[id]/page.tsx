@@ -189,7 +189,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${proposal?.title || "proposal"}-${id.slice(0, 8)}.csv`;
+      a.download = `${proposal?.title || "proposal"}-${id.slice(0, 8)}.xlsx`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -300,8 +300,8 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
             Back
           </Button>
           <Button variant="outline" size="sm" onClick={handleDownloadCsv} disabled={exportCsv.isPending}>
-            <Download className="h-4 w-4 mr-1" />
-            {exportCsv.isPending ? "Generating..." : "Export CSV"}
+            <Download className="mr-2 h-4 w-4" />
+            {exportCsv.isPending ? "Generating..." : "Export Excel"}
           </Button>
           <Button variant="outline" size="sm" onClick={() => setDeleteDialogOpen(true)}>
             <Trash2 className="h-4 w-4 mr-1" />

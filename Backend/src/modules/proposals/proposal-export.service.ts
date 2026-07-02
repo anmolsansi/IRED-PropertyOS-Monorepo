@@ -3,6 +3,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { PROPOSAL_EXPORT_FIELDS } from "./constants/proposal-export-fields";
 import { ProposalStatus } from "@prisma/client";
 import { MediaService } from "../media/media.service";
+import * as exceljs from "exceljs";
 
 @Injectable()
 export class ProposalExportService {
@@ -13,12 +14,12 @@ export class ProposalExportService {
     private mediaService: MediaService,
   ) {}
 
-  async exportCsv(
+  async exportExcel(
     proposalId: string,
     userId: string,
     userRole: string,
     selectedFields?: string[],
-  ): Promise<string> {
+  ): Promise<Buffer> {
     const proposal = await this.prisma.proposal.findUnique({
       where: { id: proposalId },
       include: { client: true },
@@ -77,12 +78,18 @@ export class ProposalExportService {
       }
     });
 
-    // Build CSV Content
-    const headers = validFields.map(f => f.label);
-    headers.push("Images");
-    const rows = [headers.join(",")];
+    const workbook = new exceljs.Workbook();
+    const worksheet = workbook.addWorksheet("Proposal");
 
-    for (const item of items) {
+    // Build headers
+    const headers = validFields.map(f => f.label);
+    worksheet.addRow(headers);
+    
+    // Auto-fit headers (simple bold)
+    worksheet.getRow(1).font = { bold: true };
+
+    for (let rowIndex = 0; rowIndex < items.length; rowIndex++) {
+      const item = items[rowIndex];
       const b = item.building;
       const u = item.unit;
       const f = item.floor;
@@ -134,19 +141,13 @@ export class ProposalExportService {
           case "internalNotes": val = b?.additionalFields ? JSON.stringify(b.additionalFields) : ""; break;
         }
 
-        // CSV escaping
-        if (val === null || val === undefined) {
-          return "";
-        }
-        
-        let strVal = String(val);
-        if (strVal.includes(",") || strVal.includes('"') || strVal.includes("\n")) {
-          strVal = `"${strVal.replace(/"/g, '""')}"`;
-        }
-        return strVal;
+        return val ?? "";
       });
 
-      // Append Images column
+      const excelRow = worksheet.addRow(rowValues);
+      const currentRowNum = excelRow.number;
+
+      // Handle Images
       const images: string[] = [];
       if (b?.media) {
         images.push(...b.media.map(m => this.mediaService.buildPublicUrl(m.storageKey)));
@@ -155,14 +156,51 @@ export class ProposalExportService {
         images.push(...u.media.map(m => this.mediaService.buildPublicUrl(m.storageKey)));
       }
       
-      const imagesStr = images.join("; ");
-      let escapedImagesStr = imagesStr;
-      if (escapedImagesStr.includes(",") || escapedImagesStr.includes('"') || escapedImagesStr.includes("\n")) {
-        escapedImagesStr = `"${escapedImagesStr.replace(/"/g, '""')}"`;
-      }
-      rowValues.push(escapedImagesStr);
+      if (images.length > 0) {
+        // Set a custom row height so images fit (100 is approx 133 pixels)
+        worksheet.getRow(currentRowNum).height = 100;
 
-      rows.push(rowValues.join(","));
+        let currentImageCol = validFields.length;
+        
+        for (let i = 0; i < images.length; i++) {
+          const imgUrl = images[i];
+          const imgColNum = currentImageCol + i + 1;
+          
+          // Ensure column is wide enough
+          const col = worksheet.getColumn(imgColNum);
+          if (!col.width || col.width < 25) {
+             col.width = 25; // approx 175 pixels
+          }
+          // Set header if missing
+          if (!worksheet.getCell(1, imgColNum).value) {
+            worksheet.getCell(1, imgColNum).value = `Image ${i + 1}`;
+            worksheet.getCell(1, imgColNum).font = { bold: true };
+          }
+          
+          try {
+            const response = await fetch(imgUrl);
+            if (response.ok) {
+              const arrayBuffer = await response.arrayBuffer();
+              const buffer = Buffer.from(arrayBuffer);
+              
+              const imageId = workbook.addImage({
+                buffer: buffer as any,
+                extension: imgUrl.toLowerCase().includes('.png') ? 'png' : 'jpeg',
+              });
+              
+              worksheet.addImage(imageId, {
+                tl: { col: imgColNum - 1, row: currentRowNum - 1 },
+                ext: { width: 130, height: 130 },
+              });
+            } else {
+               worksheet.getCell(currentRowNum, imgColNum).value = "Image Fetch Failed";
+            }
+          } catch (err: any) {
+            this.logger.warn(`Failed to fetch image ${imgUrl}: ${err.message}`);
+            worksheet.getCell(currentRowNum, imgColNum).value = "Error Loading";
+          }
+        }
+      }
     }
 
     // Update proposal status
@@ -174,6 +212,7 @@ export class ProposalExportService {
       }
     });
 
-    return rows.join("\n");
+    const buffer = await workbook.xlsx.writeBuffer();
+    return buffer as unknown as Buffer;
   }
 }
