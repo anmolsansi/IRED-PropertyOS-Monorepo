@@ -3,6 +3,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { PROPOSAL_EXPORT_FIELDS } from "./constants/proposal-export-fields";
 import { ProposalStatus } from "@prisma/client";
 import { MediaService } from "../media/media.service";
+import * as sharp from 'sharp';
 import * as exceljs from "exceljs";
 
 @Injectable()
@@ -183,9 +184,15 @@ export class ProposalExportService {
               const arrayBuffer = await response.arrayBuffer();
               const buffer = Buffer.from(arrayBuffer);
               
+              // Compress and resize image to prevent OOM
+              const compressedBuffer = await sharp(buffer)
+                .resize(130, 130, { fit: 'inside' })
+                .jpeg({ quality: 80 })
+                .toBuffer();
+
               const imageId = workbook.addImage({
-                buffer: buffer as any,
-                extension: imgUrl.toLowerCase().includes('.png') ? 'png' : 'jpeg',
+                buffer: compressedBuffer as any,
+                extension: 'jpeg',
               });
               
               worksheet.addImage(imageId, {
