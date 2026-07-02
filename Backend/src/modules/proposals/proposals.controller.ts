@@ -10,6 +10,7 @@ import {
   Res,
   UseGuards,
   UsePipes,
+  StreamableFile,
 } from "@nestjs/common";
 import {
   ApiTags,
@@ -175,7 +176,7 @@ export class ProposalsController {
     @Body() dto: ExportProposalDto,
     @CurrentUser("id") userId: string,
     @CurrentUser("role") role: string,
-    @Res() res: Response,
+    @Res({ passthrough: true }) res: Response,
   ) {
     const excelBuffer = await this.exportService.exportExcel(id, userId, role, dto.selectedFields);
     const fileName = `proposal-${id}.xlsx`;
@@ -183,19 +184,19 @@ export class ProposalsController {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "Content-Disposition": `attachment; filename="${fileName}"`,
     });
-    res.send(excelBuffer);
+    return new StreamableFile(excelBuffer);
   }
 
   // Legacy PDF support
   @Post(":id/generate-pdf")
   @ApiOperation({ summary: "Generate PDF for a proposal" })
-  async generatePdf(@Param("id") id: string, @Res() res: Response) {
+  async generatePdf(@Param("id") id: string, @Res({ passthrough: true }) res: Response) {
     const buffer = await this.proposalsService.generatePdf(id);
     const fileName = `proposal-${id}.pdf`;
     res.set({
       "Content-Type": "application/pdf",
       "Content-Disposition": `attachment; filename="${fileName}"`,
     });
-    res.end(buffer);
+    return new StreamableFile(buffer);
   }
 }
