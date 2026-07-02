@@ -295,7 +295,7 @@ export class MediaService {
     };
   }
 
-  private buildPublicUrl(storageKey: string) {
+  public buildPublicUrl(storageKey: string) {
     const baseUrl = this.publicUrl.replace(/\/$/, "");
     if (!baseUrl) return storageKey;
 

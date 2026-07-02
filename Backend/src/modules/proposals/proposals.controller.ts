@@ -10,6 +10,7 @@ import {
   Res,
   UseGuards,
   UsePipes,
+  StreamableFile,
 } from "@nestjs/common";
 import {
   ApiTags,
@@ -168,34 +169,34 @@ export class ProposalsController {
   }
 
   @Post(":id/export")
-  @ApiOperation({ summary: "Export proposal to CSV" })
+  @ApiOperation({ summary: "Export proposal to Excel" })
   @UsePipes(new ZodValidationPipe(ExportProposalSchema))
-  async exportCsv(
+  async exportExcel(
     @Param("id") id: string,
     @Body() dto: ExportProposalDto,
     @CurrentUser("id") userId: string,
     @CurrentUser("role") role: string,
-    @Res() res: Response,
+    @Res({ passthrough: true }) res: Response,
   ) {
-    const csvContent = await this.exportService.exportCsv(id, userId, role, dto.selectedFields);
-    const fileName = `proposal-${id}.csv`;
+    const excelBuffer = await this.exportService.exportExcel(id, userId, role, dto.selectedFields);
+    const fileName = `proposal-${id}.xlsx`;
     res.set({
-      "Content-Type": "text/csv",
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "Content-Disposition": `attachment; filename="${fileName}"`,
     });
-    res.send(csvContent);
+    return new StreamableFile(excelBuffer);
   }
 
   // Legacy PDF support
   @Post(":id/generate-pdf")
   @ApiOperation({ summary: "Generate PDF for a proposal" })
-  async generatePdf(@Param("id") id: string, @Res() res: Response) {
+  async generatePdf(@Param("id") id: string, @Res({ passthrough: true }) res: Response) {
     const buffer = await this.proposalsService.generatePdf(id);
     const fileName = `proposal-${id}.pdf`;
     res.set({
       "Content-Type": "application/pdf",
       "Content-Disposition": `attachment; filename="${fileName}"`,
     });
-    res.end(buffer);
+    return new StreamableFile(buffer);
   }
 }
