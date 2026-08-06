@@ -160,9 +160,6 @@ function ValidatedField({
 }
 
 interface FormData {
-  entryType: string;
-  propertyType: string;
-  source: string;
   address: string;
   state: string;
   city: string;
@@ -171,31 +168,10 @@ interface FormData {
   latitude: string;
   longitude: string;
   mapsUrl: string;
-  totalArea: string;
-  availableArea: string;
-  rentPerSqFt: string;
-  camCharges: string;
-  maintenanceCharges: string;
-  securityDeposit: string;
-  leaseTerms: string;
-  escalationDetails: string;
-  brokerage: string;
-  availabilityStatus: string;
-  furnishingStatus: string;
-  availabilityDate: string;
-  possessionDate: string;
   notes: string;
-  landlordName: string;
-  telecallerStatus: string;
-  starRating: string;
-  facingOption: string;
-  unitAccessLocation: string;
 }
 
 const initialFormData: FormData = {
-  entryType: "building",
-  propertyType: "",
-  source: "",
   address: "",
   state: "",
   city: "",
@@ -204,25 +180,7 @@ const initialFormData: FormData = {
   latitude: "",
   longitude: "",
   mapsUrl: "",
-  totalArea: "",
-  availableArea: "",
-  rentPerSqFt: "",
-  camCharges: "",
-  maintenanceCharges: "",
-  securityDeposit: "",
-  leaseTerms: "",
-  escalationDetails: "",
-  brokerage: "",
-  availabilityStatus: "",
-  furnishingStatus: "",
-  availabilityDate: "",
-  possessionDate: "",
   notes: "",
-  landlordName: "",
-  telecallerStatus: "BLANK",
-  starRating: "",
-  facingOption: "",
-  unitAccessLocation: "",
 };
 
 export default function NewPropertyPage() {
@@ -357,26 +315,9 @@ export default function NewPropertyPage() {
         localityName: formData.locality || undefined,
         pincode: formData.pincode || undefined,
         notes: formData.notes || undefined,
-        landlordName: formData.landlordName || undefined,
-        telecallerStatus: formData.telecallerStatus || undefined,
-        starRating: formData.starRating ? parseInt(formData.starRating, 10) : undefined,
-        facingOption: formData.facingOption || undefined,
-        unitAccessLocation: formData.unitAccessLocation || undefined,
       };
 
-      const commercialTerms = {
-        availableArea: formData.availableArea ? parseFloat(formData.availableArea) : undefined,
-        rentPerSqFt: formData.rentPerSqFt ? parseFloat(formData.rentPerSqFt) : undefined,
-        camCharges: formData.camCharges ? parseFloat(formData.camCharges) : undefined,
-        maintenanceCharges: formData.maintenanceCharges ? parseFloat(formData.maintenanceCharges) : undefined,
-        securityDeposit: formData.securityDeposit ? parseFloat(formData.securityDeposit) : undefined,
-        leaseTerms: formData.leaseTerms || undefined,
-        escalationDetails: formData.escalationDetails || undefined,
-        brokerage: formData.brokerage || undefined,
-        furnishingStatusId: formData.furnishingStatus || undefined,
-        availabilityDate: formData.availabilityDate || undefined,
-        possessionDate: formData.possessionDate || undefined,
-      };
+      const commercialTerms = {};
 
       const extraFields = additionalFields
         .filter((field) => field.value.trim())
@@ -386,13 +327,7 @@ export default function NewPropertyPage() {
           value: field.value.trim(),
         }));
 
-      const selectedPropertyType = findById(propertyTypes, formData.propertyType);
       const selectedState = findById(states, formData.state);
-      const selectedSource = findById(sources, formData.source);
-      if (formData.propertyType) {
-        if (isUuid(formData.propertyType)) payload.propertyTypeId = formData.propertyType;
-        else payload.propertyTypeName = selectedPropertyType?.name || formData.propertyType;
-      }
       if (formData.state) {
         if (isUuid(formData.state)) payload.stateId = formData.state;
         else {
@@ -400,15 +335,9 @@ export default function NewPropertyPage() {
           payload.stateName = selectedState?.name || formData.state;
         }
       }
-      if (formData.source) {
-        if (isUuid(formData.source)) payload.sourceId = formData.source;
-        else payload.sourceName = selectedSource?.name || formData.source;
-      }
-      if (formData.availabilityStatus) payload.availabilityStatusId = formData.availabilityStatus;
       if (formData.mapsUrl) payload.googleMapsUrl = formData.mapsUrl;
       if (formData.latitude) payload.latitude = parseFloat(formData.latitude);
       if (formData.longitude) payload.longitude = parseFloat(formData.longitude);
-      if (formData.totalArea) payload.totalBuildingArea = parseFloat(formData.totalArea);
       if (Object.values(commercialTerms).some((value) => value !== undefined)) {
         payload.commercialTerms = commercialTerms;
       }
@@ -444,7 +373,7 @@ export default function NewPropertyPage() {
   const validateStep = useCallback(
     (stepIndex: number): Record<string, string> | null => {
       const stepFields: Record<number, string[]> = {
-        0: ["entryType", "propertyType", "state", "city", "pincode", "mapsUrl", "totalArea", "availableArea", "rentPerSqFt"],
+        0: ["state", "city", "pincode", "mapsUrl"],
       };
 
       const fields = stepFields[stepIndex];
@@ -578,53 +507,7 @@ export default function NewPropertyPage() {
         {/* Step 1: Add Property */}
         <StepContent>
           <div className="space-y-8">
-          <section className="space-y-4">
-          <h3 className="text-sm font-semibold">Basic Info</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <ValidatedField label="Entry Type" required field="entryType">
-              <Select value={formData.entryType} onValueChange={(v) => updateField("entryType", v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="building">Building</SelectItem>
-                  <SelectItem value="floor">Floor</SelectItem>
-                  <SelectItem value="unit">Unit</SelectItem>
-                </SelectContent>
-              </Select>
-            </ValidatedField>
 
-            <ValidatedField label="Property Type" required field="propertyType">
-              <Select value={formData.propertyType} onValueChange={(v) => updateField("propertyType", v)}>
-                <SelectTrigger>
-                  <SelectValue>{findById(propertyTypes, formData.propertyType)?.name || "Select property type"}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {propertyTypes.map((pt) => (
-                    <SelectItem key={pt.id} value={pt.id}>
-                      {pt.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </ValidatedField>
-
-            <FormField label="Source">
-              <Select value={formData.source} onValueChange={(v) => updateField("source", v)}>
-                <SelectTrigger>
-                  <SelectValue>{findById(sources, formData.source)?.name || "Select source"}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {sources.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </FormField>
-          </div>
-          </section>
 
         {/* Location */}
           <section className="space-y-4">
@@ -731,203 +614,7 @@ export default function NewPropertyPage() {
           </div>
           </section>
 
-        {/* Area & Commercial Terms */}
-          <section className="space-y-4">
-          <h3 className="text-sm font-semibold">Area & Commercial Terms</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <ValidatedField label="Total Area (sqft)" field="totalArea">
-              <Input
-                type="number"
-                placeholder="e.g. 5000"
-                value={formData.totalArea}
-                onChange={(e) => updateField("totalArea", e.target.value)}
-              />
-            </ValidatedField>
 
-            <ValidatedField label="Available Area (sqft)" field="availableArea">
-              <Input
-                type="number"
-                placeholder="e.g. 2500"
-                value={formData.availableArea}
-                onChange={(e) => updateField("availableArea", e.target.value)}
-              />
-            </ValidatedField>
-
-            <ValidatedField label="Rent per sqft (₹)" field="rentPerSqFt">
-              <Input
-                type="number"
-                placeholder="e.g. 125"
-                value={formData.rentPerSqFt}
-                onChange={(e) => updateField("rentPerSqFt", e.target.value)}
-              />
-            </ValidatedField>
-
-            <FormField label="CAM Charges (₹/sqft)">
-              <Input
-                type="number"
-                placeholder="e.g. 15"
-                value={formData.camCharges}
-                onChange={(e) => updateField("camCharges", e.target.value)}
-              />
-            </FormField>
-
-            <FormField label="Maintenance Charges (₹/sqft)">
-              <Input
-                type="number"
-                placeholder="e.g. 10"
-                value={formData.maintenanceCharges}
-                onChange={(e) => updateField("maintenanceCharges", e.target.value)}
-              />
-            </FormField>
-
-            <FormField label="Security Deposit (₹)">
-              <Input
-                type="number"
-                placeholder="e.g. 500000"
-                value={formData.securityDeposit}
-                onChange={(e) => updateField("securityDeposit", e.target.value)}
-              />
-            </FormField>
-
-            <FormField label="Lease Terms">
-              <Input
-                placeholder="e.g. 3+3 years"
-                value={formData.leaseTerms}
-                onChange={(e) => updateField("leaseTerms", e.target.value)}
-              />
-            </FormField>
-
-            <FormField label="Escalation Details">
-              <Input
-                placeholder="e.g. 10% every 2 years"
-                value={formData.escalationDetails}
-                onChange={(e) => updateField("escalationDetails", e.target.value)}
-              />
-            </FormField>
-
-            <FormField label="Brokerage">
-              <Input
-                placeholder="e.g. 1 month rent"
-                value={formData.brokerage}
-                onChange={(e) => updateField("brokerage", e.target.value)}
-              />
-            </FormField>
-          </div>
-          </section>
-
-        {/* Availability & Furnishing */}
-          <section className="space-y-4">
-          <h3 className="text-sm font-semibold">Availability & Furnishing</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField label="Availability Status">
-              <Select value={formData.availabilityStatus} onValueChange={(v) => updateField("availabilityStatus", v)}>
-                <SelectTrigger>
-                  <SelectValue>{findById(availabilityStatuses, formData.availabilityStatus)?.name || "Select status"}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {availabilityStatuses.map((status) => (
-                    <SelectItem key={status.id} value={status.id}>
-                      {status.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </FormField>
-
-            <FormField label="Furnishing Status">
-              <Select value={formData.furnishingStatus} onValueChange={(v) => updateField("furnishingStatus", v)}>
-                <SelectTrigger>
-                  <SelectValue>{findById(furnishingStatuses, formData.furnishingStatus)?.name || "Select furnishing"}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {furnishingStatuses.map((fs) => (
-                    <SelectItem key={fs.id} value={fs.id}>
-                      {fs.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </FormField>
-
-            <FormField label="Availability Date">
-              <Input
-                type="date"
-                value={formData.availabilityDate}
-                onChange={(e) => updateField("availabilityDate", e.target.value)}
-              />
-            </FormField>
-
-            <FormField label="Possession Date">
-              <Input
-                type="date"
-                value={formData.possessionDate}
-                onChange={(e) => updateField("possessionDate", e.target.value)}
-              />
-            </FormField>
-          </div>
-          </section>
-
-        {/* Additional Property Details */}
-          <section className="space-y-4">
-          <h3 className="text-sm font-semibold">Additional Property Details</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField label="Landlord Name">
-              <Input
-                placeholder="e.g. John Doe"
-                value={formData.landlordName}
-                onChange={(e) => updateField("landlordName", e.target.value)}
-              />
-            </FormField>
-
-            <FormField label="Telecaller Status">
-              <Select value={formData.telecallerStatus} onValueChange={(v) => updateField("telecallerStatus", v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="VERIFIED">Verified</SelectItem>
-                  <SelectItem value="REVIEW_NEEDED">Review Needed</SelectItem>
-                  <SelectItem value="BLANK">Blank (Default)</SelectItem>
-                </SelectContent>
-              </Select>
-            </FormField>
-
-            <FormField label="Star Rating">
-              <Input
-                type="number"
-                min="1"
-                max="5"
-                placeholder="e.g. 5"
-                value={formData.starRating}
-                onChange={(e) => updateField("starRating", e.target.value)}
-              />
-            </FormField>
-
-            <FormField label="Facing Option">
-              <Select value={formData.facingOption} onValueChange={(v) => updateField("facingOption", v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Facing Option" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="FRONT">Front</SelectItem>
-                  <SelectItem value="REAR">Rear</SelectItem>
-                </SelectContent>
-              </Select>
-            </FormField>
-
-            <FormField label="Unit Access Location">
-              <Select value={formData.unitAccessLocation} onValueChange={(v) => updateField("unitAccessLocation", v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Access Location" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="MAIN_ROAD">Main Road</SelectItem>
-                  <SelectItem value="INSIDE">Inside</SelectItem>
-                </SelectContent>
-              </Select>
-            </FormField>
-          </div>
-          </section>
 
         {/* Contacts */}
           <section className="space-y-4">
@@ -1196,12 +883,8 @@ export default function NewPropertyPage() {
             <div>
               <h4 className="text-sm font-semibold mb-2">Basic Info</h4>
               <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
-                <span className="text-muted-foreground">Entry Type:</span>
-                <span>{formData.entryType.charAt(0).toUpperCase() + formData.entryType.slice(1)}</span>
-                <span className="text-muted-foreground">Property Type:</span>
-                <span>{findById(propertyTypes, formData.propertyType)?.name || "—"}</span>
-                <span className="text-muted-foreground">Source:</span>
-                <span>{findById(sources, formData.source)?.name || "—"}</span>
+                <span className="text-muted-foreground">Address:</span>
+                <span>{formData.address || "—"}</span>
               </div>
             </div>
 
@@ -1228,43 +911,7 @@ export default function NewPropertyPage() {
               </div>
             </div>
 
-            {/* Commercial Terms */}
-            <div>
-              <h4 className="text-sm font-semibold mb-2">Commercial Terms</h4>
-              <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
-                <span className="text-muted-foreground">Total Area:</span>
-                <span>{formData.totalArea ? `${formData.totalArea} sqft` : "—"}</span>
-                <span className="text-muted-foreground">Available Area:</span>
-                <span>{formData.availableArea ? `${formData.availableArea} sqft` : "—"}</span>
-                <span className="text-muted-foreground">Rent/sqft:</span>
-                <span>{formData.rentPerSqFt ? `₹${formData.rentPerSqFt}` : "—"}</span>
-                <span className="text-muted-foreground">CAM Charges:</span>
-                <span>{formData.camCharges ? `₹${formData.camCharges}/sqft` : "—"}</span>
-                <span className="text-muted-foreground">Maintenance:</span>
-                <span>{formData.maintenanceCharges ? `₹${formData.maintenanceCharges}/sqft` : "—"}</span>
-                <span className="text-muted-foreground">Security Deposit:</span>
-                <span>{formData.securityDeposit ? `₹${Number(formData.securityDeposit).toLocaleString()}` : "—"}</span>
-                <span className="text-muted-foreground">Lease Terms:</span>
-                <span>{formData.leaseTerms || "—"}</span>
-                <span className="text-muted-foreground">Escalation:</span>
-                <span>{formData.escalationDetails || "—"}</span>
-              </div>
-            </div>
 
-            {/* Availability */}
-            <div>
-              <h4 className="text-sm font-semibold mb-2">Availability</h4>
-              <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
-                <span className="text-muted-foreground">Status:</span>
-                <span>{findById(availabilityStatuses, formData.availabilityStatus)?.name || "—"}</span>
-                <span className="text-muted-foreground">Furnishing:</span>
-                <span>{findById(furnishingStatuses, formData.furnishingStatus)?.name || "—"}</span>
-                <span className="text-muted-foreground">Available From:</span>
-                <span>{formData.availabilityDate || "—"}</span>
-                <span className="text-muted-foreground">Possession Date:</span>
-                <span>{formData.possessionDate || "—"}</span>
-              </div>
-            </div>
 
             {/* Contacts */}
             <div>
