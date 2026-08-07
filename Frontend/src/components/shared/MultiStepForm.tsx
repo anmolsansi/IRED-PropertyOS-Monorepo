@@ -6,7 +6,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { FormField } from "@/components/shared/FormField";
 
-// Re-export FormField for backward compatibility
 export { FormField };
 import { ChevronLeft, ChevronRight, Check, Loader2 } from "lucide-react";
 
@@ -45,6 +44,12 @@ interface MultiStepFormProps {
   children: React.ReactNode;
   className?: string;
   isSubmitting?: boolean;
+  contentCardClassName?: string;
+  contentClassName?: string;
+  navigationClassName?: string;
+  previousLabel?: string;
+  nextLabel?: string;
+  submitLabel?: string;
 }
 
 export function MultiStepForm({
@@ -54,6 +59,12 @@ export function MultiStepForm({
   children,
   className,
   isSubmitting,
+  contentCardClassName,
+  contentClassName,
+  navigationClassName,
+  previousLabel = "Previous",
+  nextLabel = "Next",
+  submitLabel = "Submit",
 }: MultiStepFormProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -118,14 +129,13 @@ export function MultiStepForm({
   return (
     <MultiStepFormContext.Provider value={contextValue}>
       <div className={cn("space-y-6", className)}>
-        {/* Step Indicator */}
-        <nav aria-label="Progress">
+        <nav aria-label="Progress" className="px-1 sm:px-0">
           <ol className="flex items-center">
             {steps.map((step, index) => (
               <li
                 key={step.id}
                 className={cn(
-                  "flex items-center",
+                  "flex items-center min-w-0",
                   index < steps.length - 1 && "flex-1"
                 )}
               >
@@ -133,34 +143,26 @@ export function MultiStepForm({
                   type="button"
                   onClick={() => goToStep(index)}
                   className={cn(
-                    "flex items-center gap-2 text-sm font-medium transition-colors",
-                    index <= currentStep
-                      ? "text-primary"
-                      : "text-muted-foreground"
+                    "flex items-center gap-2 text-sm font-medium transition-colors min-w-0",
+                    index <= currentStep ? "text-primary" : "text-muted-foreground"
                   )}
                 >
                   <span
                     className={cn(
-                      "flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold transition-colors",
-                      index < currentStep
+                      "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors",
+                      index <= currentStep
                         ? "bg-primary text-primary-foreground"
-                        : index === currentStep
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-muted-foreground"
+                        : "bg-muted text-muted-foreground"
                     )}
                   >
-                    {index < currentStep ? (
-                      <Check className="h-4 w-4" />
-                    ) : (
-                      index + 1
-                    )}
+                    {index < currentStep ? <Check className="h-4 w-4" /> : index + 1}
                   </span>
-                  <span className="hidden sm:inline">{step.title}</span>
+                  <span className="truncate">{step.title}</span>
                 </button>
                 {index < steps.length - 1 && (
                   <div
                     className={cn(
-                      "mx-2 h-0.5 flex-1",
+                      "mx-3 h-0.5 flex-1",
                       index < currentStep ? "bg-primary" : "bg-muted"
                     )}
                   />
@@ -170,9 +172,8 @@ export function MultiStepForm({
           </ol>
         </nav>
 
-        {/* Validation Errors */}
         {Object.keys(errors).length > 0 && (
-          <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+          <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20">
             <p className="text-sm font-medium text-destructive mb-1">
               Please fix the following errors:
             </p>
@@ -184,42 +185,49 @@ export function MultiStepForm({
           </div>
         )}
 
-        {/* Step Content */}
-        <Card>
-          <CardContent className="p-6">
+        <Card className={cn(contentCardClassName)}>
+          <CardContent className={cn("p-6", contentClassName)}>
             {stepContent[currentStep]}
           </CardContent>
         </Card>
 
-        {/* Navigation Buttons */}
-        <div className="flex items-center justify-between">
+        <div
+          className={cn(
+            "flex items-center justify-between gap-3",
+            navigationClassName
+          )}
+        >
           <Button
             type="button"
             variant="outline"
             onClick={prevStep}
             disabled={currentStep === 0}
+            className="min-h-11 flex-1 sm:flex-none"
           >
             <ChevronLeft className="h-4 w-4 mr-2" />
-            Previous
+            {previousLabel}
           </Button>
 
-          <div className="flex items-center gap-2">
-            {currentStep < steps.length - 1 ? (
-              <Button type="button" onClick={nextStep}>
-                Next
-                <ChevronRight className="h-4 w-4 ml-2" />
-              </Button>
-            ) : (
-              <Button type="button" onClick={handleSubmit} disabled={isSubmitting}>
-                {isSubmitting ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Check className="h-4 w-4 mr-2" />
-                )}
-                {isSubmitting ? "Submitting..." : "Submit"}
-              </Button>
-            )}
-          </div>
+          {currentStep < steps.length - 1 ? (
+            <Button type="button" onClick={nextStep} className="min-h-11 flex-1 sm:flex-none">
+              {nextLabel}
+              <ChevronRight className="h-4 w-4 ml-2" />
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              onClick={handleSubmit}
+              disabled={isSubmitting}
+              className="min-h-11 flex-1 sm:flex-none"
+            >
+              {isSubmitting ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Check className="h-4 w-4 mr-2" />
+              )}
+              {isSubmitting ? "Submitting..." : submitLabel}
+            </Button>
+          )}
         </div>
       </div>
     </MultiStepFormContext.Provider>
