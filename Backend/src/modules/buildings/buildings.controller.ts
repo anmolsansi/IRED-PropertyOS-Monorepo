@@ -40,10 +40,10 @@ export class BuildingsController {
 
   @Get()
   @GeographyScope()
-  @ApiOperation({ summary: "List buildings with filters" })
+  @ApiOperation({ summary: "List completed/master buildings with filters" })
   @ApiResponse({
     status: 200,
-    description: "Paginated list of buildings",
+    description: "Paginated list of completed buildings",
     schema: {
       example: {
         data: [
@@ -70,6 +70,28 @@ export class BuildingsController {
     @CurrentUser("geographicScope") scope: any,
   ) {
     return this.buildingsService.findAll(query, scope);
+  }
+
+  @Get("intake")
+  @Roles(Role.ADMIN, Role.WORKER)
+  @GeographyScope()
+  @ApiOperation({ summary: "List rider-submitted properties waiting in Property Intake" })
+  async findIntake(
+    @Query("page") page: string | undefined,
+    @Query("limit") limit: string | undefined,
+    @Query("search") search: string | undefined,
+    @Query("status") status: "NEW" | "IN_PROGRESS" | "FOLLOW_UP" | undefined,
+    @CurrentUser("geographicScope") scope: any,
+  ) {
+    return this.buildingsService.findIntake(
+      {
+        page: page ? Number(page) : 1,
+        limit: limit ? Math.min(Number(limit), 250) : 20,
+        search,
+        status,
+      },
+      scope,
+    );
   }
 
   @Get(":id")
@@ -102,10 +124,10 @@ export class BuildingsController {
   }
 
   @Post()
-  @ApiOperation({ summary: "Create a new building" })
+  @ApiOperation({ summary: "Submit a new building to Property Intake" })
   @ApiResponse({
     status: 201,
-    description: "Building created successfully",
+    description: "Building submitted to Property Intake",
     schema: {
       example: {
         id: "b1e42c00-1234-4567-8901-abcdef123456",
@@ -124,10 +146,31 @@ export class BuildingsController {
     return this.buildingsService.create(dto, userId);
   }
 
+  @Patch(":id/intake-status")
+  @Roles(Role.ADMIN, Role.WORKER)
+  @ApiOperation({ summary: "Move a Property Intake record to New, In Progress, or Follow-up" })
+  async updateIntakeStatus(
+    @Param("id") id: string,
+    @Body("status") status: string,
+    @CurrentUser("id") userId: string,
+  ) {
+    return this.buildingsService.updateIntakeStatus(id, status, userId);
+  }
+
+  @Post(":id/complete-intake")
+  @Roles(Role.ADMIN, Role.WORKER)
+  @ApiOperation({ summary: "Complete Property Intake and promote the record to Properties" })
+  async completeIntake(
+    @Param("id") id: string,
+    @CurrentUser("id") userId: string,
+  ) {
+    return this.buildingsService.completeIntake(id, userId);
+  }
+
   @Patch(":id")
   @ApiOperation({
     summary:
-      "Update a building (Admin: direct, Worker: creates change request)",
+      "Update a building (Admin: direct, active intake: telecaller direct, master Worker: creates change request)",
   })
   @ApiResponse({
     status: 200,
@@ -145,6 +188,7 @@ export class BuildingsController {
       dto,
       userId,
       userRole === Role.ADMIN,
+      userRole === Role.RIDER,
     );
   }
 
