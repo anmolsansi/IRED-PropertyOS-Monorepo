@@ -12,7 +12,9 @@ export const propertySchema = z.object({
     .string()
     .min(6, "Pincode must be 6 digits")
     .max(6)
-    .regex(/^\d{6}$/, "Pincode must be 6 digits"),
+    .regex(/^\d{6}$/, "Pincode must be 6 digits")
+    .optional()
+    .or(z.literal("")),
   latitude: z.string().optional(),
   longitude: z.string().optional(),
   mapsUrl: z.string().url("Invalid URL").or(z.literal("")).optional(),
