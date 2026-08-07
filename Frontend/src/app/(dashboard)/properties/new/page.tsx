@@ -509,111 +509,78 @@ export default function NewPropertyPage() {
           <div className="space-y-8">
 
 
-        {/* Location */}
+        {/* Media */}
           <section className="space-y-4">
-          <h3 className="text-sm font-semibold">Location</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <ValidatedField label="Full Address" field="address" className="md:col-span-2">
-              <Textarea
-                placeholder="Enter complete address (optional for new records)"
-                value={formData.address}
-                onChange={(e) => updateField("address", e.target.value)}
-              />
-            </ValidatedField>
-
-            <ValidatedField label="State" required field="state">
-              <Select
-                value={formData.state}
-                onValueChange={(v) => {
-                  updateField("state", v);
-                  updateField("city", "");
-                  updateField("locality", "");
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue>{findById(states, formData.state)?.name || "Select state or union territory"}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {states.map((state) => (
-                    <SelectItem key={state.id} value={state.id}>
-                      {state.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </ValidatedField>
-
-            <ValidatedField label="City" required field="city">
-              <Input
-                placeholder="e.g. New Delhi"
-                value={formData.city}
-                onChange={(e) => updateField("city", e.target.value)}
-              />
-            </ValidatedField>
-
-            <FormField label="Locality">
-              <Input
-                placeholder="e.g. Connaught Place"
-                value={formData.locality}
-                onChange={(e) => updateField("locality", e.target.value)}
-              />
-            </FormField>
-
-            <ValidatedField label="Pincode" required field="pincode">
-              <Input
-                placeholder="e.g. 411014"
-                value={formData.pincode}
-                onChange={(e) => updateField("pincode", e.target.value)}
-              />
-            </ValidatedField>
-
-            <FormField label="Latitude">
-              <Input
-                type="number"
-                step="any"
-                placeholder="e.g. 18.5204"
-                value={formData.latitude}
-                onChange={(e) => updateField("latitude", e.target.value)}
-              />
-            </FormField>
-
-            <FormField label="Longitude">
-              <Input
-                type="number"
-                step="any"
-                placeholder="e.g. 73.8567"
-                value={formData.longitude}
-                onChange={(e) => updateField("longitude", e.target.value)}
-              />
-            </FormField>
-
-            <div className="md:col-span-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={captureGps}
-                disabled={gpsLoading}
-              >
-                {gpsLoading ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <MapPin className="h-4 w-4 mr-2" />
-                )}
-                {gpsLoading ? "Capturing..." : "Use Current Location"}
-              </Button>
+          <h3 className="text-sm font-semibold">Media</h3>
+          <div className="space-y-4">
+            <input
+              ref={mediaInputRef}
+              type="file"
+              className="hidden"
+              multiple
+              onChange={(event) => handleMediaSelection(event.target.files)}
+            />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {MEDIA_CATEGORIES.map((cat) => {
+                const Icon = cat.icon;
+                return (
+                  <Button
+                    key={cat.value}
+                    type="button"
+                    variant="outline"
+                    className="h-auto py-4 flex-col gap-2"
+                    onClick={() => openMediaPicker(cat.value as MediaDocument["category"])}
+                  >
+                    <Icon className="h-5 w-5" />
+                    <span className="text-xs">Add {cat.label}</span>
+                  </Button>
+                );
+              })}
             </div>
 
-            <FormField label="Maps URL" className="md:col-span-2">
-              <Input
-                placeholder="https://maps.google.com/..."
-                value={formData.mapsUrl}
-                onChange={(e) => updateField("mapsUrl", e.target.value)}
-              />
-            </FormField>
+            {media.length > 0 && (
+              <div className="space-y-2">
+                {media.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between p-3 rounded-lg border"
+                  >
+                    <div className="flex items-center gap-3">
+                      {item.category === "photo" && <ImageIcon className="h-4 w-4 text-muted-foreground" />}
+                      {item.category === "video" && <Film className="h-4 w-4 text-muted-foreground" />}
+                      {(item.category === "document" || item.category === "floor_plan") && (
+                        <FileText className="h-4 w-4 text-muted-foreground" />
+                      )}
+                      <div>
+                        <p className="text-sm font-medium">{item.file.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {MEDIA_CATEGORIES.find((c) => c.value === item.category)?.label} •{" "}
+                          {(item.file.size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive"
+                      onClick={() => removeMediaItem(item.id)}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {media.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground border rounded-lg">
+                <Upload className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No media files added yet.</p>
+                <p className="text-xs">Click the buttons above to choose photos, videos, or documents.</p>
+              </div>
+            )}
           </div>
           </section>
-
 
 
         {/* Contacts */}
@@ -730,78 +697,114 @@ export default function NewPropertyPage() {
           </div>
           </section>
 
-        {/* Media */}
+
+        {/* Location */}
           <section className="space-y-4">
-          <h3 className="text-sm font-semibold">Media</h3>
-          <div className="space-y-4">
-            <input
-              ref={mediaInputRef}
-              type="file"
-              className="hidden"
-              multiple
-              onChange={(event) => handleMediaSelection(event.target.files)}
-            />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              {MEDIA_CATEGORIES.map((cat) => {
-                const Icon = cat.icon;
-                return (
-                  <Button
-                    key={cat.value}
-                    type="button"
-                    variant="outline"
-                    className="h-auto py-4 flex-col gap-2"
-                    onClick={() => openMediaPicker(cat.value as MediaDocument["category"])}
-                  >
-                    <Icon className="h-5 w-5" />
-                    <span className="text-xs">Add {cat.label}</span>
-                  </Button>
-                );
-              })}
+          <h3 className="text-sm font-semibold">Location</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <ValidatedField label="Full Address" field="address" className="md:col-span-2">
+              <Textarea
+                placeholder="Enter complete address (optional for new records)"
+                value={formData.address}
+                onChange={(e) => updateField("address", e.target.value)}
+              />
+            </ValidatedField>
+
+            <ValidatedField label="State" required field="state">
+              <Select
+                value={formData.state}
+                onValueChange={(v) => {
+                  updateField("state", v);
+                  updateField("city", "");
+                  updateField("locality", "");
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue>{findById(states, formData.state)?.name || "Select state or union territory"}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {states.map((state) => (
+                    <SelectItem key={state.id} value={state.id}>
+                      {state.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </ValidatedField>
+
+            <ValidatedField label="City" required field="city">
+              <Input
+                placeholder="e.g. New Delhi"
+                value={formData.city}
+                onChange={(e) => updateField("city", e.target.value)}
+              />
+            </ValidatedField>
+
+            <FormField label="Locality">
+              <Input
+                placeholder="e.g. Connaught Place"
+                value={formData.locality}
+                onChange={(e) => updateField("locality", e.target.value)}
+              />
+            </FormField>
+
+            <ValidatedField label="Pincode" required field="pincode">
+              <Input
+                placeholder="e.g. 411014"
+                value={formData.pincode}
+                onChange={(e) => updateField("pincode", e.target.value)}
+              />
+            </ValidatedField>
+
+            <FormField label="Latitude">
+              <Input
+                type="number"
+                step="any"
+                placeholder="e.g. 18.5204"
+                value={formData.latitude}
+                onChange={(e) => updateField("latitude", e.target.value)}
+              />
+            </FormField>
+
+            <FormField label="Longitude">
+              <Input
+                type="number"
+                step="any"
+                placeholder="e.g. 73.8567"
+                value={formData.longitude}
+                onChange={(e) => updateField("longitude", e.target.value)}
+              />
+            </FormField>
+
+            <div className="md:col-span-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={captureGps}
+                disabled={gpsLoading}
+              >
+                {gpsLoading ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <MapPin className="h-4 w-4 mr-2" />
+                )}
+                {gpsLoading ? "Capturing..." : "Use Current Location"}
+              </Button>
             </div>
 
-            {media.length > 0 && (
-              <div className="space-y-2">
-                {media.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center justify-between p-3 rounded-lg border"
-                  >
-                    <div className="flex items-center gap-3">
-                      {item.category === "photo" && <ImageIcon className="h-4 w-4 text-muted-foreground" />}
-                      {item.category === "video" && <Film className="h-4 w-4 text-muted-foreground" />}
-                      {(item.category === "document" || item.category === "floor_plan") && (
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                      )}
-                      <div>
-                        <p className="text-sm font-medium">{item.file.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {MEDIA_CATEGORIES.find((c) => c.value === item.category)?.label} •{" "}
-                          {(item.file.size / 1024 / 1024).toFixed(2)} MB
-                        </p>
-                      </div>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-destructive"
-                      onClick={() => removeMediaItem(item.id)}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {media.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground border rounded-lg">
-                <Upload className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No media files added yet.</p>
-                <p className="text-xs">Click the buttons above to choose photos, videos, or documents.</p>
-              </div>
-            )}
+            <FormField label="Maps URL" className="md:col-span-2">
+              <Input
+                placeholder="https://maps.google.com/..."
+                value={formData.mapsUrl}
+                onChange={(e) => updateField("mapsUrl", e.target.value)}
+              />
+            </FormField>
           </div>
           </section>
+
+
+
 
         {/* Additional Fields */}
           <section className="space-y-4">
