@@ -4,6 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { ApiError, api, buildFilterQuery } from "@/lib/api/client";
 import type { Property, PaginatedResponse, FilterParams } from "@/types";
 
+export type IntakeStatus = "NEW" | "IN_PROGRESS" | "FOLLOW_UP" | "COMPLETED";
+
 interface BackendContact {
   id: string;
   fullName: string;
@@ -46,7 +48,7 @@ interface BackendBuilding {
   parkingDetails?: Record<string, unknown>;
   liftDetails?: Record<string, unknown>;
   commercialTerms?: Record<string, unknown>;
-  additionalFields?: Record<string, unknown>;
+  additionalFields?: Record<string, unknown> | unknown[];
   landlordName?: string;
   telecallerStatus?: string;
   starRating?: number;
@@ -62,6 +64,33 @@ interface BackendBuilding {
   source?: { id: string; name: string };
   creator?: { id: string; fullName: string };
   updater?: { id: string; fullName: string };
+  _count?: { contacts?: number; media?: number };
+}
+
+export interface PropertyIntakeItem extends Property {
+  intakeStatus: IntakeStatus;
+  submittedByName: string;
+  submittedAt: string;
+  lastUpdatedByName: string;
+  contactCount: number;
+  mediaCount: number;
+  contacts: import("@/types").Contact[];
+}
+
+export interface PropertyIntakeSummary {
+  total: number;
+  new: number;
+  inProgress: number;
+  followUp: number;
+}
+
+export interface PropertyIntakeResponse {
+  data: PropertyIntakeItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  summary: PropertyIntakeSummary;
 }
 
 function adaptBackendContact(contact: BackendContact): import("@/types").Contact {
@@ -127,6 +156,32 @@ function adaptBuildingToProperty(building: BackendBuilding): Property & { contac
   };
 }
 
+function getIntakeMetadata(building: BackendBuilding) {
+  const fields = building.additionalFields;
+  if (fields && !Array.isArray(fields) && typeof fields === "object") {
+    return fields;
+  }
+  return {} as Record<string, unknown>;
+}
+
+function adaptBuildingToIntake(building: BackendBuilding): PropertyIntakeItem {
+  const property = adaptBuildingToProperty(building);
+  const metadata = getIntakeMetadata(building);
+  const status = (metadata.intakeStatus as IntakeStatus | undefined) ||
+    (building.telecallerStatus === "VERIFIED" ? "COMPLETED" : "NEW");
+
+  return {
+    ...property,
+    intakeStatus: status,
+    submittedByName: building.creator?.fullName || "Unknown rider",
+    submittedAt: (metadata.intakeSubmittedAt as string | undefined) || building.createdAt,
+    lastUpdatedByName: building.updater?.fullName || building.creator?.fullName || "—",
+    contactCount: building._count?.contacts ?? building.contacts?.length ?? 0,
+    mediaCount: building._count?.media ?? 0,
+    contacts: property.contacts,
+  };
+}
+
 export function useProperties(filters: FilterParams = {}) {
   const queryParams = buildFilterQuery(filters);
 
@@ -157,6 +212,44 @@ export function useProperties(filters: FilterParams = {}) {
   });
 }
 
+export function usePropertyIntake(filters: {
+  status?: Exclude<IntakeStatus, "COMPLETED">;
+  search?: string;
+  page?: number;
+  limit?: number;
+} = {}) {
+  return useQuery({
+    queryKey: ["property-intake", filters],
+    queryFn: async (): Promise<PropertyIntakeResponse> => {
+      const params: Record<string, string> = {
+        page: String(filters.page || 1),
+        limit: String(filters.limit || 20),
+      };
+      if (filters.status) params.status = filters.status;
+      if (filters.search) params.search = filters.search;
+
+      type BackendIntakeResponse = {
+        data: BackendBuilding[];
+        meta: { total: number; page: number; limit: number; totalPages: number };
+        summary: PropertyIntakeSummary;
+      };
+
+      const raw = await api.get<BackendIntakeResponse | { data: BackendIntakeResponse }>("/buildings/intake", params);
+      const response = "meta" in raw ? raw : raw.data;
+
+      return {
+        data: (response.data || []).map(adaptBuildingToIntake),
+        total: response.meta?.total || 0,
+        page: response.meta?.page || 1,
+        pageSize: response.meta?.limit || 20,
+        totalPages: response.meta?.totalPages || 0,
+        summary: response.summary || { total: 0, new: 0, inProgress: 0, followUp: 0 },
+      };
+    },
+    staleTime: 30 * 1000,
+  });
+}
+
 export function useProperty(id: string) {
   return useQuery({
     queryKey: ["properties", id],
@@ -181,6 +274,22 @@ export function useUpdateProperty() {
   return {
     mutateAsync: async ({ id, data }: { id: string; data: Record<string, unknown> }) => {
       return api.patch<{ data: BackendBuilding }>(`/buildings/${id}`, data);
+    },
+  };
+}
+
+export function useUpdateIntakeStatus() {
+  return {
+    mutateAsync: async ({ id, status }: { id: string; status: Exclude<IntakeStatus, "COMPLETED"> }) => {
+      return api.patch<{ data: BackendBuilding }>(`/buildings/${id}/intake-status`, { status });
+    },
+  };
+}
+
+export function useCompletePropertyIntake() {
+  return {
+    mutateAsync: async (id: string) => {
+      return api.post<{ data: BackendBuilding }>(`/buildings/${id}/complete-intake`);
     },
   };
 }
