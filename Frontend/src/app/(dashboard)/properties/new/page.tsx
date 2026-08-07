@@ -148,15 +148,17 @@ function SectionCard({
   title,
   description,
   children,
+  className = "",
 }: {
   icon: React.ReactNode;
   title: string;
   description: string;
   children: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <section className="rounded-2xl border bg-card p-4 shadow-sm sm:p-5">
-      <div className="mb-4 flex items-start gap-3">
+    <section className={`rounded-2xl border bg-card p-4 shadow-sm sm:p-5 lg:p-6 ${className}`}>
+      <div className="mb-4 flex items-start gap-3 lg:mb-5">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
           {icon}
         </div>
@@ -419,9 +421,15 @@ export default function NewPropertyPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl pb-20 sm:pb-4">
+    <div className="mx-auto w-full max-w-[1240px] pb-20 sm:pb-6 lg:px-2 xl:px-4">
       <div className="mb-5 flex items-center justify-between sm:hidden">
-        <Button type="button" variant="ghost" size="icon" onClick={() => router.push("/properties")} aria-label="Back to properties">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={() => router.push("/properties")}
+          aria-label="Back to properties"
+        >
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <h1 className="text-lg font-semibold">Add New Property</h1>
@@ -429,7 +437,10 @@ export default function NewPropertyPage() {
       </div>
 
       <div className="hidden sm:block">
-        <PageHeader title="Add New Property" description="Create a new property record in Master Data." />
+        <PageHeader
+          title="Add New Property"
+          description="Create a new property record in Master Data."
+        />
       </div>
 
       <MultiStepForm
@@ -437,145 +448,255 @@ export default function NewPropertyPage() {
         onSubmit={handleSubmit}
         validateStep={validateStep}
         isSubmitting={isSubmitting}
+        className="lg:space-y-7"
         contentCardClassName="border-0 bg-transparent shadow-none"
         contentClassName="p-0"
-        navigationClassName="sticky bottom-0 z-20 -mx-4 border-t bg-background/95 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0"
+        navigationClassName="sticky bottom-0 z-20 -mx-4 border-t bg-background/95 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 lg:justify-end lg:pt-1"
         previousLabel="Back"
         nextLabel="Continue to Review"
         submitLabel="Create Property"
       >
         <StepContent>
-          <div className="space-y-4 sm:space-y-5">
-            <SectionCard
-              icon={<ImageIcon className="h-5 w-5" />}
-              title="Media"
-              description="Add photos, videos, documents, or floor plans."
-            >
-              <input
-                ref={mediaInputRef}
-                type="file"
-                className="hidden"
-                multiple
-                onChange={(event) => handleMediaSelection(event.target.files)}
-              />
-              <button
-                type="button"
-                onClick={() => openMediaPicker("photo")}
-                className="flex min-h-32 w-full flex-col items-center justify-center rounded-xl border border-dashed bg-muted/20 px-4 py-6 text-center transition-colors hover:bg-muted/40"
+          <div className="space-y-4 sm:space-y-5 lg:space-y-6">
+            <div className="grid gap-4 sm:gap-5 lg:grid-cols-2 lg:items-stretch lg:gap-6">
+              <SectionCard
+                className="h-full"
+                icon={<ImageIcon className="h-5 w-5" />}
+                title="Media"
+                description="Add photos, videos, documents, or floor plans."
               >
-                <Upload className="mb-2 h-7 w-7 text-primary" />
-                <span className="text-sm font-medium">Upload files</span>
-                <span className="mt-1 text-xs text-muted-foreground">Tap to choose files</span>
-              </button>
-              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {MEDIA_CATEGORIES.map((cat) => {
-                  const Icon = cat.icon;
-                  return (
-                    <Button key={cat.value} type="button" variant="outline" className="min-h-11 gap-2" onClick={() => openMediaPicker(cat.value as MediaDocument["category"])}>
-                      <Icon className="h-4 w-4 text-primary" />
-                      <span className="text-xs sm:text-sm">{cat.label}</span>
-                    </Button>
-                  );
-                })}
-              </div>
-              {media.length > 0 && (
-                <div className="mt-3 space-y-2">
-                  {media.map((item) => (
-                    <div key={item.id} className="flex items-center justify-between gap-3 rounded-xl border p-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">{item.file.name}</p>
-                        <p className="text-xs text-muted-foreground">{MEDIA_CATEGORIES.find((c) => c.value === item.category)?.label} · {(item.file.size / 1024 / 1024).toFixed(2)} MB</p>
-                      </div>
-                      <Button type="button" variant="ghost" size="icon" className="shrink-0 text-destructive" onClick={() => removeMediaItem(item.id)}>
-                        <X className="h-4 w-4" />
+                <input
+                  ref={mediaInputRef}
+                  type="file"
+                  className="hidden"
+                  multiple
+                  onChange={(event) => handleMediaSelection(event.target.files)}
+                />
+                <button
+                  type="button"
+                  onClick={() => openMediaPicker("photo")}
+                  className="flex min-h-32 w-full flex-col items-center justify-center rounded-xl border border-dashed bg-muted/20 px-4 py-6 text-center transition-colors hover:border-primary/40 hover:bg-primary/[0.03] lg:min-h-[150px]"
+                >
+                  <Upload className="mb-2 h-7 w-7 text-primary" />
+                  <span className="text-sm font-medium">Upload files</span>
+                  <span className="mt-1 text-xs text-muted-foreground">Tap to choose files</span>
+                </button>
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4">
+                  {MEDIA_CATEGORIES.map((cat) => {
+                    const Icon = cat.icon;
+                    return (
+                      <Button
+                        key={cat.value}
+                        type="button"
+                        variant="outline"
+                        className="min-h-11 gap-2"
+                        onClick={() => openMediaPicker(cat.value as MediaDocument["category"])}
+                      >
+                        <Icon className="h-4 w-4 text-primary" />
+                        <span className="text-xs sm:text-sm">{cat.label}</span>
                       </Button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
-              )}
-            </SectionCard>
-
-            <SectionCard
-              icon={<Users className="h-5 w-5" />}
-              title="Contacts"
-              description="Add people or organizations related to this property."
-            >
-              {contacts.length === 0 ? (
-                <div className="rounded-xl border bg-muted/10 px-4 py-6 text-center">
-                  <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-                    <Users className="h-5 w-5 text-muted-foreground" />
+                {media.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    {media.map((item) => (
+                      <div key={item.id} className="flex items-center justify-between gap-3 rounded-xl border p-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{item.file.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {MEDIA_CATEGORIES.find((c) => c.value === item.category)?.label} · {(item.file.size / 1024 / 1024).toFixed(2)} MB
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="shrink-0 text-destructive"
+                          onClick={() => removeMediaItem(item.id)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
                   </div>
-                  <p className="text-sm font-medium">No contacts added yet</p>
-                  <p className="mt-1 text-xs text-muted-foreground">Add property contacts to get started.</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {contacts.map((contact) => (
-                    <div key={contact.id} className="rounded-xl border p-3 sm:p-4">
-                      <div className="mb-3 flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium">Contact</span>
-                          {contact.isPrimary && <Badge variant="secondary">Primary</Badge>}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          {!contact.isPrimary && <Button type="button" variant="ghost" size="sm" onClick={() => setPrimaryContact(contact.id)}>Set Primary</Button>}
-                          <Button type="button" variant="ghost" size="icon" className="text-destructive" onClick={() => removeContact(contact.id)}><Trash2 className="h-4 w-4" /></Button>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-medium">Type</label>
-                          <Select value={contact.contactType} onValueChange={(v) => updateContact(contact.id, "contactType", v)}>
-                            <SelectTrigger className="min-h-11"><SelectValue /></SelectTrigger>
-                            <SelectContent>{CONTACT_TYPES.map((ct) => <SelectItem key={ct.value} value={ct.value}>{ct.label}</SelectItem>)}</SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-1.5"><label className="text-xs font-medium">Name *</label><Input className="min-h-11" placeholder="Contact name" value={contact.name} onChange={(e) => updateContact(contact.id, "name", e.target.value)} /></div>
-                        <div className="space-y-1.5"><label className="text-xs font-medium">Phone *</label><Input className="min-h-11" placeholder="Phone number" value={contact.phone} onChange={(e) => updateContact(contact.id, "phone", e.target.value)} /></div>
-                        <div className="space-y-1.5"><label className="text-xs font-medium">Email</label><Input className="min-h-11" type="email" placeholder="Email (optional)" value={contact.email || ""} onChange={(e) => updateContact(contact.id, "email", e.target.value)} /></div>
-                        <div className="space-y-1.5"><label className="text-xs font-medium">Designation</label><Input className="min-h-11" placeholder="Designation (optional)" value={contact.designation || ""} onChange={(e) => updateContact(contact.id, "designation", e.target.value)} /></div>
-                      </div>
+                )}
+              </SectionCard>
+
+              <SectionCard
+                className="h-full"
+                icon={<Users className="h-5 w-5" />}
+                title="Contacts"
+                description="Add people or organizations related to this property."
+              >
+                {contacts.length === 0 ? (
+                  <div className="flex min-h-[150px] flex-col items-center justify-center rounded-xl border bg-muted/10 px-4 py-6 text-center">
+                    <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                      <Users className="h-5 w-5 text-muted-foreground" />
                     </div>
-                  ))}
-                </div>
-              )}
-              <Button type="button" variant="outline" className="mt-3 min-h-11 w-full border-primary/50 text-primary hover:text-primary" onClick={addContact}>
-                <Plus className="mr-2 h-4 w-4" /> Add Contact
-              </Button>
-            </SectionCard>
+                    <p className="text-sm font-medium">No contacts added yet</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Add property contacts to get started.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {contacts.map((contact) => (
+                      <div key={contact.id} className="rounded-xl border p-3 sm:p-4">
+                        <div className="mb-3 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium">Contact</span>
+                            {contact.isPrimary && <Badge variant="secondary">Primary</Badge>}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            {!contact.isPrimary && (
+                              <Button type="button" variant="ghost" size="sm" onClick={() => setPrimaryContact(contact.id)}>
+                                Set Primary
+                              </Button>
+                            )}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="text-destructive"
+                              onClick={() => removeContact(contact.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-medium">Type</label>
+                            <Select value={contact.contactType} onValueChange={(v) => updateContact(contact.id, "contactType", v)}>
+                              <SelectTrigger className="min-h-11"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                {CONTACT_TYPES.map((ct) => <SelectItem key={ct.value} value={ct.value}>{ct.label}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-medium">Name *</label>
+                            <Input className="min-h-11" placeholder="Contact name" value={contact.name} onChange={(e) => updateContact(contact.id, "name", e.target.value)} />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-medium">Phone *</label>
+                            <Input className="min-h-11" placeholder="Phone number" value={contact.phone} onChange={(e) => updateContact(contact.id, "phone", e.target.value)} />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-medium">Email</label>
+                            <Input className="min-h-11" type="email" placeholder="Email (optional)" value={contact.email || ""} onChange={(e) => updateContact(contact.id, "email", e.target.value)} />
+                          </div>
+                          <div className="space-y-1.5 sm:col-span-2">
+                            <label className="text-xs font-medium">Designation</label>
+                            <Input className="min-h-11" placeholder="Designation (optional)" value={contact.designation || ""} onChange={(e) => updateContact(contact.id, "designation", e.target.value)} />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="mt-3 min-h-11 w-full border-primary/50 text-primary hover:text-primary"
+                  onClick={addContact}
+                >
+                  <Plus className="mr-2 h-4 w-4" /> Add Contact
+                </Button>
+              </SectionCard>
+            </div>
 
             <SectionCard
               icon={<MapPin className="h-5 w-5" />}
               title="Location"
               description="Add the property’s address and location details."
             >
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:gap-x-5 lg:gap-y-4">
                 <ValidatedField label="Full Address" field="address" className="sm:col-span-2">
-                  <Textarea className="min-h-20" placeholder="Enter complete address" value={formData.address} onChange={(e) => updateField("address", e.target.value)} />
+                  <Textarea
+                    className="min-h-20 lg:min-h-24"
+                    placeholder="Enter complete address"
+                    value={formData.address}
+                    onChange={(e) => updateField("address", e.target.value)}
+                  />
                 </ValidatedField>
+
                 <ValidatedField label="State" required field="state">
-                  <Select value={formData.state} onValueChange={(v) => { updateField("state", v); updateField("city", ""); updateField("locality", ""); }}>
-                    <SelectTrigger className="min-h-11"><SelectValue>{findById(states, formData.state)?.name || "Select state"}</SelectValue></SelectTrigger>
-                    <SelectContent>{states.map((state) => <SelectItem key={state.id} value={state.id}>{state.name}</SelectItem>)}</SelectContent>
+                  <Select
+                    value={formData.state}
+                    onValueChange={(v) => {
+                      updateField("state", v);
+                      updateField("city", "");
+                      updateField("locality", "");
+                    }}
+                  >
+                    <SelectTrigger className="min-h-11">
+                      <SelectValue>{findById(states, formData.state)?.name || "Select state"}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {states.map((state) => <SelectItem key={state.id} value={state.id}>{state.name}</SelectItem>)}
+                    </SelectContent>
                   </Select>
                 </ValidatedField>
-                <ValidatedField label="City" required field="city"><Input className="min-h-11" placeholder="Enter city" value={formData.city} onChange={(e) => updateField("city", e.target.value)} /></ValidatedField>
-                <FormField label="Locality" className="sm:col-span-2"><Input className="min-h-11" placeholder="Enter locality / area" value={formData.locality} onChange={(e) => updateField("locality", e.target.value)} /></FormField>
-                <FormField label="Google Maps URL" className="sm:col-span-2">
-                  <div className="relative"><Link2 className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" /><Input className="min-h-11 pl-9" placeholder="https://maps.google.com/..." value={formData.mapsUrl} onChange={(e) => updateField("mapsUrl", e.target.value)} /></div>
+
+                <ValidatedField label="City" required field="city">
+                  <Input
+                    className="min-h-11"
+                    placeholder="Enter city"
+                    value={formData.city}
+                    onChange={(e) => updateField("city", e.target.value)}
+                  />
+                </ValidatedField>
+
+                <FormField label="Locality">
+                  <Input
+                    className="min-h-11"
+                    placeholder="Enter locality / area"
+                    value={formData.locality}
+                    onChange={(e) => updateField("locality", e.target.value)}
+                  />
                 </FormField>
-                <div className="sm:col-span-2">
-                  <Button type="button" variant="outline" className="min-h-11 w-full text-primary" onClick={captureGps} disabled={gpsLoading}>
+
+                <FormField label="Google Maps URL">
+                  <div className="relative">
+                    <Link2 className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      className="min-h-11 pl-9"
+                      placeholder="https://maps.google.com/..."
+                      value={formData.mapsUrl}
+                      onChange={(e) => updateField("mapsUrl", e.target.value)}
+                    />
+                  </div>
+                </FormField>
+
+                <div className="grid gap-3 sm:col-span-2 lg:grid-cols-[minmax(240px,0.8fr)_minmax(0,1.2fr)] lg:items-stretch">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="min-h-11 w-full text-primary"
+                    onClick={captureGps}
+                    disabled={gpsLoading}
+                  >
                     {gpsLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MapPin className="mr-2 h-4 w-4" />}
                     {gpsLoading ? "Capturing..." : "Use current location"}
                   </Button>
+
+                  {formData.latitude || formData.longitude ? (
+                    <div className="flex min-h-11 flex-col gap-2 rounded-xl border border-primary/10 bg-primary/5 px-3 py-2.5 text-sm sm:flex-row sm:items-center sm:justify-between">
+                      <span className="flex min-w-0 items-center gap-2">
+                        <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <span className="truncate">Lat: {formData.latitude || "—"} · Long: {formData.longitude || "—"}</span>
+                      </span>
+                      <Badge className="w-fit shrink-0 bg-green-100 text-green-700 hover:bg-green-100">
+                        GPS Location Captured
+                      </Badge>
+                    </div>
+                  ) : (
+                    <div className="flex min-h-11 items-center gap-2 rounded-xl border bg-muted/10 px-3 text-sm text-muted-foreground">
+                      <MapPin className="h-4 w-4 shrink-0" />
+                      GPS coordinates have not been captured yet.
+                    </div>
+                  )}
                 </div>
-                {(formData.latitude || formData.longitude) && (
-                  <div className="sm:col-span-2 flex flex-col gap-2 rounded-xl border border-primary/10 bg-primary/5 px-3 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
-                    <span className="flex items-center gap-2"><MapPin className="h-4 w-4 text-muted-foreground" /> Lat: {formData.latitude || "—"} · Long: {formData.longitude || "—"}</span>
-                    <Badge className="w-fit bg-green-100 text-green-700 hover:bg-green-100">GPS Location Captured</Badge>
-                  </div>
-                )}
               </div>
             </SectionCard>
 
@@ -584,67 +705,145 @@ export default function NewPropertyPage() {
               title="Additional Details"
               description="Add extra fields and notes about this property."
             >
-              <Button type="button" variant="outline" className="min-h-11 w-full justify-between" onClick={addAdditionalField}>
-                <span className="flex items-center"><Plus className="mr-2 h-4 w-4 text-primary" /> Add Field</span>
-                <span className="text-muted-foreground">›</span>
-              </Button>
+              <div className="flex justify-stretch sm:justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="min-h-11 w-full justify-between sm:w-auto sm:min-w-36"
+                  onClick={addAdditionalField}
+                >
+                  <span className="flex items-center"><Plus className="mr-2 h-4 w-4 text-primary" /> Add Field</span>
+                  <span className="ml-4 text-muted-foreground">›</span>
+                </Button>
+              </div>
+
               {additionalFields.length > 0 && (
                 <div className="mt-3 space-y-3">
                   {additionalFields.map((field) => (
-                    <div key={field.id} className="grid grid-cols-1 gap-2 rounded-xl border p-3 sm:grid-cols-[160px_1fr_1fr_auto]">
+                    <div
+                      key={field.id}
+                      className="grid grid-cols-1 gap-2 rounded-xl border p-3 sm:grid-cols-2 lg:grid-cols-[180px_minmax(180px,0.8fr)_minmax(260px,1.2fr)_44px] lg:items-center"
+                    >
                       <Select value={field.type} onValueChange={(value) => updateAdditionalField(field.id, "type", value || "other")}>
-                        <SelectTrigger className="min-h-11"><SelectValue>{ADDITIONAL_FIELD_TYPES.find((type) => type.value === field.type)?.label || "Other"}</SelectValue></SelectTrigger>
-                        <SelectContent>{ADDITIONAL_FIELD_TYPES.map((type) => <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>)}</SelectContent>
+                        <SelectTrigger className="min-h-11">
+                          <SelectValue>{ADDITIONAL_FIELD_TYPES.find((type) => type.value === field.type)?.label || "Other"}</SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ADDITIONAL_FIELD_TYPES.map((type) => <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>)}
+                        </SelectContent>
                       </Select>
-                      <Input className="min-h-11" placeholder="Field label" value={field.label} onChange={(e) => updateAdditionalField(field.id, "label", e.target.value)} />
-                      <Input className="min-h-11" placeholder="Value or URL" value={field.value} onChange={(e) => updateAdditionalField(field.id, "value", e.target.value)} />
-                      <Button type="button" variant="ghost" size="icon" className="text-destructive" onClick={() => removeAdditionalField(field.id)}><Trash2 className="h-4 w-4" /></Button>
+                      <Input
+                        className="min-h-11"
+                        placeholder="Field label"
+                        value={field.label}
+                        onChange={(e) => updateAdditionalField(field.id, "label", e.target.value)}
+                      />
+                      <Input
+                        className="min-h-11 sm:col-span-2 lg:col-span-1"
+                        placeholder="Value or URL"
+                        value={field.value}
+                        onChange={(e) => updateAdditionalField(field.id, "value", e.target.value)}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive sm:justify-self-end lg:justify-self-auto"
+                        onClick={() => removeAdditionalField(field.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   ))}
                 </div>
               )}
-              <div className="mt-4 space-y-1.5">
+
+              <div className="mt-4 space-y-1.5 lg:mt-5">
                 <label className="text-sm font-medium">Notes</label>
-                <Textarea className="min-h-24" placeholder="Add notes about this property..." value={formData.notes} onChange={(e) => updateField("notes", e.target.value)} />
+                <Textarea
+                  className="min-h-24 lg:min-h-28"
+                  placeholder="Add notes about this property..."
+                  value={formData.notes}
+                  onChange={(e) => updateField("notes", e.target.value)}
+                />
               </div>
             </SectionCard>
           </div>
         </StepContent>
 
         <StepContent>
-          <div className="space-y-4">
-            <div className="rounded-2xl border bg-card p-4 shadow-sm sm:p-5">
+          <div className="space-y-4 sm:space-y-5 lg:space-y-6">
+            <div className="rounded-2xl border bg-card p-4 shadow-sm sm:p-5 lg:p-6">
               <h3 className="font-semibold">Review Your Property</h3>
               <p className="mt-1 text-sm text-muted-foreground">Please review all the information before submitting.</p>
             </div>
-            <div className="rounded-2xl border bg-card p-4 shadow-sm sm:p-5">
-              <h4 className="mb-3 text-sm font-semibold">Location</h4>
-              <dl className="grid grid-cols-[110px_1fr] gap-x-4 gap-y-2 text-sm">
-                <dt className="text-muted-foreground">Address</dt><dd>{formData.address || "—"}</dd>
-                <dt className="text-muted-foreground">State</dt><dd>{findById(states, formData.state)?.name || "—"}</dd>
-                <dt className="text-muted-foreground">City</dt><dd>{formData.city || "—"}</dd>
-                <dt className="text-muted-foreground">Locality</dt><dd>{formData.locality || "—"}</dd>
-                <dt className="text-muted-foreground">Coordinates</dt><dd>{formData.latitude && formData.longitude ? `${formData.latitude}, ${formData.longitude}` : "—"}</dd>
-              </dl>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-2xl border bg-card p-4 shadow-sm sm:p-5">
-                <h4 className="text-sm font-semibold">Contacts ({contacts.length})</h4>
-                {contacts.length === 0 ? <p className="mt-2 text-sm text-muted-foreground">No contacts added.</p> : <div className="mt-2 space-y-2">{contacts.map((c) => <div key={c.id} className="rounded-lg border p-2 text-sm"><span className="font-medium">{c.name || "Unnamed"}</span><span className="ml-2 text-muted-foreground">{c.phone}</span></div>)}</div>}
+
+            <div className="grid gap-4 sm:gap-5 lg:grid-cols-[1.2fr_0.8fr] lg:gap-6">
+              <div className="rounded-2xl border bg-card p-4 shadow-sm sm:p-5 lg:p-6">
+                <h4 className="mb-3 text-sm font-semibold">Location</h4>
+                <dl className="grid grid-cols-[110px_1fr] gap-x-4 gap-y-2 text-sm sm:grid-cols-[130px_1fr]">
+                  <dt className="text-muted-foreground">Address</dt><dd>{formData.address || "—"}</dd>
+                  <dt className="text-muted-foreground">State</dt><dd>{findById(states, formData.state)?.name || "—"}</dd>
+                  <dt className="text-muted-foreground">City</dt><dd>{formData.city || "—"}</dd>
+                  <dt className="text-muted-foreground">Locality</dt><dd>{formData.locality || "—"}</dd>
+                  <dt className="text-muted-foreground">Coordinates</dt><dd>{formData.latitude && formData.longitude ? `${formData.latitude}, ${formData.longitude}` : "—"}</dd>
+                </dl>
               </div>
-              <div className="rounded-2xl border bg-card p-4 shadow-sm sm:p-5">
-                <h4 className="text-sm font-semibold">Media ({media.length})</h4>
-                {media.length === 0 ? <p className="mt-2 text-sm text-muted-foreground">No media files added.</p> : <div className="mt-2 flex flex-wrap gap-2">{media.map((m) => <Badge key={m.id} variant="outline">{m.file.name}</Badge>)}</div>}
+
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+                <div className="rounded-2xl border bg-card p-4 shadow-sm sm:p-5 lg:p-6">
+                  <h4 className="text-sm font-semibold">Contacts ({contacts.length})</h4>
+                  {contacts.length === 0 ? (
+                    <p className="mt-2 text-sm text-muted-foreground">No contacts added.</p>
+                  ) : (
+                    <div className="mt-2 space-y-2">
+                      {contacts.map((c) => (
+                        <div key={c.id} className="rounded-lg border p-2 text-sm">
+                          <span className="font-medium">{c.name || "Unnamed"}</span>
+                          <span className="ml-2 text-muted-foreground">{c.phone}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-2xl border bg-card p-4 shadow-sm sm:p-5 lg:p-6">
+                  <h4 className="text-sm font-semibold">Media ({media.length})</h4>
+                  {media.length === 0 ? (
+                    <p className="mt-2 text-sm text-muted-foreground">No media files added.</p>
+                  ) : (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {media.map((m) => <Badge key={m.id} variant="outline">{m.file.name}</Badge>)}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
+
             {additionalFields.some((field) => field.value.trim()) && (
-              <div className="rounded-2xl border bg-card p-4 shadow-sm sm:p-5">
+              <div className="rounded-2xl border bg-card p-4 shadow-sm sm:p-5 lg:p-6">
                 <h4 className="mb-3 text-sm font-semibold">Additional Fields</h4>
-                <div className="space-y-2 text-sm">{additionalFields.filter((field) => field.value.trim()).map((field) => <div key={field.id} className="flex justify-between gap-4"><span className="text-muted-foreground">{field.label || "Other"}</span><span className="break-all text-right">{field.value}</span></div>)}</div>
+                <div className="space-y-2 text-sm">
+                  {additionalFields.filter((field) => field.value.trim()).map((field) => (
+                    <div key={field.id} className="flex justify-between gap-4">
+                      <span className="text-muted-foreground">{field.label || "Other"}</span>
+                      <span className="break-all text-right">{field.value}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
-            {formData.notes && <div className="rounded-2xl border bg-card p-4 shadow-sm sm:p-5"><h4 className="mb-2 text-sm font-semibold">Notes</h4><p className="whitespace-pre-wrap text-sm text-muted-foreground">{formData.notes}</p></div>}
-            <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-800 dark:border-green-800 dark:bg-green-900/30 dark:text-green-300">This new property will be added to Master Data upon submission.</div>
+
+            {formData.notes && (
+              <div className="rounded-2xl border bg-card p-4 shadow-sm sm:p-5 lg:p-6">
+                <h4 className="mb-2 text-sm font-semibold">Notes</h4>
+                <p className="whitespace-pre-wrap text-sm text-muted-foreground">{formData.notes}</p>
+              </div>
+            )}
+
+            <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-800 dark:border-green-800 dark:bg-green-900/30 dark:text-green-300">
+              This new property will be added to Master Data upon submission.
+            </div>
           </div>
         </StepContent>
       </MultiStepForm>
