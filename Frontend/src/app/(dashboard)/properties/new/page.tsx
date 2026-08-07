@@ -164,7 +164,6 @@ interface FormData {
   state: string;
   city: string;
   locality: string;
-  pincode: string;
   latitude: string;
   longitude: string;
   mapsUrl: string;
@@ -176,7 +175,6 @@ const initialFormData: FormData = {
   state: "",
   city: "",
   locality: "",
-  pincode: "",
   latitude: "",
   longitude: "",
   mapsUrl: "",
@@ -255,7 +253,7 @@ export default function NewPropertyPage() {
     const addressLine = formData.address.trim().split("\n")[0]?.trim();
     return (
       addressLine ||
-      [formData.locality, formData.city, formData.pincode].filter(Boolean).join(", ") ||
+      [formData.locality, formData.city].filter(Boolean).join(", ") ||
       "New Property"
     );
   }
@@ -313,7 +311,6 @@ export default function NewPropertyPage() {
         stateName: formData.state || undefined,
         cityName: formData.city || undefined,
         localityName: formData.locality || undefined,
-        pincode: formData.pincode || undefined,
         notes: formData.notes || undefined,
       };
 
@@ -373,7 +370,7 @@ export default function NewPropertyPage() {
   const validateStep = useCallback(
     (stepIndex: number): Record<string, string> | null => {
       const stepFields: Record<number, string[]> = {
-        0: ["state", "city", "pincode", "mapsUrl"],
+        0: ["state", "city", "mapsUrl"],
       };
 
       const fields = stepFields[stepIndex];
@@ -747,15 +744,6 @@ export default function NewPropertyPage() {
                 onChange={(e) => updateField("locality", e.target.value)}
               />
             </FormField>
-
-            <ValidatedField label="Pincode" required field="pincode">
-              <Input
-                placeholder="e.g. 411014"
-                value={formData.pincode}
-                onChange={(e) => updateField("pincode", e.target.value)}
-              />
-            </ValidatedField>
-
             <FormField label="Latitude">
               <Input
                 type="number"
@@ -903,8 +891,6 @@ export default function NewPropertyPage() {
                 <span>{formData.city || "—"}</span>
                 <span className="text-muted-foreground">Locality:</span>
                 <span>{formData.locality || "—"}</span>
-                <span className="text-muted-foreground">Pincode:</span>
-                <span>{formData.pincode || "—"}</span>
                 <span className="text-muted-foreground">Coordinates:</span>
                 <span>
                   {formData.latitude && formData.longitude
