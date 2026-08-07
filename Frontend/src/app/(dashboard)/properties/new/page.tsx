@@ -1,10 +1,30 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { MapPin, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  ArrowLeft,
+  ChevronUp,
+  FileText,
+  Film,
+  ImageIcon,
+  Link2,
+  Loader2,
+  MapPin,
+  Plus,
+  Trash2,
+  Upload,
+  Users,
+  X,
+} from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
-import { MultiStepForm, StepContent, FormField, useMultiStepForm } from "@/components/shared/MultiStepForm";
+import {
+  MultiStepForm,
+  StepContent,
+  FormField,
+  useMultiStepForm,
+} from "@/components/shared/MultiStepForm";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -20,21 +40,11 @@ import { toast } from "sonner";
 import { propertySchema } from "@/lib/validation";
 import { useCreateProperty } from "@/hooks/use-properties";
 import { useCompleteUpload, useUploadMedia } from "@/hooks/use-media";
-import {
-  useStates,
-  usePropertyTypes,
-  useFurnishingStatuses,
-  useAvailabilityStatuses,
-  useSources,
-  findById,
-  type ReferenceItem,
-} from "@/hooks/use-reference";
-import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, Upload, X, ImageIcon, FileText, Film } from "lucide-react";
+import { useStates, findById, type ReferenceItem } from "@/hooks/use-reference";
 import type { Contact, MediaDocument } from "@/types";
 
 const steps = [
-  { id: "property", title: "Add Property", description: "All property details" },
+  { id: "property", title: "Property Details", description: "All property details" },
   { id: "review", title: "Review", description: "Review and submit" },
 ];
 
@@ -62,66 +72,18 @@ const ADDITIONAL_FIELD_TYPES = [
   { value: "other", label: "Other" },
 ];
 
-const FALLBACK_PROPERTY_TYPES: ReferenceItem[] = [
-  "Office",
-  "Retail",
-  "Warehouse",
-  "Industrial",
-  "Residential",
-  "CoWorking",
-  "Plot",
-  "Farmhouse",
-].map((name) => ({ id: name, name, active: true }));
-
-const FALLBACK_SOURCES: ReferenceItem[] = [
-  "Manual Entry",
-  "Website",
-  "Referral",
-  "99acres",
-  "MagicBricks",
-  "Housing.com",
-  "JustDial",
-  "Google Maps",
-  "Walk-in",
-  "Existing Client",
-].map((name) => ({ id: name, name, active: true }));
-
 const FALLBACK_STATES: ReferenceItem[] = [
-  ["AP", "Andhra Pradesh"],
-  ["AR", "Arunachal Pradesh"],
-  ["AS", "Assam"],
-  ["BR", "Bihar"],
-  ["CG", "Chhattisgarh"],
-  ["GA", "Goa"],
-  ["GJ", "Gujarat"],
-  ["HR", "Haryana"],
-  ["HP", "Himachal Pradesh"],
-  ["JH", "Jharkhand"],
-  ["KA", "Karnataka"],
-  ["KL", "Kerala"],
-  ["MP", "Madhya Pradesh"],
-  ["MH", "Maharashtra"],
-  ["MN", "Manipur"],
-  ["ML", "Meghalaya"],
-  ["MZ", "Mizoram"],
-  ["NL", "Nagaland"],
-  ["OD", "Odisha"],
-  ["PB", "Punjab"],
-  ["RJ", "Rajasthan"],
-  ["SK", "Sikkim"],
-  ["TN", "Tamil Nadu"],
-  ["TS", "Telangana"],
-  ["TR", "Tripura"],
-  ["UP", "Uttar Pradesh"],
-  ["UK", "Uttarakhand"],
-  ["WB", "West Bengal"],
-  ["AN", "Andaman and Nicobar Islands"],
-  ["CH", "Chandigarh"],
-  ["DN", "Dadra and Nagar Haveli and Daman and Diu"],
-  ["DL", "Delhi"],
-  ["JK", "Jammu and Kashmir"],
-  ["LA", "Ladakh"],
-  ["LD", "Lakshadweep"],
+  ["AP", "Andhra Pradesh"], ["AR", "Arunachal Pradesh"], ["AS", "Assam"],
+  ["BR", "Bihar"], ["CG", "Chhattisgarh"], ["GA", "Goa"], ["GJ", "Gujarat"],
+  ["HR", "Haryana"], ["HP", "Himachal Pradesh"], ["JH", "Jharkhand"],
+  ["KA", "Karnataka"], ["KL", "Kerala"], ["MP", "Madhya Pradesh"],
+  ["MH", "Maharashtra"], ["MN", "Manipur"], ["ML", "Meghalaya"],
+  ["MZ", "Mizoram"], ["NL", "Nagaland"], ["OD", "Odisha"], ["PB", "Punjab"],
+  ["RJ", "Rajasthan"], ["SK", "Sikkim"], ["TN", "Tamil Nadu"], ["TS", "Telangana"],
+  ["TR", "Tripura"], ["UP", "Uttar Pradesh"], ["UK", "Uttarakhand"],
+  ["WB", "West Bengal"], ["AN", "Andaman and Nicobar Islands"], ["CH", "Chandigarh"],
+  ["DN", "Dadra and Nagar Haveli and Daman and Diu"], ["DL", "Delhi"],
+  ["JK", "Jammu and Kashmir"], ["LA", "Ladakh"], ["LD", "Lakshadweep"],
   ["PY", "Puducherry"],
 ].map(([code, name]) => ({ id: code, code, name, active: true }));
 
@@ -136,27 +98,6 @@ interface PendingMediaFile {
   id: string;
   file: File;
   category: MediaDocument["category"];
-}
-
-function ValidatedField({
-  label,
-  required,
-  field,
-  children,
-  className,
-}: {
-  label: string;
-  required?: boolean;
-  field: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  const { errors } = useMultiStepForm();
-  return (
-    <FormField label={label} required={required} error={errors[field]} className={className}>
-      {children}
-    </FormField>
-  );
 }
 
 interface FormData {
@@ -181,6 +122,55 @@ const initialFormData: FormData = {
   notes: "",
 };
 
+function ValidatedField({
+  label,
+  required,
+  field,
+  children,
+  className,
+}: {
+  label: string;
+  required?: boolean;
+  field: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const { errors } = useMultiStepForm();
+  return (
+    <FormField label={label} required={required} error={errors[field]} className={className}>
+      {children}
+    </FormField>
+  );
+}
+
+function SectionCard({
+  icon,
+  title,
+  description,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-2xl border bg-card p-4 shadow-sm sm:p-5">
+      <div className="mb-4 flex items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          {icon}
+        </div>
+        <div className="min-w-0 flex-1">
+          <h3 className="font-semibold leading-5">{title}</h3>
+          <p className="mt-0.5 text-xs leading-5 text-muted-foreground sm:text-sm">{description}</p>
+        </div>
+        <ChevronUp className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
+      </div>
+      {children}
+    </section>
+  );
+}
+
 export default function NewPropertyPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -196,6 +186,13 @@ export default function NewPropertyPage() {
   const idCounter = useRef(0);
   const mediaInputRef = useRef<HTMLInputElement>(null);
   const pendingMediaCategory = useRef<MediaDocument["category"]>("photo");
+
+  const { data: statesData = [] } = useStates();
+  const states = statesData.length > 0 ? statesData : FALLBACK_STATES;
+
+  function updateField(field: string, value: string | null) {
+    setFormData((prev) => ({ ...prev, [field]: value ?? "" }));
+  }
 
   const captureGps = () => {
     if (!navigator.geolocation) {
@@ -215,26 +212,12 @@ export default function NewPropertyPage() {
         toast.error(
           error.code === 1
             ? "Location access denied. Please enable location permissions."
-            : "Unable to get location. Please enter coordinates manually.",
+            : "Unable to get location. Please enter coordinates manually."
         );
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   };
-
-  // Reference data
-  const { data: statesData = [] } = useStates();
-  const { data: propertyTypesData = [] } = usePropertyTypes();
-  const { data: furnishingStatuses = [] } = useFurnishingStatuses();
-  const { data: availabilityStatuses = [] } = useAvailabilityStatuses();
-  const { data: sourcesData = [] } = useSources();
-  const states = statesData.length > 0 ? statesData : FALLBACK_STATES;
-  const propertyTypes = propertyTypesData.length > 0 ? propertyTypesData : FALLBACK_PROPERTY_TYPES;
-  const sources = sourcesData.length > 0 ? sourcesData : FALLBACK_SOURCES;
-
-  function updateField(field: string, value: string | null) {
-    setFormData((prev) => ({ ...prev, [field]: value ?? "" }));
-  }
 
   function getMediaFileType(category: MediaDocument["category"]) {
     return category === "photo" ? "image" : category === "video" ? "video" : "document";
@@ -251,16 +234,11 @@ export default function NewPropertyPage() {
 
   function derivePropertyName() {
     const addressLine = formData.address.trim().split("\n")[0]?.trim();
-    return (
-      addressLine ||
-      [formData.locality, formData.city].filter(Boolean).join(", ") ||
-      "New Property"
-    );
+    return addressLine || [formData.locality, formData.city].filter(Boolean).join(", ") || "New Property";
   }
 
   async function uploadPendingMedia(buildingId: string) {
     if (media.length === 0) return;
-
     let uploadedCount = 0;
     for (const item of media) {
       const uploadResponse = await uploadMedia.mutateAsync({
@@ -273,30 +251,20 @@ export default function NewPropertyPage() {
       const uploadData = uploadResponse.data ?? uploadResponse;
       const uploadUrl = uploadData.uploadUrl || uploadData.presignedUrl;
       if (!uploadUrl) throw new Error(`Upload URL missing for ${item.file.name}`);
-
       const uploadResult = await fetch(uploadUrl, {
         method: "PUT",
         headers: { "Content-Type": item.file.type || "application/octet-stream" },
         body: item.file,
       });
-
-      if (!uploadResult.ok) {
-        throw new Error(`Failed to upload ${item.file.name}`);
-      }
-
-      await completeUpload.mutateAsync({
-        mediaId: uploadData.mediaId,
-        fileSizeBytes: item.file.size,
-      });
+      if (!uploadResult.ok) throw new Error(`Failed to upload ${item.file.name}`);
+      await completeUpload.mutateAsync({ mediaId: uploadData.mediaId, fileSizeBytes: item.file.size });
       uploadedCount += 1;
     }
-
     toast.success(`${uploadedCount} media file(s) uploaded`);
   }
 
   async function handleSubmit() {
     if (isSubmitting) return;
-
     const result = propertySchema.safeParse(formData);
     if (!result.success) {
       toast.error("Please fix validation errors before submitting.");
@@ -313,9 +281,6 @@ export default function NewPropertyPage() {
         localityName: formData.locality || undefined,
         notes: formData.notes || undefined,
       };
-
-      const commercialTerms = {};
-
       const extraFields = additionalFields
         .filter((field) => field.value.trim())
         .map((field) => ({
@@ -323,7 +288,6 @@ export default function NewPropertyPage() {
           label: field.label.trim() || ADDITIONAL_FIELD_TYPES.find((item) => item.value === field.type)?.label || "Other",
           value: field.value.trim(),
         }));
-
       const selectedState = findById(states, formData.state);
       if (formData.state) {
         if (isUuid(formData.state)) payload.stateId = formData.state;
@@ -335,13 +299,8 @@ export default function NewPropertyPage() {
       if (formData.mapsUrl) payload.googleMapsUrl = formData.mapsUrl;
       if (formData.latitude) payload.latitude = parseFloat(formData.latitude);
       if (formData.longitude) payload.longitude = parseFloat(formData.longitude);
-      if (Object.values(commercialTerms).some((value) => value !== undefined)) {
-        payload.commercialTerms = commercialTerms;
-      }
       if (extraFields.length > 0) payload.additionalFields = extraFields;
-      if (contacts && contacts.length > 0) {
-        payload.contacts = contacts;
-      }
+      if (contacts.length > 0) payload.contacts = contacts;
 
       const createdProperty = await createProperty.mutateAsync(payload);
       const buildingId = getCreatedBuildingId(createdProperty);
@@ -349,19 +308,14 @@ export default function NewPropertyPage() {
         try {
           await uploadPendingMedia(buildingId);
         } catch (uploadError) {
-          const uploadMessage =
-            uploadError instanceof Error
-              ? uploadError.message
-              : "Property created, but media upload failed.";
-          toast.error(uploadMessage);
+          toast.error(uploadError instanceof Error ? uploadError.message : "Property created, but media upload failed.");
         }
       }
       await queryClient.invalidateQueries({ queryKey: ["properties"] });
       toast.success("Property created successfully!");
       router.push("/properties");
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Failed to create property";
-      toast.error(message);
+      toast.error(error instanceof Error ? error.message : "Failed to create property");
     } finally {
       setIsSubmitting(false);
     }
@@ -369,21 +323,15 @@ export default function NewPropertyPage() {
 
   const validateStep = useCallback(
     (stepIndex: number): Record<string, string> | null => {
-      const stepFields: Record<number, string[]> = {
-        0: ["state", "city", "mapsUrl"],
-      };
-
+      const stepFields: Record<number, string[]> = { 0: ["state", "city", "mapsUrl"] };
       const fields = stepFields[stepIndex];
       if (!fields) return null;
-
       const result = propertySchema.safeParse(formData);
       if (!result.success) {
         const fieldErrors: Record<string, string> = {};
         for (const issue of result.error.issues) {
           const path = issue.path[0] as string;
-          if (fields.includes(path) && !fieldErrors[path]) {
-            fieldErrors[path] = issue.message;
-          }
+          if (fields.includes(path) && !fieldErrors[path]) fieldErrors[path] = issue.message;
         }
         return Object.keys(fieldErrors).length > 0 ? fieldErrors : null;
       }
@@ -392,7 +340,6 @@ export default function NewPropertyPage() {
     [formData]
   );
 
-  // Contact handlers
   function addContact() {
     idCounter.current += 1;
     const newContact: Contact = {
@@ -411,28 +358,21 @@ export default function NewPropertyPage() {
   }
 
   function updateContact(id: string, field: keyof Contact, value: string | boolean | null) {
-    setContacts((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, [field]: value ?? "" } : c))
-    );
+    setContacts((prev) => prev.map((c) => (c.id === id ? { ...c, [field]: value ?? "" } : c)));
   }
 
   function removeContact(id: string) {
     setContacts((prev) => {
       const filtered = prev.filter((c) => c.id !== id);
-      if (filtered.length > 0 && !filtered.some((c) => c.isPrimary)) {
-        filtered[0].isPrimary = true;
-      }
+      if (filtered.length > 0 && !filtered.some((c) => c.isPrimary)) filtered[0].isPrimary = true;
       return filtered;
     });
   }
 
   function setPrimaryContact(id: string) {
-    setContacts((prev) =>
-      prev.map((c) => ({ ...c, isPrimary: c.id === id }))
-    );
+    setContacts((prev) => prev.map((c) => ({ ...c, isPrimary: c.id === id })));
   }
 
-  // Media handlers
   function openMediaPicker(category: MediaDocument["category"]) {
     pendingMediaCategory.current = category;
     mediaInputRef.current?.click();
@@ -440,17 +380,11 @@ export default function NewPropertyPage() {
 
   function handleMediaSelection(files: FileList | null) {
     if (!files || files.length === 0) return;
-
     const category = pendingMediaCategory.current;
     const selectedFiles = Array.from(files).map((file) => {
       idCounter.current += 1;
-      return {
-        id: `media-${idCounter.current}`,
-        file,
-        category,
-      };
+      return { id: `media-${idCounter.current}`, file, category };
     });
-
     setMedia((prev) => [...prev, ...selectedFiles]);
     if (mediaInputRef.current) mediaInputRef.current.value = "";
   }
@@ -463,12 +397,7 @@ export default function NewPropertyPage() {
     idCounter.current += 1;
     setAdditionalFields((prev) => [
       ...prev,
-      {
-        id: `extra-${idCounter.current}`,
-        type: "instagram",
-        label: "Instagram",
-        value: "",
-      },
+      { id: `extra-${idCounter.current}`, type: "instagram", label: "Instagram", value: "" },
     ]);
   }
 
@@ -478,14 +407,10 @@ export default function NewPropertyPage() {
         if (item.id !== id) return item;
         if (field === "type") {
           const selectedType = ADDITIONAL_FIELD_TYPES.find((type) => type.value === value);
-          return {
-            ...item,
-            type: value,
-            label: selectedType?.label || item.label,
-          };
+          return { ...item, type: value, label: selectedType?.label || item.label };
         }
         return { ...item, [field]: value };
-      }),
+      })
     );
   }
 
@@ -494,485 +419,232 @@ export default function NewPropertyPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Add New Property"
-        description="Create a new property record in Master Data."
-      />
+    <div className="mx-auto max-w-5xl pb-20 sm:pb-4">
+      <div className="mb-5 flex items-center justify-between sm:hidden">
+        <Button type="button" variant="ghost" size="icon" onClick={() => router.push("/properties")} aria-label="Back to properties">
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+        <h1 className="text-lg font-semibold">Add New Property</h1>
+        <span className="w-10" />
+      </div>
 
-      <MultiStepForm steps={steps} onSubmit={handleSubmit} validateStep={validateStep} isSubmitting={isSubmitting}>
-        {/* Step 1: Add Property */}
+      <div className="hidden sm:block">
+        <PageHeader title="Add New Property" description="Create a new property record in Master Data." />
+      </div>
+
+      <MultiStepForm
+        steps={steps}
+        onSubmit={handleSubmit}
+        validateStep={validateStep}
+        isSubmitting={isSubmitting}
+        contentCardClassName="border-0 bg-transparent shadow-none"
+        contentClassName="p-0"
+        navigationClassName="sticky bottom-0 z-20 -mx-4 border-t bg-background/95 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0"
+        previousLabel="Back"
+        nextLabel="Continue to Review"
+        submitLabel="Create Property"
+      >
         <StepContent>
-          <div className="space-y-8">
+          <div className="space-y-4 sm:space-y-5">
+            <SectionCard
+              icon={<ImageIcon className="h-5 w-5" />}
+              title="Media"
+              description="Add photos, videos, documents, or floor plans."
+            >
+              <input
+                ref={mediaInputRef}
+                type="file"
+                className="hidden"
+                multiple
+                onChange={(event) => handleMediaSelection(event.target.files)}
+              />
+              <button
+                type="button"
+                onClick={() => openMediaPicker("photo")}
+                className="flex min-h-32 w-full flex-col items-center justify-center rounded-xl border border-dashed bg-muted/20 px-4 py-6 text-center transition-colors hover:bg-muted/40"
+              >
+                <Upload className="mb-2 h-7 w-7 text-primary" />
+                <span className="text-sm font-medium">Upload files</span>
+                <span className="mt-1 text-xs text-muted-foreground">Tap to choose files</span>
+              </button>
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {MEDIA_CATEGORIES.map((cat) => {
+                  const Icon = cat.icon;
+                  return (
+                    <Button key={cat.value} type="button" variant="outline" className="min-h-11 gap-2" onClick={() => openMediaPicker(cat.value as MediaDocument["category"])}>
+                      <Icon className="h-4 w-4 text-primary" />
+                      <span className="text-xs sm:text-sm">{cat.label}</span>
+                    </Button>
+                  );
+                })}
+              </div>
+              {media.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {media.map((item) => (
+                    <div key={item.id} className="flex items-center justify-between gap-3 rounded-xl border p-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{item.file.name}</p>
+                        <p className="text-xs text-muted-foreground">{MEDIA_CATEGORIES.find((c) => c.value === item.category)?.label} · {(item.file.size / 1024 / 1024).toFixed(2)} MB</p>
+                      </div>
+                      <Button type="button" variant="ghost" size="icon" className="shrink-0 text-destructive" onClick={() => removeMediaItem(item.id)}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </SectionCard>
 
-
-        {/* Media */}
-          <section className="space-y-4">
-          <h3 className="text-sm font-semibold">Media</h3>
-          <div className="space-y-4">
-            <input
-              ref={mediaInputRef}
-              type="file"
-              className="hidden"
-              multiple
-              onChange={(event) => handleMediaSelection(event.target.files)}
-            />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              {MEDIA_CATEGORIES.map((cat) => {
-                const Icon = cat.icon;
-                return (
-                  <Button
-                    key={cat.value}
-                    type="button"
-                    variant="outline"
-                    className="h-auto py-4 flex-col gap-2"
-                    onClick={() => openMediaPicker(cat.value as MediaDocument["category"])}
-                  >
-                    <Icon className="h-5 w-5" />
-                    <span className="text-xs">Add {cat.label}</span>
-                  </Button>
-                );
-              })}
-            </div>
-
-            {media.length > 0 && (
-              <div className="space-y-2">
-                {media.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center justify-between p-3 rounded-lg border"
-                  >
-                    <div className="flex items-center gap-3">
-                      {item.category === "photo" && <ImageIcon className="h-4 w-4 text-muted-foreground" />}
-                      {item.category === "video" && <Film className="h-4 w-4 text-muted-foreground" />}
-                      {(item.category === "document" || item.category === "floor_plan") && (
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                      )}
-                      <div>
-                        <p className="text-sm font-medium">{item.file.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {MEDIA_CATEGORIES.find((c) => c.value === item.category)?.label} •{" "}
-                          {(item.file.size / 1024 / 1024).toFixed(2)} MB
-                        </p>
+            <SectionCard
+              icon={<Users className="h-5 w-5" />}
+              title="Contacts"
+              description="Add people or organizations related to this property."
+            >
+              {contacts.length === 0 ? (
+                <div className="rounded-xl border bg-muted/10 px-4 py-6 text-center">
+                  <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                    <Users className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <p className="text-sm font-medium">No contacts added yet</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Add property contacts to get started.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {contacts.map((contact) => (
+                    <div key={contact.id} className="rounded-xl border p-3 sm:p-4">
+                      <div className="mb-3 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">Contact</span>
+                          {contact.isPrimary && <Badge variant="secondary">Primary</Badge>}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {!contact.isPrimary && <Button type="button" variant="ghost" size="sm" onClick={() => setPrimaryContact(contact.id)}>Set Primary</Button>}
+                          <Button type="button" variant="ghost" size="icon" className="text-destructive" onClick={() => removeContact(contact.id)}><Trash2 className="h-4 w-4" /></Button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium">Type</label>
+                          <Select value={contact.contactType} onValueChange={(v) => updateContact(contact.id, "contactType", v)}>
+                            <SelectTrigger className="min-h-11"><SelectValue /></SelectTrigger>
+                            <SelectContent>{CONTACT_TYPES.map((ct) => <SelectItem key={ct.value} value={ct.value}>{ct.label}</SelectItem>)}</SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1.5"><label className="text-xs font-medium">Name *</label><Input className="min-h-11" placeholder="Contact name" value={contact.name} onChange={(e) => updateContact(contact.id, "name", e.target.value)} /></div>
+                        <div className="space-y-1.5"><label className="text-xs font-medium">Phone *</label><Input className="min-h-11" placeholder="Phone number" value={contact.phone} onChange={(e) => updateContact(contact.id, "phone", e.target.value)} /></div>
+                        <div className="space-y-1.5"><label className="text-xs font-medium">Email</label><Input className="min-h-11" type="email" placeholder="Email (optional)" value={contact.email || ""} onChange={(e) => updateContact(contact.id, "email", e.target.value)} /></div>
+                        <div className="space-y-1.5"><label className="text-xs font-medium">Designation</label><Input className="min-h-11" placeholder="Designation (optional)" value={contact.designation || ""} onChange={(e) => updateContact(contact.id, "designation", e.target.value)} /></div>
                       </div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-destructive"
-                      onClick={() => removeMediaItem(item.id)}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {media.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground border rounded-lg">
-                <Upload className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No media files added yet.</p>
-                <p className="text-xs">Click the buttons above to choose photos, videos, or documents.</p>
-              </div>
-            )}
-          </div>
-          </section>
-
-
-        {/* Contacts */}
-          <section className="space-y-4">
-          <h3 className="text-sm font-semibold">Contacts</h3>
-          <div className="space-y-4">
-            {contacts.map((contact) => (
-              <div
-                key={contact.id}
-                className="p-4 rounded-lg border space-y-3"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">Contact</span>
-                    {contact.isPrimary && (
-                      <Badge variant="secondary" className="text-xs">Primary</Badge>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {!contact.isPrimary && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 text-xs"
-                        onClick={() => setPrimaryContact(contact.id)}
-                      >
-                        Set Primary
-                      </Button>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-destructive"
-                      onClick={() => removeContact(contact.id)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="text-xs text-muted-foreground">Type</label>
-                    <Select
-                      value={contact.contactType}
-                      onValueChange={(v) => updateContact(contact.id, "contactType", v)}
-                    >
-                      <SelectTrigger className="h-8">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CONTACT_TYPES.map((ct) => (
-                          <SelectItem key={ct.value} value={ct.value}>
-                            {ct.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs text-muted-foreground">Name *</label>
-                    <Input
-                      className="h-8"
-                      placeholder="Contact name"
-                      value={contact.name}
-                      onChange={(e) => updateContact(contact.id, "name", e.target.value)}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs text-muted-foreground">Phone *</label>
-                    <Input
-                      className="h-8"
-                      placeholder="Phone number"
-                      value={contact.phone}
-                      onChange={(e) => updateContact(contact.id, "phone", e.target.value)}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs text-muted-foreground">Email</label>
-                    <Input
-                      className="h-8"
-                      type="email"
-                      placeholder="Email (optional)"
-                      value={contact.email || ""}
-                      onChange={(e) => updateContact(contact.id, "email", e.target.value)}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs text-muted-foreground">Designation</label>
-                    <Input
-                      className="h-8"
-                      placeholder="Designation (optional)"
-                      value={contact.designation || ""}
-                      onChange={(e) => updateContact(contact.id, "designation", e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
-
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={addContact}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Contact
-            </Button>
-          </div>
-          </section>
-
-
-        {/* Location */}
-          <section className="space-y-4">
-          <h3 className="text-sm font-semibold">Location</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <ValidatedField label="Full Address" field="address" className="md:col-span-2">
-              <Textarea
-                placeholder="Enter complete address (optional for new records)"
-                value={formData.address}
-                onChange={(e) => updateField("address", e.target.value)}
-              />
-            </ValidatedField>
-
-            <ValidatedField label="State" required field="state">
-              <Select
-                value={formData.state}
-                onValueChange={(v) => {
-                  updateField("state", v);
-                  updateField("city", "");
-                  updateField("locality", "");
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue>{findById(states, formData.state)?.name || "Select state or union territory"}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {states.map((state) => (
-                    <SelectItem key={state.id} value={state.id}>
-                      {state.name}
-                    </SelectItem>
                   ))}
-                </SelectContent>
-              </Select>
-            </ValidatedField>
-
-            <ValidatedField label="City" required field="city">
-              <Input
-                placeholder="e.g. New Delhi"
-                value={formData.city}
-                onChange={(e) => updateField("city", e.target.value)}
-              />
-            </ValidatedField>
-
-            <FormField label="Locality">
-              <Input
-                placeholder="e.g. Connaught Place"
-                value={formData.locality}
-                onChange={(e) => updateField("locality", e.target.value)}
-              />
-            </FormField>
-            <FormField label="Latitude">
-              <Input
-                type="number"
-                step="any"
-                placeholder="e.g. 18.5204"
-                value={formData.latitude}
-                onChange={(e) => updateField("latitude", e.target.value)}
-              />
-            </FormField>
-
-            <FormField label="Longitude">
-              <Input
-                type="number"
-                step="any"
-                placeholder="e.g. 73.8567"
-                value={formData.longitude}
-                onChange={(e) => updateField("longitude", e.target.value)}
-              />
-            </FormField>
-
-            <div className="md:col-span-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={captureGps}
-                disabled={gpsLoading}
-              >
-                {gpsLoading ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <MapPin className="h-4 w-4 mr-2" />
-                )}
-                {gpsLoading ? "Capturing..." : "Use Current Location"}
+                </div>
+              )}
+              <Button type="button" variant="outline" className="mt-3 min-h-11 w-full border-primary/50 text-primary hover:text-primary" onClick={addContact}>
+                <Plus className="mr-2 h-4 w-4" /> Add Contact
               </Button>
-            </div>
+            </SectionCard>
 
-            <FormField label="Maps URL" className="md:col-span-2">
-              <Input
-                placeholder="https://maps.google.com/..."
-                value={formData.mapsUrl}
-                onChange={(e) => updateField("mapsUrl", e.target.value)}
-              />
-            </FormField>
-          </div>
-          </section>
-
-
-
-
-        {/* Additional Fields */}
-          <section className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="text-sm font-semibold">Additional Fields</h3>
-            <Button type="button" variant="outline" size="sm" onClick={addAdditionalField}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Field
-            </Button>
-          </div>
-          {additionalFields.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Add Instagram, Facebook, website, or any custom field when available.</p>
-          ) : (
-            <div className="space-y-3">
-              {additionalFields.map((field) => (
-                <div key={field.id} className="grid grid-cols-1 md:grid-cols-[180px_1fr_1fr_auto] gap-3 rounded-lg border p-3">
-                  <Select value={field.type} onValueChange={(value) => updateAdditionalField(field.id, "type", value || "other")}>
-                    <SelectTrigger>
-                      <SelectValue>{ADDITIONAL_FIELD_TYPES.find((type) => type.value === field.type)?.label || "Other"}</SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ADDITIONAL_FIELD_TYPES.map((type) => (
-                        <SelectItem key={type.value} value={type.value}>
-                          {type.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
+            <SectionCard
+              icon={<MapPin className="h-5 w-5" />}
+              title="Location"
+              description="Add the property’s address and location details."
+            >
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <ValidatedField label="Full Address" field="address" className="sm:col-span-2">
+                  <Textarea className="min-h-20" placeholder="Enter complete address" value={formData.address} onChange={(e) => updateField("address", e.target.value)} />
+                </ValidatedField>
+                <ValidatedField label="State" required field="state">
+                  <Select value={formData.state} onValueChange={(v) => { updateField("state", v); updateField("city", ""); updateField("locality", ""); }}>
+                    <SelectTrigger className="min-h-11"><SelectValue>{findById(states, formData.state)?.name || "Select state"}</SelectValue></SelectTrigger>
+                    <SelectContent>{states.map((state) => <SelectItem key={state.id} value={state.id}>{state.name}</SelectItem>)}</SelectContent>
                   </Select>
-                  <Input
-                    placeholder="Field label"
-                    value={field.label}
-                    onChange={(e) => updateAdditionalField(field.id, "label", e.target.value)}
-                  />
-                  <Input
-                    placeholder="Value or URL"
-                    value={field.value}
-                    onChange={(e) => updateAdditionalField(field.id, "value", e.target.value)}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="text-destructive"
-                    onClick={() => removeAdditionalField(field.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
+                </ValidatedField>
+                <ValidatedField label="City" required field="city"><Input className="min-h-11" placeholder="Enter city" value={formData.city} onChange={(e) => updateField("city", e.target.value)} /></ValidatedField>
+                <FormField label="Locality" className="sm:col-span-2"><Input className="min-h-11" placeholder="Enter locality / area" value={formData.locality} onChange={(e) => updateField("locality", e.target.value)} /></FormField>
+                <FormField label="Google Maps URL" className="sm:col-span-2">
+                  <div className="relative"><Link2 className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" /><Input className="min-h-11 pl-9" placeholder="https://maps.google.com/..." value={formData.mapsUrl} onChange={(e) => updateField("mapsUrl", e.target.value)} /></div>
+                </FormField>
+                <div className="sm:col-span-2">
+                  <Button type="button" variant="outline" className="min-h-11 w-full text-primary" onClick={captureGps} disabled={gpsLoading}>
+                    {gpsLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MapPin className="mr-2 h-4 w-4" />}
+                    {gpsLoading ? "Capturing..." : "Use current location"}
                   </Button>
                 </div>
-              ))}
-            </div>
-          )}
-          </section>
+                {(formData.latitude || formData.longitude) && (
+                  <div className="sm:col-span-2 flex flex-col gap-2 rounded-xl border border-primary/10 bg-primary/5 px-3 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+                    <span className="flex items-center gap-2"><MapPin className="h-4 w-4 text-muted-foreground" /> Lat: {formData.latitude || "—"} · Long: {formData.longitude || "—"}</span>
+                    <Badge className="w-fit bg-green-100 text-green-700 hover:bg-green-100">GPS Location Captured</Badge>
+                  </div>
+                )}
+              </div>
+            </SectionCard>
 
-        {/* Notes */}
-          <section className="space-y-4">
-          <h3 className="text-sm font-semibold">Notes</h3>
-          <FormField label="Notes">
-            <Textarea
-              placeholder="Additional notes about this property..."
-              value={formData.notes}
-              onChange={(e) => updateField("notes", e.target.value)}
-            />
-          </FormField>
-          </section>
+            <SectionCard
+              icon={<FileText className="h-5 w-5" />}
+              title="Additional Details"
+              description="Add extra fields and notes about this property."
+            >
+              <Button type="button" variant="outline" className="min-h-11 w-full justify-between" onClick={addAdditionalField}>
+                <span className="flex items-center"><Plus className="mr-2 h-4 w-4 text-primary" /> Add Field</span>
+                <span className="text-muted-foreground">›</span>
+              </Button>
+              {additionalFields.length > 0 && (
+                <div className="mt-3 space-y-3">
+                  {additionalFields.map((field) => (
+                    <div key={field.id} className="grid grid-cols-1 gap-2 rounded-xl border p-3 sm:grid-cols-[160px_1fr_1fr_auto]">
+                      <Select value={field.type} onValueChange={(value) => updateAdditionalField(field.id, "type", value || "other")}>
+                        <SelectTrigger className="min-h-11"><SelectValue>{ADDITIONAL_FIELD_TYPES.find((type) => type.value === field.type)?.label || "Other"}</SelectValue></SelectTrigger>
+                        <SelectContent>{ADDITIONAL_FIELD_TYPES.map((type) => <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>)}</SelectContent>
+                      </Select>
+                      <Input className="min-h-11" placeholder="Field label" value={field.label} onChange={(e) => updateAdditionalField(field.id, "label", e.target.value)} />
+                      <Input className="min-h-11" placeholder="Value or URL" value={field.value} onChange={(e) => updateAdditionalField(field.id, "value", e.target.value)} />
+                      <Button type="button" variant="ghost" size="icon" className="text-destructive" onClick={() => removeAdditionalField(field.id)}><Trash2 className="h-4 w-4" /></Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="mt-4 space-y-1.5">
+                <label className="text-sm font-medium">Notes</label>
+                <Textarea className="min-h-24" placeholder="Add notes about this property..." value={formData.notes} onChange={(e) => updateField("notes", e.target.value)} />
+              </div>
+            </SectionCard>
           </div>
         </StepContent>
 
-        {/* Step 2: Review */}
         <StepContent>
-          <div className="space-y-6">
-            <div className="p-4 rounded-lg bg-muted">
-              <h3 className="font-semibold mb-1">Review Your Property</h3>
-              <p className="text-sm text-muted-foreground">
-                Please review all the information before submitting.
-              </p>
+          <div className="space-y-4">
+            <div className="rounded-2xl border bg-card p-4 shadow-sm sm:p-5">
+              <h3 className="font-semibold">Review Your Property</h3>
+              <p className="mt-1 text-sm text-muted-foreground">Please review all the information before submitting.</p>
             </div>
-
-            {/* Basic Info */}
-            <div>
-              <h4 className="text-sm font-semibold mb-2">Basic Info</h4>
-              <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
-                <span className="text-muted-foreground">Address:</span>
-                <span>{formData.address || "—"}</span>
+            <div className="rounded-2xl border bg-card p-4 shadow-sm sm:p-5">
+              <h4 className="mb-3 text-sm font-semibold">Location</h4>
+              <dl className="grid grid-cols-[110px_1fr] gap-x-4 gap-y-2 text-sm">
+                <dt className="text-muted-foreground">Address</dt><dd>{formData.address || "—"}</dd>
+                <dt className="text-muted-foreground">State</dt><dd>{findById(states, formData.state)?.name || "—"}</dd>
+                <dt className="text-muted-foreground">City</dt><dd>{formData.city || "—"}</dd>
+                <dt className="text-muted-foreground">Locality</dt><dd>{formData.locality || "—"}</dd>
+                <dt className="text-muted-foreground">Coordinates</dt><dd>{formData.latitude && formData.longitude ? `${formData.latitude}, ${formData.longitude}` : "—"}</dd>
+              </dl>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="rounded-2xl border bg-card p-4 shadow-sm sm:p-5">
+                <h4 className="text-sm font-semibold">Contacts ({contacts.length})</h4>
+                {contacts.length === 0 ? <p className="mt-2 text-sm text-muted-foreground">No contacts added.</p> : <div className="mt-2 space-y-2">{contacts.map((c) => <div key={c.id} className="rounded-lg border p-2 text-sm"><span className="font-medium">{c.name || "Unnamed"}</span><span className="ml-2 text-muted-foreground">{c.phone}</span></div>)}</div>}
+              </div>
+              <div className="rounded-2xl border bg-card p-4 shadow-sm sm:p-5">
+                <h4 className="text-sm font-semibold">Media ({media.length})</h4>
+                {media.length === 0 ? <p className="mt-2 text-sm text-muted-foreground">No media files added.</p> : <div className="mt-2 flex flex-wrap gap-2">{media.map((m) => <Badge key={m.id} variant="outline">{m.file.name}</Badge>)}</div>}
               </div>
             </div>
-
-            {/* Location */}
-            <div>
-              <h4 className="text-sm font-semibold mb-2">Location</h4>
-              <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
-                <span className="text-muted-foreground">Address:</span>
-                <span>{formData.address || "—"}</span>
-                <span className="text-muted-foreground">State:</span>
-                <span>{findById(states, formData.state)?.name || "—"}</span>
-                <span className="text-muted-foreground">City:</span>
-                <span>{formData.city || "—"}</span>
-                <span className="text-muted-foreground">Locality:</span>
-                <span>{formData.locality || "—"}</span>
-                <span className="text-muted-foreground">Coordinates:</span>
-                <span>
-                  {formData.latitude && formData.longitude
-                    ? `${formData.latitude}, ${formData.longitude}`
-                    : "—"}
-                </span>
-              </div>
-            </div>
-
-
-
-            {/* Contacts */}
-            <div>
-              <h4 className="text-sm font-semibold mb-2">
-                Contacts ({contacts.length})
-              </h4>
-              {contacts.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No contacts added.</p>
-              ) : (
-                <div className="space-y-2">
-                  {contacts.map((c) => (
-                    <div key={c.id} className="flex items-center gap-3 text-sm p-2 rounded border">
-                      <Badge variant="outline" className="text-xs shrink-0">
-                        {CONTACT_TYPES.find((ct) => ct.value === c.contactType)?.label}
-                      </Badge>
-                      <span className="font-medium">{c.name || "Unnamed"}</span>
-                      <span className="text-muted-foreground">{c.phone}</span>
-                      {c.isPrimary && <Badge variant="secondary" className="text-xs">Primary</Badge>}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Media */}
-            <div>
-              <h4 className="text-sm font-semibold mb-2">
-                Media ({media.length})
-              </h4>
-              {media.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No media files added.</p>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {media.map((m) => (
-                    <Badge key={m.id} variant="outline" className="text-xs">
-                      {m.file.name}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Additional Fields */}
             {additionalFields.some((field) => field.value.trim()) && (
-              <div>
-                <h4 className="text-sm font-semibold mb-2">Additional Fields</h4>
-                <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
-                  {additionalFields
-                    .filter((field) => field.value.trim())
-                    .map((field) => (
-                      <div key={field.id} className="contents">
-                        <span className="text-muted-foreground">{field.label || "Other"}:</span>
-                        <span className="break-all">{field.value}</span>
-                      </div>
-                    ))}
-                </div>
+              <div className="rounded-2xl border bg-card p-4 shadow-sm sm:p-5">
+                <h4 className="mb-3 text-sm font-semibold">Additional Fields</h4>
+                <div className="space-y-2 text-sm">{additionalFields.filter((field) => field.value.trim()).map((field) => <div key={field.id} className="flex justify-between gap-4"><span className="text-muted-foreground">{field.label || "Other"}</span><span className="break-all text-right">{field.value}</span></div>)}</div>
               </div>
             )}
-
-            {/* Notes */}
-            {formData.notes && (
-              <div>
-                <h4 className="text-sm font-semibold mb-2">Notes</h4>
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{formData.notes}</p>
-              </div>
-            )}
-
-            <div className="p-4 rounded-lg bg-green-50 border border-green-200 dark:bg-green-900/30 dark:border-green-800">
-              <p className="text-sm text-green-800 dark:text-green-300">
-                This new property will be added to Master Data upon submission.
-              </p>
-            </div>
+            {formData.notes && <div className="rounded-2xl border bg-card p-4 shadow-sm sm:p-5"><h4 className="mb-2 text-sm font-semibold">Notes</h4><p className="whitespace-pre-wrap text-sm text-muted-foreground">{formData.notes}</p></div>}
+            <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-800 dark:border-green-800 dark:bg-green-900/30 dark:text-green-300">This new property will be added to Master Data upon submission.</div>
           </div>
         </StepContent>
       </MultiStepForm>
