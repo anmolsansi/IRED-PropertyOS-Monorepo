@@ -15,6 +15,7 @@ import {
   Receipt,
   UserCog,
   FileText,
+  PlusCircle,
   type LucideIcon,
 } from "lucide-react";
 
@@ -30,6 +31,8 @@ export interface NavItem {
 
 export const V1_NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Add Property", href: "/properties/new", icon: PlusCircle },
+  { label: "Property Intake", href: "/property-intake", icon: ClipboardList },
   { label: "Properties", href: "/properties", icon: Building2 },
   { label: "Buildings", href: "/buildings", icon: Building2 },
   { label: "Floors", href: "/floors", icon: Layers },
@@ -43,12 +46,18 @@ export const V1_NAV_ITEMS: NavItem[] = [
 ];
 
 export const RIDER_NAV_ITEMS: NavItem[] = [
-  { label: "Add Property", href: "/properties/new", icon: Building2 },
+  { label: "Add Property", href: "/properties/new", icon: PlusCircle },
   { label: "Settings", href: "/settings", icon: Settings },
 ];
 
 export const V2_NAV_ITEMS: NavItem[] = [
-  ...V1_NAV_ITEMS.slice(0, 5),
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Add Property", href: "/properties/new", icon: PlusCircle },
+  { label: "Property Intake", href: "/property-intake", icon: ClipboardList },
+  { label: "Properties", href: "/properties", icon: Building2 },
+  { label: "Buildings", href: "/buildings", icon: Building2 },
+  { label: "Floors", href: "/floors", icon: Layers },
+  { label: "Units", href: "/units", icon: Layers },
   { label: "Clients", href: "/clients", icon: Users },
   { label: "Proposals", href: "/proposals", icon: FileText },
   { label: "Approvals", href: "/approvals", icon: CheckCircle, adminOnly: true },
