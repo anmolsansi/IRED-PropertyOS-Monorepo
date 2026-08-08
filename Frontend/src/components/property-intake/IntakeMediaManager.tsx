@@ -30,6 +30,13 @@ function fileTypeFor(category: MediaDocument["category"]) {
   return "document";
 }
 
+function acceptFor(category: MediaDocument["category"]) {
+  if (category === "photo") return "image/*";
+  if (category === "video") return "video/*";
+  if (category === "floor_plan") return "image/*,.pdf";
+  return ".pdf,.doc,.docx,.xls,.xlsx,.txt,image/*";
+}
+
 export function IntakeMediaManager({
   buildingId,
   embedded = false,
@@ -45,10 +52,12 @@ export function IntakeMediaManager({
   const inputRef = useRef<HTMLInputElement>(null);
   const pendingCategory = useRef<MediaDocument["category"]>("photo");
   const [busy, setBusy] = useState(false);
+  const [accept, setAccept] = useState("image/*");
 
   function openPicker(category: MediaDocument["category"]) {
     pendingCategory.current = category;
-    inputRef.current?.click();
+    setAccept(acceptFor(category));
+    requestAnimationFrame(() => inputRef.current?.click());
   }
 
   async function handleFiles(files: FileList | null) {
@@ -136,11 +145,12 @@ export function IntakeMediaManager({
         ref={inputRef}
         type="file"
         multiple
+        accept={accept}
         className="hidden"
         onChange={(event) => handleFiles(event.target.files)}
       />
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
         {MEDIA_CATEGORIES.map((category) => {
           const Icon = category.icon;
           return (
@@ -148,44 +158,44 @@ export function IntakeMediaManager({
               key={category.value}
               type="button"
               variant="outline"
-              className="min-h-10"
+              className="h-11 min-w-0 justify-start gap-2 overflow-hidden px-3 text-xs sm:text-sm"
               onClick={() => openPicker(category.value)}
               disabled={busy}
             >
-              <Icon className="mr-2 h-4 w-4 text-primary" />
-              {category.label}
+              <Icon className="h-4 w-4 shrink-0 text-primary" />
+              <span className="truncate whitespace-nowrap">{category.label}</span>
             </Button>
           );
         })}
       </div>
 
       {isLoading ? (
-        <div className="mt-3 flex min-h-24 items-center justify-center rounded-xl border border-dashed text-sm text-muted-foreground">
+        <div className="mt-3 flex min-h-28 items-center justify-center rounded-xl border border-dashed text-sm text-muted-foreground">
           Loading rider media...
         </div>
       ) : media.length === 0 ? (
         <button
           type="button"
           onClick={() => openPicker("photo")}
-          className="mt-3 flex min-h-28 w-full flex-col items-center justify-center rounded-xl border border-dashed bg-muted/10 p-5 text-center hover:border-primary/40"
+          className="mt-3 flex min-h-32 w-full flex-col items-center justify-center rounded-xl border border-dashed bg-muted/10 p-5 text-center transition-colors hover:border-primary/40 hover:bg-muted/20"
         >
           <Upload className="mb-2 h-6 w-6 text-primary" />
           <span className="text-sm font-medium">No media uploaded yet</span>
-          <span className="mt-1 text-xs text-muted-foreground">Click to add the first photo</span>
+          <span className="mt-1 text-xs text-muted-foreground">Add photos, videos, documents, or floor plans above</span>
         </button>
       ) : (
-        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 2xl:grid-cols-4">
           {media.map((item) => (
-            <div key={item.id} className="overflow-hidden rounded-xl border bg-background">
+            <div key={item.id} className="min-w-0 overflow-hidden rounded-xl border bg-background">
               {item.category === "photo" && item.fileUrl ? (
                 <div
-                  className="h-28 bg-muted bg-cover bg-center"
+                  className="aspect-[4/3] w-full bg-muted bg-cover bg-center"
                   style={{ backgroundImage: `url(${JSON.stringify(item.fileUrl)})` }}
                   role="img"
                   aria-label={item.fileName}
                 />
               ) : (
-                <div className="flex h-28 items-center justify-center bg-muted/40">
+                <div className="flex aspect-[4/3] w-full items-center justify-center bg-muted/40">
                   {item.category === "video" ? (
                     <Film className="h-8 w-8 text-muted-foreground" />
                   ) : (
@@ -193,16 +203,16 @@ export function IntakeMediaManager({
                   )}
                 </div>
               )}
-              <div className="flex items-center justify-between gap-2 p-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{item.fileName}</p>
-                  <p className="text-xs capitalize text-muted-foreground">{item.category.replace("_", " ")}</p>
+              <div className="flex min-w-0 items-center justify-between gap-2 p-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium" title={item.fileName}>{item.fileName}</p>
+                  <p className="truncate text-xs capitalize text-muted-foreground">{item.category.replace("_", " ")}</p>
                 </div>
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="shrink-0 text-destructive"
+                  className="h-8 w-8 shrink-0 text-destructive"
                   onClick={() => removeMedia(item.id)}
                   disabled={busy}
                   aria-label={`Remove ${item.fileName}`}
@@ -217,7 +227,7 @@ export function IntakeMediaManager({
     </>
   );
 
-  if (embedded) return <div>{content}</div>;
+  if (embedded) return <div className="min-w-0">{content}</div>;
 
   return (
     <section id="media" className="scroll-mt-24 rounded-2xl border bg-card p-4 shadow-sm sm:p-5 lg:p-6">
