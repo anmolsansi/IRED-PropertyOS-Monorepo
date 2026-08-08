@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { ApiError, api, buildFilterQuery } from "@/lib/api/client";
-import type { Property, PaginatedResponse, FilterParams } from "@/types";
+import type { Contact, Property, PaginatedResponse, FilterParams } from "@/types";
 
 export type IntakeStatus = "NEW" | "IN_PROGRESS" | "FOLLOW_UP" | "COMPLETED";
 
@@ -61,20 +61,32 @@ interface BackendBuilding {
   floors?: unknown[];
   units?: unknown[];
   contacts?: BackendContact[];
+  sourceId?: string;
   source?: { id: string; name: string };
   creator?: { id: string; fullName: string };
   updater?: { id: string; fullName: string };
   _count?: { contacts?: number; media?: number };
 }
 
-export interface PropertyIntakeItem extends Property {
+export interface PropertyRecord extends Property {
+  contacts: Contact[];
+  propertyTypeId?: string;
+  stateId?: string;
+  cityId?: string;
+  localityId?: string;
+  availabilityStatusId?: string;
+  sourceId?: string;
+  furnishingStatusId?: string;
+  commercialTerms?: Record<string, unknown>;
+}
+
+export interface PropertyIntakeItem extends PropertyRecord {
   intakeStatus: IntakeStatus;
   submittedByName: string;
   submittedAt: string;
   lastUpdatedByName: string;
   contactCount: number;
   mediaCount: number;
-  contacts: import("@/types").Contact[];
 }
 
 export interface PropertyIntakeSummary {
@@ -93,22 +105,33 @@ export interface PropertyIntakeResponse {
   summary: PropertyIntakeSummary;
 }
 
-function adaptBackendContact(contact: BackendContact): import("@/types").Contact {
+function adaptBackendContact(contact: BackendContact): Contact {
   return {
     id: contact.id,
     entityId: contact.id,
     entityType: "building",
-    contactType: (contact.contactRole?.name?.toLowerCase() || "owner") as import("@/types").Contact["contactType"],
+    contactType: (contact.contactRole?.name?.toLowerCase() || "owner") as Contact["contactType"],
     name: contact.fullName,
     phone: contact.mobileNumber || "",
     email: contact.email || undefined,
     designation: contact.contactRole?.name || undefined,
-    isPrimary: false,
+    isPrimary: contact.notes?.toLowerCase().includes("primary contact") || false,
     createdAt: contact.createdAt,
   };
 }
 
-function adaptBuildingToProperty(building: BackendBuilding): Property & { contacts: import("@/types").Contact[] } {
+function normalizeEnumValue(value: unknown, fallback: string) {
+  if (typeof value !== "string" || !value.trim()) return fallback;
+  return value.trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
+function adaptBuildingToProperty(building: BackendBuilding): PropertyRecord {
+  const commercialTerms = building.commercialTerms || {};
+  const furnishingName =
+    commercialTerms.furnishingStatusName ||
+    commercialTerms.furnishingStatus ||
+    commercialTerms.furnishingStatusId;
+
   return {
     id: building.id,
     propertyId: building.buildingCode || building.id,
@@ -122,21 +145,30 @@ function adaptBuildingToProperty(building: BackendBuilding): Property & { contac
     latitude: building.latitude,
     longitude: building.longitude,
     mapsUrl: building.googleMapsUrl,
-    propertyType: (building.propertyType?.code || building.propertyType?.name?.toLowerCase().replace(/\s+/g, "_") || "mixed_use") as Property["propertyType"],
-    furnishingStatus: ((building.commercialTerms?.furnishingStatusId as string)?.toLowerCase().replace(/\s+/g, "_") || "unfurnished") as Property["furnishingStatus"],
-    availabilityStatus: (building.availabilityStatus?.name?.toLowerCase().replace(/\s+/g, "_") as Property["availabilityStatus"]) || "available",
-    verificationStatus: (building.verificationStatus?.name?.toLowerCase().replace(/\s+/g, "_") as Property["verificationStatus"]) || "pending_verification",
-    availableArea: (building.commercialTerms?.availableArea as number) || 0,
+    propertyType: normalizeEnumValue(
+      building.propertyType?.code || building.propertyType?.name,
+      "mixed_use",
+    ) as Property["propertyType"],
+    furnishingStatus: normalizeEnumValue(furnishingName, "unfurnished") as Property["furnishingStatus"],
+    availabilityStatus: normalizeEnumValue(
+      building.availabilityStatus?.name,
+      "available",
+    ) as Property["availabilityStatus"],
+    verificationStatus: normalizeEnumValue(
+      building.verificationStatus?.name,
+      "pending_verification",
+    ) as Property["verificationStatus"],
+    availableArea: Number(commercialTerms.availableArea) || 0,
     totalArea: building.totalBuildingArea || 0,
-    rentPerSqFt: (building.commercialTerms?.rentPerSqFt as number) || 0,
-    camCharges: (building.commercialTerms?.camCharges as number) || 0,
-    maintenanceCharges: (building.commercialTerms?.maintenanceCharges as number) || 0,
-    securityDeposit: (building.commercialTerms?.securityDeposit as number) || 0,
-    leaseTerms: (building.commercialTerms?.leaseTerms as string) || "",
-    escalationDetails: (building.commercialTerms?.escalationDetails as string) || "",
-    brokerage: (building.commercialTerms?.brokerage as string) || "",
-    availabilityDate: (building.commercialTerms?.availabilityDate as string) || "",
-    possessionDate: (building.commercialTerms?.possessionDate as string) || "",
+    rentPerSqFt: Number(commercialTerms.rentPerSqFt) || 0,
+    camCharges: Number(commercialTerms.camCharges) || 0,
+    maintenanceCharges: Number(commercialTerms.maintenanceCharges) || 0,
+    securityDeposit: Number(commercialTerms.securityDeposit) || 0,
+    leaseTerms: (commercialTerms.leaseTerms as string) || "",
+    escalationDetails: (commercialTerms.escalationDetails as string) || "",
+    brokerage: (commercialTerms.brokerage as string) || "",
+    availabilityDate: (commercialTerms.availabilityDate as string) || "",
+    possessionDate: (commercialTerms.possessionDate as string) || "",
     landlordName: building.landlordName || "",
     telecallerStatus: building.telecallerStatus || "",
     starRating: building.starRating || 0,
@@ -147,12 +179,23 @@ function adaptBuildingToProperty(building: BackendBuilding): Property & { contac
     assignedWorkerName: building.creator?.fullName || "",
     lastAssignedWorkerName: building.updater?.fullName || "",
     createdByName: building.creator?.fullName || "",
-    source: (building.source?.name?.toLowerCase().replace(/\s+/g, "_") as Property["source"]) || "field",
+    source: normalizeEnumValue(building.source?.name, "field"),
     notes: building.notes,
     createdAt: building.createdAt,
     updatedAt: building.updatedAt,
     createdBy: building.createdBy || "",
     contacts: (building.contacts || []).map(adaptBackendContact),
+    propertyTypeId: building.propertyTypeId || building.propertyType?.id,
+    stateId: building.stateId || building.state?.id,
+    cityId: building.cityId || building.city?.id,
+    localityId: building.localityId || building.locality?.id,
+    availabilityStatusId: building.availabilityStatusId || building.availabilityStatus?.id,
+    sourceId: building.sourceId || building.source?.id,
+    furnishingStatusId:
+      typeof commercialTerms.furnishingStatusId === "string"
+        ? commercialTerms.furnishingStatusId
+        : undefined,
+    commercialTerms,
   };
 }
 
@@ -178,7 +221,6 @@ function adaptBuildingToIntake(building: BackendBuilding): PropertyIntakeItem {
     lastUpdatedByName: building.updater?.fullName || building.creator?.fullName || "—",
     contactCount: building._count?.contacts ?? building.contacts?.length ?? 0,
     mediaCount: building._count?.media ?? 0,
-    contacts: property.contacts,
   };
 }
 
@@ -253,7 +295,7 @@ export function usePropertyIntake(filters: {
 export function useProperty(id: string) {
   return useQuery({
     queryKey: ["properties", id],
-    queryFn: async () => {
+    queryFn: async (): Promise<PropertyRecord> => {
       const response = await api.get<{ data: BackendBuilding }>(`/buildings/${id}`);
       const building = (response.data ?? response) as unknown as BackendBuilding;
       return adaptBuildingToProperty(building);
