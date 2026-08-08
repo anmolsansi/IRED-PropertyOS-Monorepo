@@ -24,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { IntakeMediaManager } from "@/components/property-intake/IntakeMediaManager";
 import {
   Select,
   SelectContent,
@@ -726,6 +727,8 @@ export default function PropertyIntakeDetailPage({ params }: { params: Promise<{
               </Button>
             </div>
           </Section>
+
+          <IntakeMediaManager buildingId={id} />
 
           <Section
             id="notes"
