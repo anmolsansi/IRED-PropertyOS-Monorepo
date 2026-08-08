@@ -28,7 +28,6 @@ export function SidebarContent({
   mode,
   isMaster,
   toggleMode,
-  setCollapsed,
 }: {
   collapsed: boolean;
   navItems: NavItem[];
@@ -36,7 +35,6 @@ export function SidebarContent({
   mode: string;
   isMaster: boolean;
   toggleMode: () => void;
-  setCollapsed?: (val: boolean) => void;
 }) {
   return (
     <>
@@ -117,8 +115,8 @@ export function SidebarContent({
         </div>
       </div>
 
-      <div className="border-t border-sidebar-border p-3 space-y-2">
-        {!collapsed && (
+      <div className="border-t border-sidebar-border p-3">
+        {!collapsed ? (
           <div className="rounded-lg bg-sidebar-accent p-3">
             <div className="flex items-center gap-2 mb-1">
               <Headphones className="h-4 w-4" />
@@ -134,20 +132,10 @@ export function SidebarContent({
               support@ired.co.in
             </a>
           </div>
-        )}
-        {setCollapsed && (
-          <button
-            onClick={() => setCollapsed(!collapsed)}
-            className="w-full flex items-center justify-center h-8 rounded-md hover:bg-sidebar-accent transition-colors hidden md:flex"
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            {collapsed ? (
-              <ChevronRight className="h-4 w-4" />
-            ) : (
-              <ChevronLeft className="h-4 w-4" />
-            )}
-          </button>
+        ) : (
+          <div className="flex justify-center py-2" title="Need help?">
+            <Headphones className="h-4 w-4 text-sidebar-foreground/70" />
+          </div>
         )}
       </div>
     </>
@@ -175,6 +163,16 @@ export function Sidebar({
         collapsed ? "w-[68px]" : "w-64"
       )}
     >
+      <button
+        type="button"
+        onClick={() => setCollapsed(!collapsed)}
+        className="absolute -right-3 top-5 z-50 flex h-7 w-7 items-center justify-center rounded-full border border-sidebar-border bg-sidebar text-sidebar-foreground shadow-md transition-colors hover:bg-sidebar-accent"
+        aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+      >
+        {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+      </button>
+
       <SidebarContent
         collapsed={collapsed}
         navItems={navItems}
@@ -182,7 +180,6 @@ export function Sidebar({
         mode={mode}
         isMaster={isMaster}
         toggleMode={toggleMode}
-        setCollapsed={setCollapsed}
       />
     </aside>
   );
