@@ -1,27 +1,24 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useMemo, type ReactNode } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { PageHeader } from "@/components/shared/PageHeader";
-import { StatusBadge } from "@/components/shared/StatusBadge";
-import { LoadingSkeleton } from "@/components/shared/LoadingSkeleton";
-import { EmptyState } from "@/components/shared/EmptyState";
-import { InfoSection } from "@/components/properties/InfoSection";
-import { ContactCard } from "@/components/properties/ContactCard";
-import { MediaGallery } from "@/components/properties/MediaGallery";
-import { AddToProposalDialog } from "@/components/proposals/AddToProposalDialog";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { useQueryClient } from "@tanstack/react-query";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  ArrowLeft,
+  Building2,
+  CalendarDays,
+  CheckCircle2,
+  ImageIcon,
+  Mail,
+  MapPin,
+  Pencil,
+  Phone,
+  Trash2,
+  UserRound,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,57 +30,103 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { useProperty, useBuildingFloors, useCreateFloor, useCreateUnit, useDeleteFloor, useDeleteUnit, useDeleteProperty } from "@/hooks/use-properties";
+import { LoadingSkeleton } from "@/components/shared/LoadingSkeleton";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { useProperty, useDeleteProperty } from "@/hooks/use-properties";
 import { useMediaByBuilding } from "@/hooks/use-media";
 import {
-  PROPERTY_TYPE_LABELS,
-  FURNISHING_LABELS,
-  AVAILABILITY_LABELS,
-} from "@/lib/constants";
-import {
-  Pencil,
-  Trash2,
-  ArrowLeft,
-  MapPin,
-  Building2,
-  AlertTriangle,
-  Plus,
-  Layers,
-  DoorOpen,
-} from "lucide-react";
-import Link from "next/link";
+  getPropertyProfile,
+  PROPERTY_PROFILE_SECTIONS,
+  type PropertyProfileFields,
+  type PropertyProfileKey,
+} from "@/lib/property-profile";
 import { toast } from "sonner";
-import { useQueryClient } from "@tanstack/react-query";
 
-export default function PropertyDetailPage({
-  params,
+function DetailCard({ title, children, className = "" }: { title: string; children: ReactNode; className?: string }) {
+  return (
+    <section className={`rounded-2xl border bg-card p-4 shadow-sm sm:p-5 ${className}`}>
+      <h2 className="mb-3 text-sm font-semibold sm:text-base">{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+function DetailRows({
+  fields,
+  profile,
 }: {
-  params: Promise<{ id: string }>;
+  fields: ReadonlyArray<readonly [PropertyProfileKey, string]>;
+  profile: PropertyProfileFields;
 }) {
+  return (
+    <dl className="divide-y divide-border/70">
+      {fields.map(([key, label]) => (
+        <div key={key} className="grid grid-cols-[minmax(120px,0.9fr)_minmax(0,1.1fr)] gap-4 py-2.5 text-sm">
+          <dt className="text-muted-foreground">{label}</dt>
+          <dd className="min-w-0 break-words font-medium">{profile[key] || "—"}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function MediaPanel({ media }: { media: Array<{ id: string; fileUrl?: string; fileName: string; category: string }> }) {
+  const photos = media.filter((item) => item.category === "photo" && item.fileUrl);
+  const hero = photos[0];
+  const thumbnails = photos.slice(1, 4);
+
+  return (
+    <div className="grid min-h-[320px] gap-2 overflow-hidden rounded-2xl border bg-muted/20 shadow-sm sm:grid-cols-[minmax(0,1fr)_150px] lg:min-h-[390px]">
+      <div
+        className="relative min-h-[280px] bg-muted bg-cover bg-center sm:min-h-full"
+        style={hero?.fileUrl ? { backgroundImage: `url(${JSON.stringify(hero.fileUrl)})` } : undefined}
+      >
+        {!hero && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground">
+            <ImageIcon className="h-10 w-10" />
+            <span className="text-sm">No property photos</span>
+          </div>
+        )}
+        {photos.length > 0 && (
+          <Badge className="absolute left-3 top-3 bg-black/70 text-white hover:bg-black/70">
+            1 / {photos.length}
+          </Badge>
+        )}
+      </div>
+
+      <div className="hidden gap-2 sm:grid sm:grid-rows-3">
+        {Array.from({ length: 3 }).map((_, index) => {
+          const item = thumbnails[index];
+          return (
+            <div
+              key={item?.id || index}
+              className="relative min-h-0 bg-muted bg-cover bg-center"
+              style={item?.fileUrl ? { backgroundImage: `url(${JSON.stringify(item.fileUrl)})` } : undefined}
+            >
+              {!item && <div className="absolute inset-0 bg-muted/60" />}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export default function PropertyDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
   const queryClient = useQueryClient();
   const { data: property, isLoading, error } = useProperty(id);
-  const { data: floors = [] } = useBuildingFloors(id);
   const { data: media = [] } = useMediaByBuilding(id);
-  const createFloor = useCreateFloor();
-  const createUnit = useCreateUnit();
-  const deleteFloor = useDeleteFloor();
-  const deleteUnit = useDeleteUnit();
   const deleteProperty = useDeleteProperty();
 
-  const [addFloorOpen, setAddFloorOpen] = useState(false);
-  const [addUnitOpen, setAddUnitOpen] = useState(false);
-  const [selectedFloorId, setSelectedFloorId] = useState<string | null>(null);
-  const [floorForm, setFloorForm] = useState({ floorName: "", floorNumber: "" });
-  const [unitForm, setUnitForm] = useState({ unitNumber: "", carpetArea: "", builtUpArea: "", monthlyRent: "" });
+  const profile = useMemo(
+    () => getPropertyProfile(property?.additionalFields, property?.commercialTerms),
+    [property?.additionalFields, property?.commercialTerms],
+  );
 
   if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <LoadingSkeleton type="table" />
-      </div>
-    );
+    return <LoadingSkeleton type="table" />;
   }
 
   if (error || !property) {
@@ -94,8 +137,7 @@ export default function PropertyDetailPage({
         action={
           <Link href="/properties">
             <Button variant="outline">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Properties
+              <ArrowLeft className="mr-2 h-4 w-4" /> Back to Properties
             </Button>
           </Link>
         }
@@ -103,557 +145,152 @@ export default function PropertyDetailPage({
     );
   }
 
+  const primaryContact = property.contacts.find((contact) => contact.isPrimary) || property.contacts[0];
+  const postedOn = profile.postedOn || new Date(property.createdAt).toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+  const buildingType = profile.buildingType || property.propertyType.replaceAll("_", " ");
+  const headerLocation = [property.locality, property.city, property.state].filter(Boolean).join(", ");
+
   async function handleDelete() {
     try {
       await deleteProperty.mutateAsync(id);
+      await queryClient.invalidateQueries({ queryKey: ["properties"] });
       toast.success("Property deleted successfully");
-      queryClient.invalidateQueries({ queryKey: ["properties"] });
       router.push("/properties");
-    } catch {
-      toast.error("Failed to delete property");
+    } catch (deleteError) {
+      toast.error(deleteError instanceof Error ? deleteError.message : "Failed to delete property");
     }
   }
-
-  async function handleCreateFloor() {
-    if (!floorForm.floorName || !floorForm.floorNumber) {
-      toast.error("Floor name and number are required");
-      return;
-    }
-    try {
-      await createFloor.mutateAsync({
-        buildingId: id,
-        data: { floorName: floorForm.floorName, floorNumber: parseInt(floorForm.floorNumber) },
-      });
-      toast.success("Floor added successfully");
-      queryClient.invalidateQueries({ queryKey: ["buildingFloors", id] });
-      setAddFloorOpen(false);
-      setFloorForm({ floorName: "", floorNumber: "" });
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to add floor");
-    }
-  }
-
-  async function handleCreateUnit(floorId: string) {
-    if (!unitForm.unitNumber) {
-      toast.error("Unit number is required");
-      return;
-    }
-    try {
-      await createUnit.mutateAsync({
-        unitNumber: unitForm.unitNumber,
-        buildingId: id,
-        floorId,
-        carpetArea: unitForm.carpetArea ? parseFloat(unitForm.carpetArea) : undefined,
-        builtUpArea: unitForm.builtUpArea ? parseFloat(unitForm.builtUpArea) : undefined,
-        monthlyRent: unitForm.monthlyRent ? parseFloat(unitForm.monthlyRent) : undefined,
-      });
-      toast.success("Unit added successfully");
-      queryClient.invalidateQueries({ queryKey: ["buildingFloors", id] });
-      setAddUnitOpen(false);
-      setSelectedFloorId(null);
-      setUnitForm({ unitNumber: "", carpetArea: "", builtUpArea: "", monthlyRent: "" });
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to add unit");
-    }
-  }
-
-  async function handleDeleteFloor(floorId: string) {
-    try {
-      await deleteFloor.mutateAsync({ buildingId: id, floorId });
-      toast.success("Floor deleted");
-      queryClient.invalidateQueries({ queryKey: ["buildingFloors", id] });
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete floor");
-    }
-  }
-
-  async function handleDeleteUnit(unitId: string) {
-    try {
-      await deleteUnit.mutateAsync(unitId);
-      toast.success("Unit deleted");
-      queryClient.invalidateQueries({ queryKey: ["buildingFloors", id] });
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete unit");
-    }
-  }
-
-  const monthlyRent = property.availableArea * property.rentPerSqFt;
-  const totalMonthlyCharges =
-    monthlyRent +
-    property.availableArea * property.camCharges +
-    property.availableArea * property.maintenanceCharges;
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title={property.buildingName}
-        description={`${property.propertyId} · ${property.address}`}
-      >
-        <Link href="/properties">
-          <Button variant="outline" size="sm">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
-          </Button>
-        </Link>
-        <AddToProposalDialog buildingId={id} />
-        <Link href={`/properties/${property.id}/edit`}>
-          <Button variant="outline" size="sm">
-            <Pencil className="h-4 w-4 mr-2" />
-            Edit
-          </Button>
-        </Link>
-        <AlertDialog>
-          <AlertDialogTrigger
-            render={
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-destructive hover:text-destructive"
-              />
-            }
-          >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete Property</AlertDialogTitle>
-              <AlertDialogDescription>
-                Are you sure you want to delete {property.buildingName}? This action cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleDelete}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
-                Delete
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </PageHeader>
+    <div className="mx-auto w-full max-w-[1480px] space-y-5 pb-8">
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground sm:text-sm">
+        <Link href="/dashboard" className="hover:text-foreground">Dashboard</Link>
+        <span>›</span>
+        <Link href="/properties" className="hover:text-foreground">Properties</Link>
+        <span>›</span>
+        <span className="truncate">{property.buildingName}</span>
+      </div>
 
-      {/* Status Badges */}
-      <div className="flex flex-wrap items-center gap-2">
-        <StatusBadge type="availability" value={property.availabilityStatus} />
-        <StatusBadge type="verification" value={property.verificationStatus} />
-        {property.duplicateWarning && (
-          <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-2 py-1 rounded-md">
-            <AlertTriangle className="h-4 w-4" />
-            <span className="text-sm font-medium">Duplicate of {property.duplicateOfId}</span>
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{property.buildingName}</h1>
+            <Badge variant="secondary" className="bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+              {property.propertyId}
+            </Badge>
+            <Badge variant="secondary" className="bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-300">
+              {property.availabilityStatus.replaceAll("_", " ")}
+            </Badge>
           </div>
-        )}
-      </div>
+          <p className="mt-2 flex items-start gap-2 text-sm text-muted-foreground">
+            <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{property.address || headerLocation || "Location not added"}</span>
+          </p>
+        </div>
 
-      {/* Media */}
-      <MediaGallery
-        media={media}
-        canDelete={true}
-        onDeleteComplete={() => {
-          queryClient.invalidateQueries({ queryKey: ["media", { buildingId: id }] });
-        }}
-      />
-
-      {/* Key Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-muted-foreground mb-1">
-              <Building2 className="h-4 w-4" />
-              <span className="text-xs">Type</span>
-            </div>
-            <p className="text-sm font-semibold">
-              {PROPERTY_TYPE_LABELS[property.propertyType]}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-muted-foreground mb-1">
-              <MapPin className="h-4 w-4" />
-              <span className="text-xs">Location</span>
-            </div>
-            <p className="text-sm font-semibold">
-              {property.city}, {property.state}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-muted-foreground mb-1">
-              <span className="text-xs">Area</span>
-            </div>
-            <p className="text-sm font-semibold">
-              {property.availableArea.toLocaleString()} / {property.totalArea.toLocaleString()} sqft
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-muted-foreground mb-1">
-              <span className="text-xs">Rent</span>
-            </div>
-            <p className="text-sm font-semibold">
-              ₹{property.rentPerSqFt}/sqft
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Detail Sections */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <InfoSection
-          title="Location Details"
-          fields={[
-            { label: "Full Address", value: property.address, className: "sm:col-span-2" },
-            { label: "State", value: property.state },
-            { label: "City", value: property.city },
-            { label: "Locality", value: property.locality },
-            { label: "Pincode", value: property.pincode },
-            {
-              label: "GPS Coordinates",
-              value:
-                property.latitude && property.longitude
-                  ? `${property.latitude}, ${property.longitude}`
-                  : null,
-            },
-            {
-              label: "Maps URL",
-              value: property.mapsUrl ? (
-                <a
-                  href={property.mapsUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline"
-                >
-                  Open in Google Maps
-                </a>
-              ) : null,
-            },
-          ]}
-        />
-
-        <InfoSection
-          title="Commercial Terms"
-          fields={[
-            { label: "Total Area", value: `${property.totalArea.toLocaleString()} sqft` },
-            { label: "Available Area", value: `${property.availableArea.toLocaleString()} sqft` },
-            { label: "Rent per sqft", value: `₹${property.rentPerSqFt}` },
-            { label: "CAM Charges", value: `₹${property.camCharges}/sqft` },
-            { label: "Maintenance Charges", value: `₹${property.maintenanceCharges}/sqft` },
-            { label: "Security Deposit", value: `₹${property.securityDeposit.toLocaleString()}` },
-            { label: "Lease Terms", value: property.leaseTerms },
-            { label: "Escalation", value: property.escalationDetails },
-            { label: "Brokerage", value: property.brokerage },
-            {
-              label: "Est. Monthly Rent",
-              value: `₹${monthlyRent.toLocaleString()}`,
-              className: "sm:col-span-2",
-            },
-            {
-              label: "Est. Total Monthly Cost",
-              value: `₹${totalMonthlyCharges.toLocaleString()}`,
-              className: "sm:col-span-2",
-            },
-          ]}
-        />
-
-        <InfoSection
-          title="Availability & Status"
-          fields={[
-            {
-              label: "Availability Status",
-              value: AVAILABILITY_LABELS[property.availabilityStatus],
-            },
-            {
-              label: "Furnishing Status",
-              value: FURNISHING_LABELS[property.furnishingStatus],
-            },
-            { label: "Entry Type", value: property.entryType.charAt(0).toUpperCase() + property.entryType.slice(1) },
-            { label: "Source", value: property.source ? property.source.charAt(0).toUpperCase() + property.source.slice(1) : null },
-            {
-              label: "Availability Date",
-              value: property.availabilityDate
-                ? new Date(property.availabilityDate).toLocaleDateString("en-IN", {
-                    day: "numeric",
-                    month: "long",
-                    year: "numeric",
-                  })
-                : null,
-            },
-            {
-              label: "Possession Date",
-              value: property.possessionDate
-                ? new Date(property.possessionDate).toLocaleDateString("en-IN", {
-                    day: "numeric",
-                    month: "long",
-                    year: "numeric",
-                  })
-                : null,
-            },
-          ]}
-        />
-
-        <InfoSection
-          title="Record Info"
-          fields={[
-            { label: "Property ID", value: property.propertyId },
-            {
-              label: "Created At",
-              value: new Date(property.createdAt).toLocaleDateString("en-IN", {
-                day: "numeric",
-                month: "long",
-                year: "numeric",
-              }),
-            },
-            {
-              label: "Last Updated",
-              value: new Date(property.updatedAt).toLocaleDateString("en-IN", {
-                day: "numeric",
-                month: "long",
-                year: "numeric",
-              }),
-            },
-            { label: "Created By", value: property.createdByName || property.createdBy },
-            { label: "Assigned Worker", value: property.assignedWorkerName || property.assignedWorkerId },
-            { label: "Last Assigned Worker", value: property.lastAssignedWorkerName || "N/A" },
-          ]}
-        />
-      </div>
-
-      {/* Floors & Units */}
-      {property.entryType === "building" && (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Layers className="h-4 w-4" />
-              Floors & Units
-            </CardTitle>
-            <Button size="sm" variant="outline" onClick={() => setAddFloorOpen(true)}>
-              <Plus className="h-4 w-4 mr-1" />
-              Add Floor
+        <div className="flex shrink-0 items-center gap-2">
+          <Link href={`/properties/${property.id}/edit`}>
+            <Button variant="outline">
+              <Pencil className="mr-2 h-4 w-4" /> Edit
             </Button>
-          </CardHeader>
-          <CardContent>
-            {floors.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">
-                No floors added yet. Add floors to organize units within this building.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {floors
-                  .sort((a, b) => a.floorNumber - b.floorNumber)
-                  .map((floor) => (
-                    <div key={floor.id} className="border rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-3">
-                          <div className="h-8 w-8 rounded bg-muted flex items-center justify-center text-sm font-medium">
-                            {floor.floorNumber}
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium">{floor.floorName}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {floor.units?.length || 0} units
-                              {floor.totalArea ? ` · ${floor.totalArea.toLocaleString()} sqft` : ""}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => {
-                              setSelectedFloorId(floor.id);
-                              setAddUnitOpen(true);
-                            }}
-                          >
-                            <Plus className="h-3 w-3" />
-                          </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger
-                              render={
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="text-destructive hover:text-destructive"
-                                />
-                              }
-                            >
-                                <Trash2 className="h-3 w-3" />
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Delete Floor</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Delete &quot;{floor.floorName}&quot;? All units on this floor will also be removed.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleDeleteFloor(floor.id)}
-                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                >
-                                  Delete
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-                      </div>
-                      {floor.units && floor.units.length > 0 && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 mt-3">
-                          {floor.units?.map((unit) => (
-                            <div
-                              key={unit.id}
-                              className="flex items-center justify-between p-2 rounded bg-muted/50 text-sm"
-                            >
-                              <div className="flex items-center gap-2">
-                                <DoorOpen className="h-3 w-3 text-muted-foreground" />
-                                <span className="font-medium">{unit.unitNumber}</span>
-                                {unit.carpetArea && (
-                                  <span className="text-xs text-muted-foreground">
-                                    {unit.carpetArea} sqft
-                                  </span>
-                                )}
-                                {unit.monthlyRent && (
-                                  <span className="text-xs text-muted-foreground">
-                                    ₹{unit.monthlyRent.toLocaleString()}/mo
-                                  </span>
-                                )}
-                              </div>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-6 w-6 p-0 text-destructive hover:text-destructive"
-                                onClick={() => handleDeleteUnit(unit.id)}
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+          </Link>
+          <AlertDialog>
+            <AlertDialogTrigger
+              render={<Button variant="outline" className="text-destructive hover:text-destructive" />}
+            >
+              <Trash2 className="mr-2 h-4 w-4" /> Delete
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete Property</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Delete {property.buildingName}? This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      </header>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.16fr)_minmax(0,0.9fr)_minmax(0,0.9fr)]">
+        <div className="space-y-4">
+          <MediaPanel media={media} />
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <DetailCard title="Property Overview">
+              <dl className="divide-y divide-border/70 text-sm">
+                <div className="flex items-center justify-between gap-4 py-2.5">
+                  <dt className="flex items-center gap-2 text-muted-foreground"><CalendarDays className="h-4 w-4" /> Posted On</dt>
+                  <dd className="font-medium">{postedOn}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-4 py-2.5">
+                  <dt className="flex items-center gap-2 text-muted-foreground"><Building2 className="h-4 w-4" /> Building Type</dt>
+                  <dd className="text-right font-medium capitalize">{buildingType || "—"}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-4 py-2.5">
+                  <dt className="text-muted-foreground">Building Name</dt>
+                  <dd className="text-right font-medium">{property.buildingName}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-4 py-2.5">
+                  <dt className="flex items-center gap-2 text-muted-foreground"><CheckCircle2 className="h-4 w-4" /> Verified No.</dt>
+                  <dd className="font-medium text-green-700 dark:text-green-400">{profile.verifiedNo || "—"}</dd>
+                </div>
+              </dl>
+            </DetailCard>
+
+            <DetailCard title="Property Address">
+              <p className="min-h-12 text-sm leading-6">{property.address || "—"}</p>
+              <div className="mt-3 flex min-h-28 flex-col items-center justify-center rounded-xl border bg-muted/30 px-4 text-center">
+                <MapPin className="mb-2 h-6 w-6 text-primary" />
+                <span className="text-xs text-muted-foreground">{headerLocation || "Map location"}</span>
               </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+              {property.mapsUrl && (
+                <a href={property.mapsUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex text-sm font-medium text-primary hover:underline">
+                  Open in Google Maps ↗
+                </a>
+              )}
+            </DetailCard>
 
-      {/* Notes */}
-      {property.notes && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Notes</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-              {property.notes}
-            </p>
-          </CardContent>
-        </Card>
-      )}
+            <DetailCard title="Owner Contact Details">
+              <div className="space-y-3 text-sm">
+                <div className="flex gap-3"><UserRound className="mt-0.5 h-4 w-4 text-muted-foreground" /><div><p className="text-xs text-muted-foreground">Contact Person</p><p className="font-medium">{primaryContact?.name || "—"}</p></div></div>
+                <div className="flex gap-3"><Phone className="mt-0.5 h-4 w-4 text-muted-foreground" /><div><p className="text-xs text-muted-foreground">Mobile</p><p className="font-medium">{primaryContact?.phone || "—"}</p></div></div>
+                <div className="flex gap-3"><Mail className="mt-0.5 h-4 w-4 text-muted-foreground" /><div className="min-w-0"><p className="text-xs text-muted-foreground">Email</p><p className="break-all font-medium">{primaryContact?.email || "—"}</p></div></div>
+              </div>
+            </DetailCard>
 
-      {/* Contacts */}
-      <ContactCard contacts={property.contacts || []} />
-
-
-
-      {/* Add Floor Dialog */}
-      <Dialog open={addFloorOpen} onOpenChange={setAddFloorOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Add Floor</DialogTitle>
-            <DialogDescription>Add a new floor to {property.buildingName}</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="floor-name">Floor Name *</Label>
-              <Input
-                id="floor-name"
-                placeholder="e.g. Ground Floor, First Floor"
-                value={floorForm.floorName}
-                onChange={(e) => setFloorForm((p) => ({ ...p, floorName: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="floor-number">Floor Number *</Label>
-              <Input
-                id="floor-number"
-                type="number"
-                placeholder="e.g. 0, 1, 2"
-                value={floorForm.floorNumber}
-                onChange={(e) => setFloorForm((p) => ({ ...p, floorNumber: e.target.value }))}
-              />
-            </div>
+            <DetailCard title="Notes">
+              <p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{property.notes || "No notes added."}</p>
+            </DetailCard>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAddFloorOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreateFloor}>Add Floor</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </div>
 
-      {/* Add Unit Dialog */}
-      <Dialog open={addUnitOpen} onOpenChange={setAddUnitOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Add Unit</DialogTitle>
-            <DialogDescription>Add a new unit to this floor</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="unit-number">Unit Number *</Label>
-              <Input
-                id="unit-number"
-                placeholder="e.g. 101, A, B"
-                value={unitForm.unitNumber}
-                onChange={(e) => setUnitForm((p) => ({ ...p, unitNumber: e.target.value }))}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="carpet-area">Carpet Area (sqft)</Label>
-                <Input
-                  id="carpet-area"
-                  type="number"
-                  placeholder="0"
-                  value={unitForm.carpetArea}
-                  onChange={(e) => setUnitForm((p) => ({ ...p, carpetArea: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="built-up-area">Built-up Area (sqft)</Label>
-                <Input
-                  id="built-up-area"
-                  type="number"
-                  placeholder="0"
-                  value={unitForm.builtUpArea}
-                  onChange={(e) => setUnitForm((p) => ({ ...p, builtUpArea: e.target.value }))}
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="monthly-rent">Monthly Rent (₹)</Label>
-              <Input
-                id="monthly-rent"
-                type="number"
-                placeholder="0"
-                value={unitForm.monthlyRent}
-                onChange={(e) => setUnitForm((p) => ({ ...p, monthlyRent: e.target.value }))}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setAddUnitOpen(false); setSelectedFloorId(null); }}>Cancel</Button>
-            <Button onClick={() => selectedFloorId && handleCreateUnit(selectedFloorId)}>Add Unit</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        <div className="space-y-4">
+          <DetailCard title="Building Compliance / Technical Details">
+            <DetailRows fields={PROPERTY_PROFILE_SECTIONS.compliance} profile={profile} />
+          </DetailCard>
+          <DetailCard title="Area Details">
+            <DetailRows fields={PROPERTY_PROFILE_SECTIONS.area} profile={profile} />
+          </DetailCard>
+          <DetailCard title="Financials">
+            <DetailRows fields={PROPERTY_PROFILE_SECTIONS.financials} profile={profile} />
+          </DetailCard>
+        </div>
+
+        <DetailCard title="Amenities & Infrastructure" className="h-fit xl:min-h-[740px]">
+          <DetailRows fields={PROPERTY_PROFILE_SECTIONS.amenities} profile={profile} />
+        </DetailCard>
+      </div>
     </div>
   );
 }
