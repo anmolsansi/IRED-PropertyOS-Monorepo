@@ -32,11 +32,11 @@ export default function V2Layout({
         <div
           className={cn(
             "transition-[padding] duration-300",
-            sidebarCollapsed ? "pl-[68px]" : "pl-64",
+            sidebarCollapsed ? "md:pl-[68px]" : "md:pl-64",
           )}
         >
           <TopBar />
-          <main id="main-content" tabIndex={-1} className="p-6 animate-fade-in outline-none">
+          <main id="main-content" tabIndex={-1} className="p-4 sm:p-6 animate-fade-in outline-none">
             {children}
           </main>
         </div>
