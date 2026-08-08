@@ -79,14 +79,19 @@ function EditorCard({
   title,
   children,
   className = "",
+  description,
 }: {
   title: string;
   children: ReactNode;
   className?: string;
+  description?: string;
 }) {
   return (
     <section className={`rounded-2xl border bg-card p-4 shadow-sm sm:p-5 ${className}`}>
-      <h2 className="mb-4 text-sm font-semibold sm:text-base">{title}</h2>
+      <div className="mb-4">
+        <h2 className="text-sm font-semibold sm:text-base">{title}</h2>
+        {description && <p className="mt-1 text-xs leading-5 text-muted-foreground sm:text-sm">{description}</p>}
+      </div>
       {children}
     </section>
   );
@@ -383,9 +388,17 @@ export default function PropertyIntakeDetailPage({ params }: { params: Promise<{
       </header>
 
       <main className="space-y-5">
+        <EditorCard
+          title="Property Media"
+          description="All rider and telecaller media is kept in one place. Select any item below to inspect it at full size."
+          className="overflow-hidden"
+        >
+          <IntakeMediaManager buildingId={id} embedded />
+        </EditorCard>
+
         <div className="grid gap-5 lg:grid-cols-[1.08fr_0.92fr]">
           <EditorCard title="1. Property Overview">
-            <div className="grid gap-5 xl:grid-cols-[0.68fr_1.32fr]">
+            <div className="grid gap-5 xl:grid-cols-2">
               <div className="space-y-4">
                 <Field label="Posted On">
                   <Input type="date" value={profile.postedOn} onChange={(event) => updateProfile("postedOn", event.target.value)} />
@@ -401,18 +414,16 @@ export default function PropertyIntakeDetailPage({ params }: { params: Promise<{
                   <Input value={overview.name} onChange={(event) => setOverview((current) => ({ ...current, name: event.target.value }))} />
                 </Field>
                 <Field label="Property Address">
-                  <Textarea className="min-h-24" value={overview.fullAddress} onChange={(event) => setOverview((current) => ({ ...current, fullAddress: event.target.value }))} placeholder="Complete property address" />
+                  <Textarea className="min-h-28" value={overview.fullAddress} onChange={(event) => setOverview((current) => ({ ...current, fullAddress: event.target.value }))} placeholder="Complete property address" />
                 </Field>
                 <ProfileTextField label="Verified No." field="verifiedNo" profile={profile} onChange={updateProfile} placeholder="Verification number" />
               </div>
 
               <div className="min-w-0 space-y-5">
-                <IntakeMediaManager buildingId={id} embedded />
-
                 <div>
                   <p className="mb-2 text-sm font-semibold">Google Map</p>
-                  <div className="flex min-h-24 items-center justify-center rounded-xl border bg-muted/20">
-                    <MapPin className="h-7 w-7 text-primary" />
+                  <div className="flex min-h-36 items-center justify-center rounded-xl border bg-muted/20">
+                    <MapPin className="h-8 w-8 text-primary" />
                   </div>
                   <Input className="mt-2" value={overview.mapsUrl} onChange={(event) => setOverview((current) => ({ ...current, mapsUrl: event.target.value }))} placeholder="https://maps.google.com/..." />
                   {overview.mapsUrl && <a href={overview.mapsUrl} target="_blank" rel="noreferrer" className="mt-2 inline-block text-xs font-medium text-primary hover:underline">Open in Google Maps ↗</a>}
@@ -442,7 +453,7 @@ export default function PropertyIntakeDetailPage({ params }: { params: Promise<{
                 </div>
 
                 <Field label="Notes">
-                  <Textarea className="min-h-28" value={overview.notes} onChange={(event) => setOverview((current) => ({ ...current, notes: event.target.value }))} placeholder="Telecaller notes and owner discussion..." />
+                  <Textarea className="min-h-32" value={overview.notes} onChange={(event) => setOverview((current) => ({ ...current, notes: event.target.value }))} placeholder="Telecaller notes and owner discussion..." />
                 </Field>
               </div>
             </div>
