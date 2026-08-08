@@ -6,14 +6,11 @@ import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
-  Building2,
   CheckCircle2,
-  Clock3,
   MapPin,
   Plus,
   Save,
   Trash2,
-  UserRound,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,13 +31,10 @@ import {
   useUpdateProperty,
   type IntakeStatus,
 } from "@/hooks/use-properties";
-import { useMediaByBuilding } from "@/hooks/use-media";
 import {
-  countCompletedProfileFields,
   EMPTY_PROPERTY_PROFILE,
   getPropertyProfile,
   mergePropertyProfile,
-  PROPERTY_PROFILE_SECTIONS,
   type PropertyProfileFields,
   type PropertyProfileKey,
 } from "@/lib/property-profile";
@@ -154,19 +148,11 @@ function ProfileSelectField({
   );
 }
 
-function sectionCount(
-  profile: PropertyProfileFields,
-  fields: ReadonlyArray<readonly [PropertyProfileKey, string]>,
-) {
-  return fields.filter(([key]) => profile[key].trim()).length;
-}
-
 export default function PropertyIntakeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
   const queryClient = useQueryClient();
   const { data: property, isLoading, isError, error } = useProperty(id);
-  const { data: media = [] } = useMediaByBuilding(id);
   const updateProperty = useUpdateProperty();
   const updateStatus = useUpdateIntakeStatus();
   const completeIntake = useCompletePropertyIntake();
@@ -200,26 +186,6 @@ export default function PropertyIntakeDetailPage({ params }: { params: Promise<{
   );
 
   const primaryContactReady = contacts.some((contact) => contact.name.trim() && contact.phone.trim());
-  const overviewChecks = [
-    Boolean(profile.postedOn),
-    Boolean(profile.buildingType),
-    Boolean(overview.name.trim()),
-    Boolean(overview.fullAddress.trim()),
-    Boolean(overview.mapsUrl.trim()),
-    primaryContactReady,
-    Boolean(profile.verifiedNo.trim()),
-    Boolean(overview.notes.trim()),
-  ];
-  const overviewComplete = overviewChecks.filter(Boolean).length;
-  const complianceComplete = sectionCount(profile, PROPERTY_PROFILE_SECTIONS.compliance);
-  const areaComplete = sectionCount(profile, PROPERTY_PROFILE_SECTIONS.area);
-  const financialComplete = sectionCount(profile, PROPERTY_PROFILE_SECTIONS.financials);
-  const amenitiesComplete = sectionCount(profile, PROPERTY_PROFILE_SECTIONS.amenities);
-  const mediaComplete = media.length > 0 ? 1 : 0;
-  const profileCount = countCompletedProfileFields(profile);
-  const completedItems = overviewComplete + complianceComplete + areaComplete + financialComplete + amenitiesComplete + mediaComplete;
-  const totalItems = 8 + PROPERTY_PROFILE_SECTIONS.compliance.length + PROPERTY_PROFILE_SECTIONS.area.length + PROPERTY_PROFILE_SECTIONS.financials.length + PROPERTY_PROFILE_SECTIONS.amenities.length + 1;
-  const completionPercent = Math.round((completedItems / totalItems) * 100);
 
   const completionMissing = useMemo(() => {
     const missing: string[] = [];
@@ -416,193 +382,126 @@ export default function PropertyIntakeDetailPage({ params }: { params: Promise<{
         </div>
       </header>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
-        <main className="space-y-5">
-          <div className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
-            <EditorCard title="1. Property Overview">
-              <div className="grid gap-5 xl:grid-cols-[0.72fr_1.28fr]">
-                <div className="space-y-4">
-                  <Field label="Posted On">
-                    <Input type="date" value={profile.postedOn} onChange={(event) => updateProfile("postedOn", event.target.value)} />
-                  </Field>
-                  <ProfileSelectField
-                    label="Building Type"
-                    field="buildingType"
-                    profile={profile}
-                    onChange={updateProfile}
-                    options={["Independent Building", "High Rise", "Mall", "Business Park", "Other"]}
-                  />
-                  <Field label="Building Name">
-                    <Input value={overview.name} onChange={(event) => setOverview((current) => ({ ...current, name: event.target.value }))} />
-                  </Field>
-                  <Field label="Property Address">
-                    <Textarea className="min-h-24" value={overview.fullAddress} onChange={(event) => setOverview((current) => ({ ...current, fullAddress: event.target.value }))} placeholder="Complete property address" />
-                  </Field>
-                  <ProfileTextField label="Verified No." field="verifiedNo" profile={profile} onChange={updateProfile} placeholder="Verification number" />
+      <main className="space-y-5">
+        <div className="grid gap-5 lg:grid-cols-[1.08fr_0.92fr]">
+          <EditorCard title="1. Property Overview">
+            <div className="grid gap-5 xl:grid-cols-[0.68fr_1.32fr]">
+              <div className="space-y-4">
+                <Field label="Posted On">
+                  <Input type="date" value={profile.postedOn} onChange={(event) => updateProfile("postedOn", event.target.value)} />
+                </Field>
+                <ProfileSelectField
+                  label="Building Type"
+                  field="buildingType"
+                  profile={profile}
+                  onChange={updateProfile}
+                  options={["Independent Building", "High Rise", "Mall", "Business Park", "Other"]}
+                />
+                <Field label="Building Name">
+                  <Input value={overview.name} onChange={(event) => setOverview((current) => ({ ...current, name: event.target.value }))} />
+                </Field>
+                <Field label="Property Address">
+                  <Textarea className="min-h-24" value={overview.fullAddress} onChange={(event) => setOverview((current) => ({ ...current, fullAddress: event.target.value }))} placeholder="Complete property address" />
+                </Field>
+                <ProfileTextField label="Verified No." field="verifiedNo" profile={profile} onChange={updateProfile} placeholder="Verification number" />
+              </div>
+
+              <div className="min-w-0 space-y-5">
+                <IntakeMediaManager buildingId={id} embedded />
+
+                <div>
+                  <p className="mb-2 text-sm font-semibold">Google Map</p>
+                  <div className="flex min-h-24 items-center justify-center rounded-xl border bg-muted/20">
+                    <MapPin className="h-7 w-7 text-primary" />
+                  </div>
+                  <Input className="mt-2" value={overview.mapsUrl} onChange={(event) => setOverview((current) => ({ ...current, mapsUrl: event.target.value }))} placeholder="https://maps.google.com/..." />
+                  {overview.mapsUrl && <a href={overview.mapsUrl} target="_blank" rel="noreferrer" className="mt-2 inline-block text-xs font-medium text-primary hover:underline">Open in Google Maps ↗</a>}
                 </div>
 
-                <div className="space-y-5">
-                  <IntakeMediaManager buildingId={id} embedded />
-
-                  <div>
-                    <p className="mb-2 text-sm font-semibold">Google Map</p>
-                    <div className="flex min-h-24 items-center justify-center rounded-xl border bg-muted/20">
-                      <MapPin className="h-7 w-7 text-primary" />
-                    </div>
-                    <Input className="mt-2" value={overview.mapsUrl} onChange={(event) => setOverview((current) => ({ ...current, mapsUrl: event.target.value }))} placeholder="https://maps.google.com/..." />
-                    {overview.mapsUrl && <a href={overview.mapsUrl} target="_blank" rel="noreferrer" className="mt-2 inline-block text-xs font-medium text-primary hover:underline">Open in Google Maps ↗</a>}
+                <div>
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold">Owner Contact Details</p>
+                    <Button type="button" size="sm" variant="outline" onClick={addContact}><Plus className="mr-1 h-3.5 w-3.5" /> Add</Button>
                   </div>
-
-                  <div>
-                    <div className="mb-2 flex items-center justify-between gap-3">
-                      <p className="text-sm font-semibold">Owner Contact Details</p>
-                      <Button type="button" size="sm" variant="outline" onClick={addContact}><Plus className="mr-1 h-3.5 w-3.5" /> Add</Button>
-                    </div>
-                    <div className="space-y-3">
-                      {contacts.length === 0 && <div className="rounded-xl border border-dashed p-4 text-center text-xs text-muted-foreground">No owner contact added.</div>}
-                      {contacts.map((contact, index) => (
-                        <div key={contact.id} className="rounded-xl border p-3">
-                          <div className="mb-2 flex items-center justify-between">
-                            <span className="text-xs font-semibold">Contact {index + 1}</span>
-                            <Button type="button" variant="ghost" size="icon-xs" className="text-destructive" onClick={() => removeContact(contact.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
-                          </div>
-                          <div className="grid gap-2 sm:grid-cols-2">
-                            <Input value={contact.name} onChange={(event) => updateContact(contact.id, "name", event.target.value)} placeholder="Contact person" />
-                            <Input value={contact.phone} onChange={(event) => updateContact(contact.id, "phone", event.target.value)} placeholder="Mobile" />
-                            <Input className="sm:col-span-2" type="email" value={contact.email || ""} onChange={(event) => updateContact(contact.id, "email", event.target.value)} placeholder="Email" />
-                          </div>
+                  <div className="space-y-3">
+                    {contacts.length === 0 && <div className="rounded-xl border border-dashed p-4 text-center text-xs text-muted-foreground">No owner contact added.</div>}
+                    {contacts.map((contact, index) => (
+                      <div key={contact.id} className="rounded-xl border p-3">
+                        <div className="mb-2 flex items-center justify-between">
+                          <span className="text-xs font-semibold">Contact {index + 1}</span>
+                          <Button type="button" variant="ghost" size="icon-xs" className="text-destructive" onClick={() => removeContact(contact.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
                         </div>
-                      ))}
-                    </div>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <Input value={contact.name} onChange={(event) => updateContact(contact.id, "name", event.target.value)} placeholder="Contact person" />
+                          <Input value={contact.phone} onChange={(event) => updateContact(contact.id, "phone", event.target.value)} placeholder="Mobile" />
+                          <Input className="sm:col-span-2" type="email" value={contact.email || ""} onChange={(event) => updateContact(contact.id, "email", event.target.value)} placeholder="Email" />
+                        </div>
+                      </div>
+                    ))}
                   </div>
-
-                  <Field label="Notes">
-                    <Textarea className="min-h-28" value={overview.notes} onChange={(event) => setOverview((current) => ({ ...current, notes: event.target.value }))} placeholder="Telecaller notes and owner discussion..." />
-                  </Field>
                 </div>
+
+                <Field label="Notes">
+                  <Textarea className="min-h-28" value={overview.notes} onChange={(event) => setOverview((current) => ({ ...current, notes: event.target.value }))} placeholder="Telecaller notes and owner discussion..." />
+                </Field>
               </div>
-            </EditorCard>
-
-            <div className="space-y-5">
-              <EditorCard title="2. Building Compliance / Technical Details">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <ProfileSelectField label="Building Usage" field="buildingUsage" profile={profile} onChange={updateProfile} options={["Commercial", "Non Commercial", "IT/ITes", "Industrial"]} />
-                  <ProfileTextField label="Building Structure" field="buildingStructure" profile={profile} onChange={updateProfile} placeholder="e.g. B1+B2+G+4" />
-                  <ProfileTextField label="Age of Construction" field="ageOfConstruction" profile={profile} onChange={updateProfile} placeholder="e.g. 5 years" />
-                  <ProfileSelectField label="Sanctioned Map" field="sanctionedMap" profile={profile} onChange={updateProfile} options={["Available", "Not Available"]} />
-                  <ProfileTextField label="Floor Size" field="floorSize" profile={profile} onChange={updateProfile} placeholder="e.g. 5,000 sq.ft." />
-                  <ProfileSelectField label="Fire NOC" field="fireNoc" profile={profile} onChange={updateProfile} options={["Yes", "No"]} />
-                  <ProfileSelectField label="OC/CC" field="ocCc" profile={profile} onChange={updateProfile} options={["Yes", "No"]} />
-                </div>
-              </EditorCard>
-
-              <EditorCard title="3. Area Details">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <ProfileTextField label="Available Floor" field="availableFloor" profile={profile} onChange={updateProfile} placeholder="e.g. 2nd Floor" />
-                  <ProfileSelectField label="Premises Condition" field="premisesCondition" profile={profile} onChange={updateProfile} options={["Bareshell", "Semi Furnished", "Furnished"]} />
-                  <ProfileTextField label="Super Area" field="superArea" profile={profile} onChange={updateProfile} placeholder="e.g. 5,800 sq.ft." />
-                  <ProfileTextField label="Carpet Area" field="carpetArea" profile={profile} onChange={updateProfile} placeholder="e.g. 4,250 sq.ft." />
-                  <ProfileTextField label="Loading" field="loading" profile={profile} onChange={updateProfile} placeholder="e.g. 1.5 Ton/sq.ft." />
-                </div>
-              </EditorCard>
             </div>
-          </div>
+          </EditorCard>
 
-          <div className="grid gap-5 lg:grid-cols-2">
-            <EditorCard title="4. Financials">
+          <div className="space-y-5">
+            <EditorCard title="2. Building Compliance / Technical Details">
               <div className="grid gap-3 sm:grid-cols-2">
-                <ProfileTextField label="Rent" field="rent" profile={profile} onChange={updateProfile} placeholder="e.g. ₹110 / sq.ft. / month" />
-                <ProfileTextField label="CAM" field="cam" profile={profile} onChange={updateProfile} placeholder="e.g. ₹18 / sq.ft. / month" />
-                <ProfileTextField label="Lease Period" field="leasePeriod" profile={profile} onChange={updateProfile} placeholder="e.g. 5 Years" />
-                <ProfileTextField label="Escalation" field="escalation" profile={profile} onChange={updateProfile} placeholder="e.g. 15% every 3 Years" />
-                <ProfileTextField label="Security Deposit" field="securityDeposit" profile={profile} onChange={updateProfile} placeholder="e.g. 6 Months" />
-                <ProfileTextField label="Stamp Duty & Registration" field="stampDutyRegistration" profile={profile} onChange={updateProfile} placeholder="e.g. 50:50" />
-                <ProfileTextField label="Rent Free Period" field="rentFreePeriod" profile={profile} onChange={updateProfile} placeholder="e.g. 90 Days" />
+                <ProfileSelectField label="Building Usage" field="buildingUsage" profile={profile} onChange={updateProfile} options={["Commercial", "Non Commercial", "IT/ITes", "Industrial"]} />
+                <ProfileTextField label="Building Structure" field="buildingStructure" profile={profile} onChange={updateProfile} placeholder="e.g. B1+B2+G+4" />
+                <ProfileTextField label="Age of Construction" field="ageOfConstruction" profile={profile} onChange={updateProfile} placeholder="e.g. 5 years" />
+                <ProfileSelectField label="Sanctioned Map" field="sanctionedMap" profile={profile} onChange={updateProfile} options={["Available", "Not Available"]} />
+                <ProfileTextField label="Floor Size" field="floorSize" profile={profile} onChange={updateProfile} placeholder="e.g. 5,000 sq.ft." />
+                <ProfileSelectField label="Fire NOC" field="fireNoc" profile={profile} onChange={updateProfile} options={["Yes", "No"]} />
+                <ProfileSelectField label="OC/CC" field="ocCc" profile={profile} onChange={updateProfile} options={["Yes", "No"]} />
               </div>
             </EditorCard>
 
-            <EditorCard title="5. Amenities & Infrastructure">
+            <EditorCard title="3. Area Details">
               <div className="grid gap-3 sm:grid-cols-2">
-                <ProfileTextField label="Lift" field="lift" profile={profile} onChange={updateProfile} placeholder="e.g. 4 Passenger + 1 Service" />
-                <ProfileTextField label="Parking" field="parking" profile={profile} onChange={updateProfile} placeholder="e.g. Basement + Stilt" />
-                <ProfileTextField label="Electricity Load" field="electricityLoad" profile={profile} onChange={updateProfile} placeholder="e.g. 1500 KVA" />
-                <ProfileSelectField label="Space for DG Set" field="spaceForDgSet" profile={profile} onChange={updateProfile} options={["Available", "Not Available"]} />
-                <ProfileSelectField label="Space for V Sat" field="spaceForVSat" profile={profile} onChange={updateProfile} options={["Available", "Not Available"]} />
-                <ProfileSelectField label="Space for Signage" field="spaceForSignage" profile={profile} onChange={updateProfile} options={["Available", "Not Available"]} />
-                <ProfileSelectField label="Vitrified Flooring" field="vitrifiedFlooring" profile={profile} onChange={updateProfile} options={["Yes", "No"]} />
-                <ProfileTextField label="Toilets" field="toilets" profile={profile} onChange={updateProfile} placeholder="e.g. Yes (Each Floor)" />
-                <ProfileSelectField label="Pantry" field="pantry" profile={profile} onChange={updateProfile} options={["Yes", "No"]} />
-                <ProfileTextField label="Water Charges" field="waterCharges" profile={profile} onChange={updateProfile} placeholder="e.g. ₹5 / KL" />
+                <ProfileTextField label="Available Floor" field="availableFloor" profile={profile} onChange={updateProfile} placeholder="e.g. 2nd Floor" />
+                <ProfileSelectField label="Premises Condition" field="premisesCondition" profile={profile} onChange={updateProfile} options={["Bareshell", "Semi Furnished", "Furnished"]} />
+                <ProfileTextField label="Super Area" field="superArea" profile={profile} onChange={updateProfile} placeholder="e.g. 5,800 sq.ft." />
+                <ProfileTextField label="Carpet Area" field="carpetArea" profile={profile} onChange={updateProfile} placeholder="e.g. 4,250 sq.ft." />
+                <ProfileTextField label="Loading" field="loading" profile={profile} onChange={updateProfile} placeholder="e.g. 1.5 Ton/sq.ft." />
               </div>
             </EditorCard>
           </div>
-        </main>
+        </div>
 
-        <aside className="space-y-4 xl:sticky xl:top-20 xl:self-start">
-          <div className="rounded-2xl border bg-card p-4 shadow-sm">
-            <h2 className="font-semibold">Rider Submission</h2>
-            <div className="mt-4 space-y-4 text-sm">
-              <div className="flex gap-3">
-                <UserRound className="mt-0.5 h-4 w-4 text-muted-foreground" />
-                <div><p className="text-xs text-muted-foreground">Submitted by</p><p className="font-medium">{property.createdByName || "Unknown rider"}</p></div>
-              </div>
-              <div className="flex gap-3">
-                <Clock3 className="mt-0.5 h-4 w-4 text-muted-foreground" />
-                <div><p className="text-xs text-muted-foreground">Submitted</p><p className="font-medium">{new Date(property.createdAt).toLocaleString("en-IN")}</p></div>
-              </div>
-              <div className="flex gap-3">
-                <Building2 className="mt-0.5 h-4 w-4 text-muted-foreground" />
-                <div><p className="text-xs text-muted-foreground">Record ID</p><p className="break-all font-medium">{property.propertyId}</p></div>
-              </div>
+        <div className="grid gap-5 lg:grid-cols-2">
+          <EditorCard title="4. Financials">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <ProfileTextField label="Rent" field="rent" profile={profile} onChange={updateProfile} placeholder="e.g. ₹110 / sq.ft. / month" />
+              <ProfileTextField label="CAM" field="cam" profile={profile} onChange={updateProfile} placeholder="e.g. ₹18 / sq.ft. / month" />
+              <ProfileTextField label="Lease Period" field="leasePeriod" profile={profile} onChange={updateProfile} placeholder="e.g. 5 Years" />
+              <ProfileTextField label="Escalation" field="escalation" profile={profile} onChange={updateProfile} placeholder="e.g. 15% every 3 Years" />
+              <ProfileTextField label="Security Deposit" field="securityDeposit" profile={profile} onChange={updateProfile} placeholder="e.g. 6 Months" />
+              <ProfileTextField label="Stamp Duty & Registration" field="stampDutyRegistration" profile={profile} onChange={updateProfile} placeholder="e.g. 50:50" />
+              <ProfileTextField label="Rent Free Period" field="rentFreePeriod" profile={profile} onChange={updateProfile} placeholder="e.g. 90 Days" />
             </div>
-          </div>
+          </EditorCard>
 
-          <div className="rounded-2xl border bg-card p-4 shadow-sm">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="font-semibold">Intake Completion</h2>
-              <span className="text-sm font-semibold">{completionPercent}%</span>
+          <EditorCard title="5. Amenities & Infrastructure">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <ProfileTextField label="Lift" field="lift" profile={profile} onChange={updateProfile} placeholder="e.g. 4 Passenger + 1 Service" />
+              <ProfileTextField label="Parking" field="parking" profile={profile} onChange={updateProfile} placeholder="e.g. Basement + Stilt" />
+              <ProfileTextField label="Electricity Load" field="electricityLoad" profile={profile} onChange={updateProfile} placeholder="e.g. 1500 KVA" />
+              <ProfileSelectField label="Space for DG Set" field="spaceForDgSet" profile={profile} onChange={updateProfile} options={["Available", "Not Available"]} />
+              <ProfileSelectField label="Space for V Sat" field="spaceForVSat" profile={profile} onChange={updateProfile} options={["Available", "Not Available"]} />
+              <ProfileSelectField label="Space for Signage" field="spaceForSignage" profile={profile} onChange={updateProfile} options={["Available", "Not Available"]} />
+              <ProfileSelectField label="Vitrified Flooring" field="vitrifiedFlooring" profile={profile} onChange={updateProfile} options={["Yes", "No"]} />
+              <ProfileTextField label="Toilets" field="toilets" profile={profile} onChange={updateProfile} placeholder="e.g. Yes (Each Floor)" />
+              <ProfileSelectField label="Pantry" field="pantry" profile={profile} onChange={updateProfile} options={["Yes", "No"]} />
+              <ProfileTextField label="Water Charges" field="waterCharges" profile={profile} onChange={updateProfile} placeholder="e.g. ₹5 / KL" />
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">{completedItems} of {totalItems} required details completed</p>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
-              <div className="h-full rounded-full bg-green-500 transition-all" style={{ width: `${completionPercent}%` }} />
-            </div>
-            <div className="mt-4 space-y-2 text-sm">
-              {[
-                ["1. Property Overview", overviewComplete, 8],
-                ["2. Building Compliance", complianceComplete, PROPERTY_PROFILE_SECTIONS.compliance.length],
-                ["3. Area Details", areaComplete, PROPERTY_PROFILE_SECTIONS.area.length],
-                ["4. Financials", financialComplete, PROPERTY_PROFILE_SECTIONS.financials.length],
-                ["5. Amenities", amenitiesComplete, PROPERTY_PROFILE_SECTIONS.amenities.length],
-                ["6. Media & Photos", mediaComplete, 1],
-              ].map(([label, complete, total]) => {
-                const done = complete === total;
-                return (
-                  <div key={String(label)} className="flex items-center justify-between gap-3">
-                    <span className="flex items-center gap-2">
-                      <span className={done ? "text-green-600" : "text-muted-foreground"}>●</span>
-                      {label}
-                    </span>
-                    <span className="font-medium">{complete}/{total}</span>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs leading-5 text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-300">
-              These fields define the final record shown in Properties. Complete the intake before publishing it.
-            </div>
-          </div>
-
-          <div className="rounded-2xl border bg-card p-4 shadow-sm">
-            <h2 className="font-semibold">Workflow Tips</h2>
-            <div className="mt-3 space-y-2 text-xs leading-5 text-muted-foreground">
-              <p>✓ Save Draft whenever you gather new information.</p>
-              <p>✓ Use Mark Follow-up when another owner call is needed.</p>
-              <p>✓ Complete & Add to Properties publishes the final record.</p>
-            </div>
-            <p className="mt-3 text-[11px] text-muted-foreground">Profile fields captured: {profileCount.complete}/{profileCount.total}</p>
-          </div>
-        </aside>
-      </div>
+          </EditorCard>
+        </div>
+      </main>
 
       <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 p-3 backdrop-blur md:left-[68px] xl:hidden">
         <div className="mx-auto flex max-w-[1480px] items-center justify-between gap-2">
