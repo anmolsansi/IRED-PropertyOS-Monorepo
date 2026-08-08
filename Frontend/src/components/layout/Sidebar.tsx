@@ -17,6 +17,8 @@ import { useAuthSession } from "@/hooks/use-session";
 
 interface SidebarProps {
   isV2?: boolean;
+  collapsed?: boolean;
+  onCollapsedChange?: (collapsed: boolean) => void;
 }
 
 export function SidebarContent({
@@ -26,7 +28,6 @@ export function SidebarContent({
   mode,
   isMaster,
   toggleMode,
-  setCollapsed,
 }: {
   collapsed: boolean;
   navItems: NavItem[];
@@ -34,11 +35,9 @@ export function SidebarContent({
   mode: string;
   isMaster: boolean;
   toggleMode: () => void;
-  setCollapsed?: (val: boolean) => void;
 }) {
   return (
     <>
-      {/* Logo */}
       <div className="flex items-center gap-2 px-4 h-16 border-b border-sidebar-border shrink-0">
         <Building2 className="h-8 w-8 text-sidebar-primary shrink-0" />
         {!collapsed && (
@@ -51,7 +50,6 @@ export function SidebarContent({
         )}
       </div>
 
-      {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-1">
         {navItems.map((item) => (
           <SidebarItem
@@ -63,7 +61,6 @@ export function SidebarContent({
         ))}
       </nav>
 
-      {/* Master/Staging Toggle */}
       <div className="border-t border-sidebar-border p-3">
         <div
           className={cn(
@@ -118,9 +115,8 @@ export function SidebarContent({
         </div>
       </div>
 
-      {/* Help & Collapse */}
-      <div className="border-t border-sidebar-border p-3 space-y-2">
-        {!collapsed && (
+      <div className="border-t border-sidebar-border p-3">
+        {!collapsed ? (
           <div className="rounded-lg bg-sidebar-accent p-3">
             <div className="flex items-center gap-2 mb-1">
               <Headphones className="h-4 w-4" />
@@ -136,27 +132,25 @@ export function SidebarContent({
               support@ired.co.in
             </a>
           </div>
-        )}
-        {setCollapsed && (
-          <button
-            onClick={() => setCollapsed(!collapsed)}
-            className="w-full flex items-center justify-center h-8 rounded-md hover:bg-sidebar-accent transition-colors hidden md:flex"
-          >
-            {collapsed ? (
-              <ChevronRight className="h-4 w-4" />
-            ) : (
-              <ChevronLeft className="h-4 w-4" />
-            )}
-          </button>
+        ) : (
+          <div className="flex justify-center py-2" title="Need help?">
+            <Headphones className="h-4 w-4 text-sidebar-foreground/70" />
+          </div>
         )}
       </div>
     </>
   );
 }
 
-export function Sidebar({ isV2 = false }: SidebarProps) {
+export function Sidebar({
+  isV2 = false,
+  collapsed: controlledCollapsed,
+  onCollapsedChange,
+}: SidebarProps) {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
+  const [internalCollapsed, setInternalCollapsed] = useState(false);
+  const collapsed = controlledCollapsed ?? internalCollapsed;
+  const setCollapsed = onCollapsedChange ?? setInternalCollapsed;
   const { mode, toggleMode, isMaster } = useDataMode();
   const { session } = useAuthSession();
   const navItems = session?.user?.role === "RIDER" ? RIDER_NAV_ITEMS : (isV2 ? V2_NAV_ITEMS : V1_NAV_ITEMS);
@@ -169,6 +163,16 @@ export function Sidebar({ isV2 = false }: SidebarProps) {
         collapsed ? "w-[68px]" : "w-64"
       )}
     >
+      <button
+        type="button"
+        onClick={() => setCollapsed(!collapsed)}
+        className="absolute -right-3 top-5 z-50 flex h-7 w-7 items-center justify-center rounded-full border border-sidebar-border bg-sidebar text-sidebar-foreground shadow-md transition-colors hover:bg-sidebar-accent"
+        aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+      >
+        {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+      </button>
+
       <SidebarContent
         collapsed={collapsed}
         navItems={navItems}
@@ -176,7 +180,6 @@ export function Sidebar({ isV2 = false }: SidebarProps) {
         mode={mode}
         isMaster={isMaster}
         toggleMode={toggleMode}
-        setCollapsed={setCollapsed}
       />
     </aside>
   );
@@ -196,6 +199,7 @@ function SidebarItem({
   return (
     <Link
       href={item.href}
+      title={collapsed ? item.label : undefined}
       className={cn(
         "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
         active

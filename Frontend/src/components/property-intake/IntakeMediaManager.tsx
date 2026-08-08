@@ -30,7 +30,13 @@ function fileTypeFor(category: MediaDocument["category"]) {
   return "document";
 }
 
-export function IntakeMediaManager({ buildingId }: { buildingId: string }) {
+export function IntakeMediaManager({
+  buildingId,
+  embedded = false,
+}: {
+  buildingId: string;
+  embedded?: boolean;
+}) {
   const queryClient = useQueryClient();
   const { data: media = [], isLoading } = useMediaByBuilding(buildingId);
   const uploadMedia = useUploadMedia();
@@ -97,22 +103,34 @@ export function IntakeMediaManager({ buildingId }: { buildingId: string }) {
     }
   }
 
-  return (
-    <section id="media" className="scroll-mt-24 rounded-2xl border bg-card p-4 shadow-sm sm:p-5 lg:p-6">
-      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <ImageIcon className="h-5 w-5" />
+  const content = (
+    <>
+      {!embedded && (
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <ImageIcon className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="font-semibold">Media & Photos</h2>
+              <p className="mt-0.5 text-xs leading-5 text-muted-foreground sm:text-sm">
+                Review rider photos and add any media collected later.
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="font-semibold">Media & documents</h2>
-            <p className="mt-0.5 text-xs leading-5 text-muted-foreground sm:text-sm">
-              Review the rider&apos;s photos and add any new photos, videos, documents or floor plans collected later.
-            </p>
-          </div>
+          {busy && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
         </div>
-        {busy && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-      </div>
+      )}
+
+      {embedded && (
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold">Media & Photos</p>
+            <p className="text-xs text-muted-foreground">{media.length} file{media.length === 1 ? "" : "s"} uploaded</p>
+          </div>
+          {busy && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+        </div>
+      )}
 
       <input
         ref={inputRef}
@@ -130,7 +148,7 @@ export function IntakeMediaManager({ buildingId }: { buildingId: string }) {
               key={category.value}
               type="button"
               variant="outline"
-              className="min-h-11"
+              className="min-h-10"
               onClick={() => openPicker(category.value)}
               disabled={busy}
             >
@@ -142,32 +160,32 @@ export function IntakeMediaManager({ buildingId }: { buildingId: string }) {
       </div>
 
       {isLoading ? (
-        <div className="mt-4 flex min-h-28 items-center justify-center rounded-xl border border-dashed text-sm text-muted-foreground">
+        <div className="mt-3 flex min-h-24 items-center justify-center rounded-xl border border-dashed text-sm text-muted-foreground">
           Loading rider media...
         </div>
       ) : media.length === 0 ? (
         <button
           type="button"
           onClick={() => openPicker("photo")}
-          className="mt-4 flex min-h-32 w-full flex-col items-center justify-center rounded-xl border border-dashed bg-muted/10 p-5 text-center hover:border-primary/40"
+          className="mt-3 flex min-h-28 w-full flex-col items-center justify-center rounded-xl border border-dashed bg-muted/10 p-5 text-center hover:border-primary/40"
         >
           <Upload className="mb-2 h-6 w-6 text-primary" />
           <span className="text-sm font-medium">No media uploaded yet</span>
           <span className="mt-1 text-xs text-muted-foreground">Click to add the first photo</span>
         </button>
       ) : (
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {media.map((item) => (
             <div key={item.id} className="overflow-hidden rounded-xl border bg-background">
               {item.category === "photo" && item.fileUrl ? (
                 <div
-                  className="h-32 bg-muted bg-cover bg-center"
+                  className="h-28 bg-muted bg-cover bg-center"
                   style={{ backgroundImage: `url(${JSON.stringify(item.fileUrl)})` }}
                   role="img"
                   aria-label={item.fileName}
                 />
               ) : (
-                <div className="flex h-32 items-center justify-center bg-muted/40">
+                <div className="flex h-28 items-center justify-center bg-muted/40">
                   {item.category === "video" ? (
                     <Film className="h-8 w-8 text-muted-foreground" />
                   ) : (
@@ -196,6 +214,14 @@ export function IntakeMediaManager({ buildingId }: { buildingId: string }) {
           ))}
         </div>
       )}
+    </>
+  );
+
+  if (embedded) return <div>{content}</div>;
+
+  return (
+    <section id="media" className="scroll-mt-24 rounded-2xl border bg-card p-4 shadow-sm sm:p-5 lg:p-6">
+      {content}
     </section>
   );
 }
