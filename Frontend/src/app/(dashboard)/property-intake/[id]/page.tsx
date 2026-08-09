@@ -38,6 +38,10 @@ import {
   type PropertyProfileFields,
   type PropertyProfileKey,
 } from "@/lib/property-profile";
+import {
+  getPrimaryMediaSelection,
+  mergePrimaryMediaSelection,
+} from "@/lib/property-media";
 import type { Contact } from "@/types";
 import { toast } from "sonner";
 
@@ -165,12 +169,15 @@ export default function PropertyIntakeDetailPage({ params }: { params: Promise<{
   const [overview, setOverview] = useState<OverviewForm>(EMPTY_OVERVIEW);
   const [profile, setProfile] = useState<PropertyProfileFields>(EMPTY_PROPERTY_PROFILE);
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [primaryMediaId, setPrimaryMediaId] = useState<string | null>(null);
+  const [primaryMediaSelectionSet, setPrimaryMediaSelectionSet] = useState(false);
   const [saving, setSaving] = useState(false);
   const [statusBusy, setStatusBusy] = useState(false);
 
   useEffect(() => {
     if (!property) return;
     const loadedProfile = getPropertyProfile(property.additionalFields, property.commercialTerms);
+    const mediaSelection = getPrimaryMediaSelection(property.additionalFields);
     setOverview({
       name: property.buildingName || "",
       fullAddress: property.address || "",
@@ -183,6 +190,8 @@ export default function PropertyIntakeDetailPage({ params }: { params: Promise<{
       buildingType: loadedProfile.buildingType || property.propertyType.replaceAll("_", " "),
     });
     setContacts(property.contacts || []);
+    setPrimaryMediaId(mediaSelection.primaryMediaId);
+    setPrimaryMediaSelectionSet(mediaSelection.isExplicit);
   }, [property]);
 
   const status = useMemo(
@@ -208,6 +217,11 @@ export default function PropertyIntakeDetailPage({ params }: { params: Promise<{
 
   function updateProfile(field: PropertyProfileKey, value: string) {
     setProfile((current) => ({ ...current, [field]: value }));
+  }
+
+  function updatePrimaryMedia(mediaId: string | null) {
+    setPrimaryMediaId(mediaId);
+    setPrimaryMediaSelectionSet(true);
   }
 
   function addContact() {
@@ -240,12 +254,17 @@ export default function PropertyIntakeDetailPage({ params }: { params: Promise<{
 
   function buildPayload() {
     const existingTerms = property?.commercialTerms || {};
+    const profileAdditionalFields = mergePropertyProfile(property?.additionalFields, profile);
+    const additionalFields = primaryMediaSelectionSet
+      ? mergePrimaryMediaSelection(profileAdditionalFields, primaryMediaId)
+      : profileAdditionalFields;
+
     return {
       name: overview.name.trim(),
       fullAddress: overview.fullAddress.trim() || undefined,
       googleMapsUrl: overview.mapsUrl.trim() || undefined,
       notes: overview.notes.trim() || undefined,
-      additionalFields: mergePropertyProfile(property?.additionalFields, profile),
+      additionalFields,
       commercialTerms: {
         ...existingTerms,
         rent: profile.rent,
@@ -390,10 +409,16 @@ export default function PropertyIntakeDetailPage({ params }: { params: Promise<{
       <main className="space-y-5">
         <EditorCard
           title="Property Media"
-          description="All rider and telecaller media is kept in one place. Select any item below to inspect it at full size."
+          description="Choose one item as Primary media. It stays at the top of the property media workspace, while every other file remains Secondary media."
           className="overflow-hidden"
         >
-          <IntakeMediaManager buildingId={id} embedded />
+          <IntakeMediaManager
+            buildingId={id}
+            embedded
+            primaryMediaId={primaryMediaId}
+            primarySelectionSet={primaryMediaSelectionSet}
+            onPrimaryMediaChange={updatePrimaryMedia}
+          />
         </EditorCard>
 
         <div className="grid gap-5 lg:grid-cols-[1.08fr_0.92fr]">
