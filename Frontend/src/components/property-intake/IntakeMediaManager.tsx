@@ -141,15 +141,10 @@ export function IntakeMediaManager({
   const completeUpload = useCompleteUpload();
   const deleteMedia = useDeleteMedia();
   const inputRef = useRef<HTMLInputElement>(null);
-  const autoDefaultApplied = useRef(false);
   const [busy, setBusy] = useState(false);
 
   const primaryMedia = media.find((item) => item.id === primaryMediaId);
   const secondaryMedia = media.filter((item) => item.id !== primaryMediaId);
-
-  useEffect(() => {
-    autoDefaultApplied.current = false;
-  }, [buildingId]);
 
   useEffect(() => {
     if (
@@ -157,13 +152,11 @@ export function IntakeMediaManager({
       primarySelectionSet ||
       primaryMediaId ||
       media.length !== 1 ||
-      autoDefaultApplied.current ||
       !onPrimaryMediaChange
     ) {
       return;
     }
 
-    autoDefaultApplied.current = true;
     onPrimaryMediaChange(media[0].id);
   }, [isLoading, media, onPrimaryMediaChange, primaryMediaId, primarySelectionSet]);
 
