@@ -14,20 +14,11 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  useProperty,
-  useUpdateProperty,
-  type PropertyRecord,
-} from "@/hooks/use-properties";
-import {
   useCompleteUpload,
   useDeleteMedia,
   useMediaByBuilding,
   useUploadMedia,
 } from "@/hooks/use-media";
-import {
-  getPrimaryMediaSelection,
-  mergePrimaryMediaSelection,
-} from "@/lib/property-media";
 import type { MediaDocument } from "@/types";
 import { toast } from "sonner";
 
@@ -134,104 +125,55 @@ function SecondaryMediaPreview({ item }: { item: MediaDocument }) {
 export function IntakeMediaManager({
   buildingId,
   embedded = false,
+  primaryMediaId,
+  primarySelectionSet = false,
+  onPrimaryMediaChange,
 }: {
   buildingId: string;
   embedded?: boolean;
+  primaryMediaId?: string | null;
+  primarySelectionSet?: boolean;
+  onPrimaryMediaChange?: (mediaId: string | null) => void;
 }) {
   const queryClient = useQueryClient();
-  const { data: property } = useProperty(buildingId);
   const { data: media = [], isLoading } = useMediaByBuilding(buildingId);
-  const updateProperty = useUpdateProperty();
   const uploadMedia = useUploadMedia();
   const completeUpload = useCompleteUpload();
   const deleteMedia = useDeleteMedia();
   const inputRef = useRef<HTMLInputElement>(null);
-  const autoDefaultInFlight = useRef(false);
+  const autoDefaultApplied = useRef(false);
   const [busy, setBusy] = useState(false);
-  const [primaryBusy, setPrimaryBusy] = useState(false);
-  const [primaryMediaId, setPrimaryMediaId] = useState<string | null>(null);
-  const [primarySelectionExplicit, setPrimarySelectionExplicit] = useState(false);
-
-  useEffect(() => {
-    if (!property) return;
-    const selection = getPrimaryMediaSelection(property.additionalFields);
-    setPrimaryMediaId(selection.primaryMediaId);
-    setPrimarySelectionExplicit(selection.isExplicit);
-  }, [property]);
 
   const primaryMedia = media.find((item) => item.id === primaryMediaId);
   const secondaryMedia = media.filter((item) => item.id !== primaryMediaId);
 
   useEffect(() => {
+    autoDefaultApplied.current = false;
+  }, [buildingId]);
+
+  useEffect(() => {
     if (
-      !property ||
       isLoading ||
-      primarySelectionExplicit ||
+      primarySelectionSet ||
       primaryMediaId ||
       media.length !== 1 ||
-      autoDefaultInFlight.current
+      autoDefaultApplied.current ||
+      !onPrimaryMediaChange
     ) {
       return;
     }
 
-    autoDefaultInFlight.current = true;
-    void persistPrimaryMedia(media[0].id, true).finally(() => {
-      autoDefaultInFlight.current = false;
-    });
-  }, [property, isLoading, media, primaryMediaId, primarySelectionExplicit]);
+    autoDefaultApplied.current = true;
+    onPrimaryMediaChange(media[0].id);
+  }, [isLoading, media, onPrimaryMediaChange, primaryMediaId, primarySelectionSet]);
 
   useEffect(() => {
-    if (!property || isLoading || !primaryMediaId || primaryMedia) return;
-
-    const fallbackId = media.length === 1 ? media[0].id : null;
-    void persistPrimaryMedia(fallbackId, true);
-  }, [property, isLoading, media, primaryMedia, primaryMediaId]);
+    if (isLoading || !primaryMediaId || primaryMedia || !onPrimaryMediaChange) return;
+    onPrimaryMediaChange(media.length === 1 ? media[0].id : null);
+  }, [isLoading, media, onPrimaryMediaChange, primaryMedia, primaryMediaId]);
 
   function openPicker() {
     inputRef.current?.click();
-  }
-
-  async function persistPrimaryMedia(nextPrimaryMediaId: string | null, silent = false) {
-    if (!property || primaryBusy) return false;
-
-    const previousSelection = getPrimaryMediaSelection(property.additionalFields);
-    const previousAdditionalFields = property.additionalFields;
-    const nextAdditionalFields = mergePrimaryMediaSelection(
-      property.additionalFields,
-      nextPrimaryMediaId,
-    );
-
-    setPrimaryBusy(true);
-    setPrimaryMediaId(nextPrimaryMediaId);
-    setPrimarySelectionExplicit(true);
-    queryClient.setQueryData<PropertyRecord>(["properties", buildingId], (current) =>
-      current ? { ...current, additionalFields: nextAdditionalFields } : current,
-    );
-
-    try {
-      await updateProperty.mutateAsync({
-        id: buildingId,
-        data: { additionalFields: nextAdditionalFields },
-      });
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["properties", buildingId] }),
-        queryClient.invalidateQueries({ queryKey: ["property-intake"] }),
-      ]);
-      if (!silent) {
-        toast.success(nextPrimaryMediaId ? "Primary media updated" : "Primary media cleared");
-      }
-      return true;
-    } catch (error) {
-      setPrimaryMediaId(previousSelection.primaryMediaId);
-      setPrimarySelectionExplicit(previousSelection.isExplicit);
-      queryClient.setQueryData<PropertyRecord>(["properties", buildingId], (current) =>
-        current ? { ...current, additionalFields: previousAdditionalFields } : current,
-      );
-      toast.error(error instanceof Error ? error.message : "Failed to update primary media");
-      return false;
-    } finally {
-      setPrimaryBusy(false);
-    }
   }
 
   async function handleFiles(files: FileList | null) {
@@ -283,13 +225,12 @@ export function IntakeMediaManager({
       const remainingMedia = media.filter((item) => item.id !== id);
 
       await deleteMedia.mutateAsync(id);
-      await queryClient.invalidateQueries({ queryKey: ["media", "building", buildingId] });
 
-      if (deletingPrimary) {
-        const nextPrimaryMediaId = remainingMedia.length === 1 ? remainingMedia[0].id : null;
-        await persistPrimaryMedia(nextPrimaryMediaId, true);
+      if (deletingPrimary && onPrimaryMediaChange) {
+        onPrimaryMediaChange(remainingMedia.length === 1 ? remainingMedia[0].id : null);
       }
 
+      await queryClient.invalidateQueries({ queryKey: ["media", "building", buildingId] });
       toast.success("Media removed");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to remove media");
@@ -304,7 +245,7 @@ export function IntakeMediaManager({
         <div>
           <div className="flex items-center gap-2">
             <p className="text-sm font-semibold sm:text-base">Media</p>
-            {(busy || primaryBusy) && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+            {busy && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
           </div>
           <p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">
             {media.length > 0
@@ -312,7 +253,7 @@ export function IntakeMediaManager({
               : "Add photos, videos or documents from the rider visit or owner follow-up."}
           </p>
         </div>
-        <Button type="button" variant="outline" onClick={openPicker} disabled={busy || primaryBusy} className="shrink-0">
+        <Button type="button" variant="outline" onClick={openPicker} disabled={busy} className="shrink-0">
           <Plus className="mr-2 h-4 w-4" />
           Add media
         </Button>
@@ -360,13 +301,13 @@ export function IntakeMediaManager({
                   This media stays at the top and is saved as the property&apos;s main media.
                 </p>
               </div>
-              {primaryMedia && (
+              {primaryMedia && onPrimaryMediaChange && (
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => persistPrimaryMedia(null)}
-                  disabled={busy || primaryBusy}
+                  onClick={() => onPrimaryMediaChange(null)}
+                  disabled={busy}
                 >
                   Remove primary
                 </Button>
@@ -387,7 +328,7 @@ export function IntakeMediaManager({
                     size="sm"
                     className="text-destructive hover:text-destructive"
                     onClick={() => removeMedia(primaryMedia.id)}
-                    disabled={busy || primaryBusy}
+                    disabled={busy}
                   >
                     <Trash2 className="mr-2 h-4 w-4" />
                     Delete
@@ -438,8 +379,8 @@ export function IntakeMediaManager({
                           type="button"
                           size="sm"
                           className="flex-1"
-                          onClick={() => persistPrimaryMedia(item.id)}
-                          disabled={busy || primaryBusy}
+                          onClick={() => onPrimaryMediaChange?.(item.id)}
+                          disabled={busy || !onPrimaryMediaChange}
                         >
                           <Star className="mr-2 h-4 w-4" />
                           Set as primary
@@ -450,7 +391,7 @@ export function IntakeMediaManager({
                           size="icon"
                           className="shrink-0 text-destructive hover:text-destructive"
                           onClick={() => removeMedia(item.id)}
-                          disabled={busy || primaryBusy}
+                          disabled={busy}
                           aria-label={`Delete ${item.fileName}`}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -463,7 +404,7 @@ export function IntakeMediaManager({
                 <button
                   type="button"
                   onClick={openPicker}
-                  disabled={busy || primaryBusy}
+                  disabled={busy}
                   className="flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed bg-muted/10 p-5 text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
                 >
                   <Plus className="h-6 w-6" />
