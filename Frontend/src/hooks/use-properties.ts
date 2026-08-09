@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { ApiError, api, buildFilterQuery } from "@/lib/api/client";
+import { buildGoogleMapsUrl } from "@/lib/google-maps";
 import type { Contact, Property, PaginatedResponse, FilterParams } from "@/types";
 
 export type IntakeStatus = "NEW" | "IN_PROGRESS" | "FOLLOW_UP" | "COMPLETED";
@@ -144,7 +145,7 @@ function adaptBuildingToProperty(building: BackendBuilding): PropertyRecord {
     pincode: building.pincode || "",
     latitude: building.latitude,
     longitude: building.longitude,
-    mapsUrl: building.googleMapsUrl,
+    mapsUrl: building.googleMapsUrl || buildGoogleMapsUrl(building.latitude, building.longitude),
     propertyType: normalizeEnumValue(
       building.propertyType?.code || building.propertyType?.name,
       "mixed_use",
