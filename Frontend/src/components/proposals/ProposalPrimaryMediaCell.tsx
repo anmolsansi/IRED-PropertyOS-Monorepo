@@ -2,27 +2,27 @@
 
 import { FileText, Film, ImageIcon, Loader2 } from "lucide-react";
 import { useMediaByBuilding } from "@/hooks/use-media";
+import { useProperty } from "@/hooks/use-properties";
 import { getPrimaryMediaSelection } from "@/lib/property-media";
 
 interface ProposalPrimaryMediaCellProps {
   buildingId?: string;
   buildingName?: string;
-  additionalFields?: unknown;
 }
 
 export function ProposalPrimaryMediaCell({
   buildingId,
   buildingName,
-  additionalFields,
 }: ProposalPrimaryMediaCellProps) {
-  const { data: media = [], isLoading } = useMediaByBuilding(buildingId);
-  const selection = getPrimaryMediaSelection(additionalFields);
+  const { data: property, isLoading: propertyLoading } = useProperty(buildingId || "");
+  const { data: media = [], isLoading: mediaLoading } = useMediaByBuilding(buildingId);
+  const selection = getPrimaryMediaSelection(property?.additionalFields);
 
   if (!buildingId) {
     return <EmptyState label="No building media" />;
   }
 
-  if (isLoading) {
+  if (propertyLoading || mediaLoading) {
     return (
       <div className="flex h-44 min-w-[240px] items-center justify-center rounded-xl border bg-muted/10 text-muted-foreground">
         <Loader2 className="h-5 w-5 animate-spin" />
