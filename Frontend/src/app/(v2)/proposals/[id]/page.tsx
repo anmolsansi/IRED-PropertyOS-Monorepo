@@ -16,6 +16,7 @@ import {
 import { PageHeader } from "@/components/shared/PageHeader";
 import { LoadingSkeleton } from "@/components/shared/LoadingSkeleton";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { ProposalPrimaryMediaCell } from "@/components/proposals/ProposalPrimaryMediaCell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -360,7 +361,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
               Shortlisted Properties
             </CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">
-              Compare shortlisted properties side by side. Fields are shown as rows and properties as columns.
+              Compare shortlisted properties side by side. Main media is shown first, followed by the selected comparison fields.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -407,7 +408,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
                   {items.map((item, index) => {
                     const code = getPropertyColumnCode(item);
                     return (
-                      <TableHead key={item.id} className="min-w-[240px] border-r last:border-r-0">
+                      <TableHead key={item.id} className="min-w-[260px] border-r last:border-r-0">
                         <div className="flex items-start justify-between gap-3 py-1">
                           <div className="min-w-0">
                             <p className="truncate font-semibold text-foreground" title={getPropertyColumnLabel(item, index)}>
@@ -443,30 +444,48 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
                       No properties added yet. Go to a building and click &quot;Add to Proposal&quot;.
                     </TableCell>
                   </TableRow>
-                ) : selectedFields.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={items.length + 1} className="h-24 text-center text-muted-foreground">
-                      No comparison fields selected. Use the Fields menu to choose what to compare.
-                    </TableCell>
-                  </TableRow>
                 ) : (
-                  selectedFields.map(key => {
-                    const fieldDef = exportFields.find(f => f.key === key);
-                    return (
-                      <TableRow key={key} className="hover:bg-muted/20">
-                        <TableCell className="sticky left-0 z-10 border-r bg-background font-medium">
-                          <span className="whitespace-nowrap">{fieldDef?.label || key}</span>
+                  <>
+                    <TableRow className="bg-muted/10 hover:bg-muted/10">
+                      <TableCell className="sticky left-0 z-10 border-r bg-background align-top font-semibold">
+                        Main Media
+                      </TableCell>
+                      {items.map((item, index) => (
+                        <TableCell key={`main-media-${item.id}`} className="min-w-[260px] border-r p-3 align-top last:border-r-0">
+                          <ProposalPrimaryMediaCell
+                            buildingId={item.buildingId || item.building?.id || undefined}
+                            buildingName={getPropertyColumnLabel(item, index)}
+                          />
                         </TableCell>
-                        {items.map(item => (
-                          <TableCell key={`${key}-${item.id}`} className="min-w-[240px] border-r align-top last:border-r-0">
-                            <div className="max-w-[320px] whitespace-normal break-words">
-                              {renderCellValue(item, key)}
-                            </div>
-                          </TableCell>
-                        ))}
+                      ))}
+                    </TableRow>
+
+                    {selectedFields.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={items.length + 1} className="h-24 text-center text-muted-foreground">
+                          No comparison fields selected. Use the Fields menu to choose what to compare.
+                        </TableCell>
                       </TableRow>
-                    );
-                  })
+                    ) : (
+                      selectedFields.map(key => {
+                        const fieldDef = exportFields.find(f => f.key === key);
+                        return (
+                          <TableRow key={key} className="hover:bg-muted/20">
+                            <TableCell className="sticky left-0 z-10 border-r bg-background font-medium">
+                              <span className="whitespace-nowrap">{fieldDef?.label || key}</span>
+                            </TableCell>
+                            {items.map(item => (
+                              <TableCell key={`${key}-${item.id}`} className="min-w-[260px] border-r align-top last:border-r-0">
+                                <div className="max-w-[340px] whitespace-normal break-words">
+                                  {renderCellValue(item, key)}
+                                </div>
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </>
                 )}
               </TableBody>
             </Table>
