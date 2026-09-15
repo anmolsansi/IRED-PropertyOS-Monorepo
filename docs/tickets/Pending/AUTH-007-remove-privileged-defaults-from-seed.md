@@ -497,3 +497,191 @@ Also stop if the project intentionally uses different seed modes (production/ref
 **User-State Comparison:** Pass / Fail  
 **Credential Rotation Required:** Yes / No / Unknown  
 **Notes:**
+
+---
+
+## Expanded Architecture Discussion And Decision Record
+
+### Decision 1: Routine seeding and privileged bootstrap are separate operational concepts
+
+**Decision:** `db:seed` owns safe deterministic reference/demo setup only. First-admin creation is a separate explicit operation owned by AUTH-008.
+
+**Reason:** Seeds are commonly rerun during development, testing, deployment troubleshooting, and environment rebuilds. Anything they do must be safe to repeat. Privileged account creation/reset is not safe as an implicit repeatable side effect.
+
+**Rejected alternative:** Keep admin upsert in seed but require strong environment variables.
+
+**Why rejected:** That removes weak defaults but still lets a routine seed create/reactivate/promote privileged access. The responsibility boundary remains wrong.
+
+### Decision 2: Published fallback credentials are considered compromised if ever used
+
+**Decision:** Treat the old fallback password as known once committed to repository history. Removing it from the current branch does not count as credential rotation.
+
+**Reason:** Git history, forks, caches, logs, and prior clones can retain the value.
+
+**Rejected alternative:** Delete the string and assume the risk is gone.
+
+**Why rejected:** Deleting current source cannot invalidate a credential already used by a deployed account.
+
+### Decision 3: Seed must not depend on a privileged user merely for fixture ownership
+
+**Decision:** Any demo/reference records that used the seeded admin must be given a deliberate safe ownership strategy rather than recreating a privileged fixture.
+
+**Reason:** Foreign-key convenience must not dictate production security architecture.
+
+## Facts, Assumptions, And Unknowns
+
+### Facts
+
+- Current seed resolves master-admin env variables with hardcoded fallbacks and upserts a privileged user.
+- Routine `db:seed` is available as a normal package command.
+- AUTH-008 is intended to replace privileged bootstrap responsibility.
+
+### Assumptions to verify
+
+- Reference data can be seeded without mutating privileged user state.
+- Any fixture requiring a user owner can either use a non-privileged dev fixture or a nullable/appropriate relationship.
+
+### Unknowns requiring escalation
+
+- Whether any real deployed account currently uses the historical fallback credential.
+- Whether deployment automation currently invokes seed expecting it to create an administrator.
+- Whether there are separate production/reference vs dev/demo seed expectations not yet encoded in repository structure.
+
+## Intern Execution Sequence - No Improvisation
+
+### Phase A - Inventory seed responsibilities
+
+1. Run seed against a disposable DB before changes.
+2. Record reference tables/records created.
+3. Record every user create/update/upsert performed.
+4. Search for `masterAdminUser` downstream references.
+5. Separate reference-data logic from privileged-user logic in your notes.
+6. Stop if deleting the admin would break a business-critical ownership relation whose replacement is not obvious.
+
+### Phase B - Protect user state with fixtures
+
+Create fake disposable users before running the new seed:
+
+```text
+Admin A: active ADMIN, known passwordHash, known clerkUserId
+Admin B: inactive ADMIN, known deactivatedAt
+Worker C: suspended WORKER, known deactivatedAt
+```
+
+Snapshot every auth/security field before seeding. These snapshots become before/after assertions.
+
+### Phase C - Remove privileged behavior
+
+1. Remove fallback email/password values.
+2. Remove master-admin hash generation used only by seed.
+3. Remove privileged user upsert/create/update.
+4. Resolve downstream fixture references safely.
+5. Do not add a new admin helper call.
+6. Run seed once.
+7. Compare user snapshots.
+8. Run seed again.
+9. Compare again.
+
+### Phase D - Validate seed's real job
+
+1. Verify representative reference records exist after the first run.
+2. Verify the second run is idempotent according to existing unique/upsert rules.
+3. Verify no unexpected duplicate cities/states/reference data appear.
+4. Verify no user auth state changed.
+5. Run backend tests/typecheck/lint.
+
+### Phase E - Operational security follow-up
+
+1. Search repository/runtime documentation for the historical privileged defaults.
+2. Record credential-rotation status as required/not-required/unknown.
+3. Do not put any replacement secret in the PR.
+4. Hand persistent config cleanup to AUTH-013 and rollout/rotation confirmation to AUTH-018.
+
+## Additional Test Cases And Explanations
+
+### TEST-AUTH007-09: Seed cannot restore an admin that was demoted before the run
+
+**Purpose:** Prove routine seed does not "repair" historical master-admin role state.
+
+**Level:** Integration.
+
+**Setup:** Create a user that previously could have matched the old seeded identity concept but currently has a non-admin role in the disposable DB. Use fake test data only.
+
+**Action:** Run seed twice.
+
+**Expected Result:** Role remains the non-admin value.
+
+**Required Assertions:** No role promotion; no status change; no password reset.
+
+**Why This Test Exists:** Removing creation is not enough if an old upsert update branch can still restore privileges.
+
+**False Positive To Avoid:** Testing only an unrelated worker row that the old where-clause could never match.
+
+**If This Test Fails:** Remove user-targeted upsert/update behavior from normal seed.
+
+### TEST-AUTH007-10: Seed failure after reference-data work does not trigger admin recovery logic
+
+**Purpose:** Ensure errors elsewhere in seed do not cause a catch/finally path to recreate a privileged account.
+
+**Level:** Integration/unit if error injection is possible.
+
+**Setup:** Inject or simulate a failure in a later safe seed section after some reference operations.
+
+**Action:** Run seed.
+
+**Expected Result:** Seed fails according to normal error semantics, and no admin/user auth mutation occurs.
+
+**Database Assertions:** Existing user security fields remain unchanged.
+
+**Why This Test Exists:** Recovery code can hide in catch/finally paths, not only the obvious master-admin block.
+
+**False Positive To Avoid:** Failing before the seed initializes, which does not exercise error handling after work begins.
+
+**If This Test Fails:** Remove privileged recovery from seed error handling.
+
+### TEST-AUTH007-11: Production-like environment does not change seed behavior
+
+**Purpose:** Prove privileged creation is not conditionally retained only for production/deployment mode.
+
+**Level:** Script/integration.
+
+**Setup:** Disposable DB with production-like `NODE_ENV` and no real secrets.
+
+**Action:** Run seed.
+
+**Expected Result:** Same no-user-mutation contract as development/test.
+
+**Required Assertions:** No admin create/update and reference data still follows the approved seed contract.
+
+**Why This Test Exists:** A branch such as `if (NODE_ENV === 'production') bootstrapAdmin()` would bypass ordinary local tests.
+
+**False Positive To Avoid:** Only testing default development environment.
+
+**If This Test Fails:** Remove environment-specific privileged seed behavior.
+
+## Observability And Audit Expectations
+
+Normal seed output may report reference-data progress but must not print passwords, password hashes, provider secrets, or privileged bootstrap credentials. After this ticket, there should be no log claiming a master administrator was created or reset by routine seeding.
+
+If credential rotation is required because the historical fallback was used, record only the completion state in operational notes, never the replacement credential.
+
+## Reviewer Walkthrough
+
+1. Search `seed.ts` for all user writes before reviewing anything else.
+2. Search for `MASTER_ADMIN` and historical fallback concepts.
+3. Review downstream fixture-owner changes caused by removing `masterAdminUser`.
+4. Review the twice-run seed test and user-state snapshots.
+5. Confirm empty user table remains without an implicitly seeded admin.
+6. Confirm reference data still seeds correctly.
+7. Confirm no production-only branch reintroduces privileged behavior.
+8. Confirm credential rotation is treated as a separate operational action.
+
+## Handoff Notes
+
+After AUTH-007 completes:
+
+- AUTH-008 can implement the only approved first-admin bootstrap path without competing seed behavior.
+- AUTH-013 can remove obsolete `MASTER_ADMIN_*` runtime configuration from examples/deployment manifests.
+- AUTH-018 can require credential rotation/go-live checks without worrying that `db:seed` will recreate/reset the privileged account.
+
+The routine seed must stay privilege-neutral in future work. If development needs fixture users, that should be explicitly designed as development/test fixture behavior rather than hidden production bootstrap semantics.
