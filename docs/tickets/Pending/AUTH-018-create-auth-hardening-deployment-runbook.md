@@ -2,293 +2,447 @@
 
 **Status:** Pending  
 **Priority:** P1  
-**Area:** Deployment / Operations / Security  
-**Complexity:** Medium  
+**Area:** Deployment / Operations / Security / Recovery  
+**Complexity:** High Operational Risk  
 **Depends On:** AUTH-005, AUTH-006, AUTH-007, AUTH-008, AUTH-009, AUTH-010, AUTH-011, AUTH-012, AUTH-013, AUTH-014, AUTH-015, AUTH-016, AUTH-017  
 **Operator Action Required:** Yes  
-**This Ticket Closes The Auth-Hardening Workstream:** Yes
+**Closes Auth-Hardening Workstream:** Yes
 
 ## Objective
 
-Create a production-ready operational runbook and use it to safely deploy the completed authentication-hardening work without locking legitimate administrators out of PropertyOS.
+Create a production-ready authentication-hardening runbook and use it to safely roll the completed workstream into production without locking legitimate administrators out, misbinding identities, restoring disabled access, or losing recovery capability.
 
-This ticket is complete only when the runbook exists **and the production rollout has actually been executed and verified**.
+This ticket is not complete when the Markdown runbook is merely written.
 
-Writing the document alone does not complete this ticket.
+It is complete only when:
 
-## Junior Engineer Orientation
+1. the runbook exists and is reviewed;
+2. every required go/no-go gate is satisfied;
+3. the production rollout is executed using that runbook;
+4. smoke tests pass;
+5. obsolete live master-admin configuration is removed at the correct stage;
+6. required credential rotation is resolved;
+7. post-deployment monitoring shows no unexplained auth regression;
+8. safe completion evidence is recorded.
 
-The code changes in this workstream intentionally remove automatic privilege recovery. That is correct security design, but it means deployment order matters more than before.
+---
 
-The dangerous rollout sequence would be:
+## Junior Engineer Mental Model
+
+This workstream removes automatic privilege recovery on purpose.
+
+That means deployment sequencing matters.
+
+Unsafe sequence:
 
 ```text
-Deploy strict Clerk-ID auth
-  -> discover production admins were never mapped
-  -> nobody can administer PropertyOS
+Deploy strict clerkUserId auth
+-> discover production admins are unmapped
+-> admins cannot log in
+-> team panics and reintroduces insecure fallback
 ```
 
-The safe sequence is:
+Safe sequence:
 
 ```text
-Audit real mappings first
-  -> resolve ambiguity
-  -> verify admin redundancy/recovery
-  -> run all automated tests
-  -> deploy hardened code
-  -> immediately smoke-test real admin access
-  -> only then remove obsolete live fallback configuration
+prove production identity data first
+-> prove admin redundancy/recovery
+-> prove code/tests
+-> record rollback anchor
+-> deploy hardened code
+-> smoke-test real admin access immediately
+-> validate lifecycle/audit/session behavior
+-> only then remove obsolete live fallback configuration
+-> monitor
 ```
 
-This ticket is therefore a **security migration runbook**, not a normal "deploy and see" checklist.
+The runbook exists so an operator does not need to design the migration while production is changing.
 
-## Why This Exists
+---
 
-A secure codebase can still be deployed unsafely.
+## Architecture Discussion and Decisions
 
-This workstream changes:
+### Decision 1: Data readiness precedes strict-auth deployment
 
-- how Clerk identity maps to local users;
-- how first admins are created;
-- how inactive/suspended users behave;
-- how final-admin removal is prevented;
-- how provider sessions are revoked;
-- how privilege changes are audited;
-- which runtime secrets/config values are obsolete.
+AUTH-005 production mapping audit/backfill must happen before AUTH-006 strict mapping is enabled in production.
 
-Production data/config must be compatible before strict behavior is turned on.
+Do not use an email fallback as a “temporary migration bridge.” That hides unresolved identity data and defeats the hardened design.
 
-## Deliverables
+### Decision 2: Real admin access is verified before old live config is removed
 
-Create or update:
+Even when code no longer uses `MASTER_ADMIN_*`, leave the live values untouched until the hardened deployment is healthy and at least one legitimate mapped production admin has successfully authenticated.
+
+Then remove obsolete config and smoke-test again.
+
+### Decision 3: Prefer two verified active admins before rollout
+
+Minimum acceptable gate:
+
+```text
+>= 1 verified mapped active ADMIN
+```
+
+Preferred gate:
+
+```text
+>= 2 independently verified mapped active ADMINs
+```
+
+One admin is a higher-risk rollout. If only one exists, recovery must be explicitly reviewed before proceeding.
+
+### Decision 4: Bootstrap is not a casual production recovery command
+
+AUTH-008 is for initial environment initialization. Do not run it in an already initialized production environment simply because an admin login failed.
+
+If zero-admin recovery requires bootstrap/break-glass reuse, that must be an approved recovery design, not operator improvisation.
+
+### Decision 5: Application rollback and data recovery are different
+
+Possible failure classes:
+
+```text
+bad code/config deployment
+-> application rollback may be enough
+
+wrong identity backfill/data mutation
+-> database correction/recovery may be required
+```
+
+The runbook must identify both recovery anchors before rollout.
+
+### Decision 6: Local authorization remains authoritative during provider cleanup failure
+
+If Clerk session cleanup fails after a user is suspended/deactivated:
+
+- local access stays denied;
+- do not reactivate to make provider cleanup green;
+- remediate provider cleanup separately.
+
+### Decision 7: Production validation uses designated safe accounts/data
+
+Do not test hardening by disabling the only real production admin or experimenting with unknown employees.
+
+Use designated admin/test accounts and reversible lifecycle actions.
+
+---
+
+## Required Deliverables
+
+Create/update:
 
 - `docs/AUTH_HARDENING_RUNBOOK.md`
-- `docs/FREE_TIER_DEPLOYMENT.md` so it does not contradict the runbook
-- `docs/INDEX.md` link if appropriate
-- any safe operator checklist/reference needed by the repository
+- `docs/FREE_TIER_DEPLOYMENT.md` so it agrees with hardened architecture
+- `docs/INDEX.md` or relevant docs index if one exists
+- bootstrap operator instructions from AUTH-008
+- safe completion checklist/evidence section
 
-Do not put real production secrets, raw identity exports, database URLs, tokens, or credentials in Git.
+Do not store in Git:
 
-## Required Reading
+- passwords;
+- tokens;
+- Clerk secrets;
+- database URLs;
+- raw production identity exports;
+- unredacted production user lists;
+- restore credentials.
 
-Before writing or executing the runbook, read completed AUTH-005 through AUTH-017 plus:
-
-- `render.yaml`
-- `docs/FREE_TIER_DEPLOYMENT.md`
-- root README setup/deployment instructions
-- Prisma production migration scripts
-- current hosting/database backup/restore documentation available to the operator
-- current deployment workflow/CI status
-
-Do not execute production steps from memory. Use the committed runbook.
+---
 
 ## Required Runbook Sections
 
-`docs/AUTH_HARDENING_RUNBOOK.md` must contain:
+`docs/AUTH_HARDENING_RUNBOOK.md` must contain at least:
 
 1. Purpose
 2. Scope
-3. Architecture Invariants
-4. Preconditions / Go-No-Go Gates
-5. Required Operator Access
-6. Communication / Change Window
-7. Pre-Deployment Database Recovery Point
-8. Production Identity Audit
-9. Administrator Verification
-10. Approved Mapping Backfill
-11. Automated Validation Gate
-12. Bootstrap Verification
-13. Deployment Sequence
-14. Immediate Smoke Tests
-15. User Lifecycle Smoke Tests
-16. Session Revocation Verification
-17. Semantic Audit Verification
-18. Live Configuration Cleanup
-19. Credential Rotation
-20. Monitoring / Alert Review
-21. Rollback Decision Tree
-22. Lockout Recovery Procedure
-23. Evidence / Completion Checklist
-24. Post-Deployment Sign-Off
+3. Architecture invariants
+4. Change summary
+5. Operator roles/responsibilities
+6. Required access
+7. Communication/change window
+8. Pre-deployment go/no-go gates
+9. Database recovery point
+10. Application rollback anchor
+11. Production Clerk identity audit
+12. Mapping backfill procedure
+13. Admin redundancy verification
+14. Automated test/build gate
+15. Bootstrap verification in disposable environment
+16. Deployment sequence
+17. Immediate health checks
+18. Admin A smoke test
+19. Admin B smoke test
+20. Unmapped-identity validation
+21. Non-active lifecycle validation
+22. Explicit reactivation validation
+23. Last-admin safety validation
+24. Clerk session revocation validation
+25. Semantic audit validation
+26. Auth-log/privacy validation
+27. Obsolete live config cleanup
+28. Credential rotation decision
+29. Monitoring window/signals
+30. Rollback decision tree
+31. Lockout recovery procedure
+32. Data-correction procedure
+33. Evidence checklist
+34. Post-deployment sign-off
+35. Follow-up/unresolved risks
 
-## Architecture / Operational Invariants
+---
 
-The runbook must state these explicitly:
+## Architecture Invariants The Runbook Must State Explicitly
+
+After hardened rollout:
 
 - login never creates a PropertyOS user;
+- login never fills a missing identity mapping;
 - login never reactivates a user;
 - login never promotes a role;
-- production Clerk identity maps by `clerkUserId`;
+- Clerk `sub` maps to local `User.clerkUserId`;
 - email is not a request-time identity fallback;
-- local PropertyOS role/status remain authorization source of truth;
-- inactive/suspended users fail closed;
-- at least one active admin must remain under normal app operations;
-- normal seed does not create admins;
-- initial admin bootstrap is explicit/manual;
-- provider session cleanup failure does not restore local access;
-- semantic security audits capture privilege/lifecycle changes;
+- PropertyOS DB role/status/org/geography remain authorization truth;
+- only `active` users authenticate;
+- inactive/suspended state survives request/restart;
+- ordinary user management cannot remove the final active admin;
+- normal seed does not create/recover admins;
+- first-admin bootstrap is explicit/manual;
+- suspension/deactivation deny locally before provider session cleanup;
+- provider cleanup failure cannot restore local access;
+- semantic security audits describe successful role/lifecycle changes;
+- auth logs use safe reason codes without routine credentials/PII;
 - `MASTER_ADMIN_*` is obsolete after verified rollout.
 
-## Production Change Ownership
+---
 
-The runbook must identify roles, not secrets:
+## Production Roles and Responsibilities
 
-- **Deployment operator:** deploys backend and hosting config.
-- **Database operator:** can create/verify restore point and run AUTH-005 tooling.
-- **Clerk operator:** can verify production identities/session behavior.
-- **Application admin tester:** validates real admin access.
-- **Reviewer/security/staff engineer:** confirms go/no-go gates and rollback decisions.
+The runbook names responsibilities, not secrets.
 
-One person may hold multiple roles in a small team, but the responsibilities must still be explicit.
+### Deployment Operator
 
-## Go / No-Go Gates
+- deploys target commit;
+- can roll back application deployment;
+- can change hosting environment variables.
 
-The runbook must use hard gates. If a required gate fails, stop rather than improvising.
+### Database Operator
 
-### Gate A: Code readiness
+- creates/verifies recovery point;
+- runs AUTH-005 audit/backfill;
+- can safely query verification counts.
 
-- dependency tickets completed/approved;
-- auth unit/service/E2E tests pass;
-- typecheck/lint/build pass.
+### Clerk Operator
 
-### Gate B: Identity readiness
+- verifies correct production Clerk instance;
+- validates intended identities;
+- can inspect/revoke sessions if required.
 
-- AUTH-005 production dry run complete;
-- no unresolved ambiguous active users needing access;
-- no broken active-user mappings;
-- strict mapping behavior matches production Clerk instance.
+### Application Admin Tester
 
-### Gate C: Administrative access readiness
+- validates actual admin login and ADMIN-only access.
 
-Minimum:
+### Reviewer / Security / Staff Engineer
 
-- at least one verified active production ADMIN with correct Clerk mapping.
+- approves go/no-go gates;
+- approves rollback when signals are ambiguous;
+- verifies evidence.
 
-Preferred:
+One person may hold multiple roles in a small team. The responsibilities must still be explicit.
 
-- two independently verified active production ADMINs.
+---
 
-If only one admin exists, document elevated rollout risk and verify recovery plan before deploy.
+## Facts, Assumptions, and Unknowns
 
-### Gate D: Recovery readiness
+### Facts / Expected State Before Execution
 
-- database restore point/branch/snapshot available for risky data operations;
-- prior deployment artifact/commit known;
-- operator knows how to roll app back;
-- lockout recovery procedure reviewed.
+- AUTH-005 through AUTH-017 are completed and reviewed;
+- AUTH-017 is the final automated assembled-app gate;
+- production uses Clerk mode according to current deployment config;
+- Render/hosting and DB recovery mechanisms exist.
 
-### Gate E: Observability readiness
+### Assumptions To Verify
 
-- logs/monitoring accessible;
-- safe auth reason codes available after AUTH-014;
-- operator knows what signals indicate mapping outage vs expected denial.
+- operator can obtain a real DB restore point/branch/snapshot;
+- prior known-good deployed commit/release is identifiable;
+- production Clerk instance is distinguishable from test/dev;
+- operator can safely verify at least one ADMIN mapping;
+- monitoring/logs are accessible after deploy.
 
-## Step-by-Step Implementation: Write The Runbook
+### Unknowns That Block Rollout Until Resolved
 
-### Step 1 - Create the runbook file
+- ambiguous active-user identity mappings;
+- broken/duplicate provider mappings;
+- no known mapped active admin;
+- failing P0 auth test;
+- unproven last-admin concurrency safety if production claims it;
+- no application rollback anchor;
+- no data recovery path for the backfill operation.
 
-Create `docs/AUTH_HARDENING_RUNBOOK.md`.
+---
 
-State:
+## Hard Go / No-Go Gates
 
-- which auth-hardening migration it covers;
-- that it must not contain secrets;
-- that production execution evidence is recorded separately/safely where necessary.
+The runbook must use explicit gates. A failed gate means **STOP**.
 
-### Step 2 - Write explicit prerequisites
+### Gate A - Code Readiness
 
-List exact tickets/features that must be complete before production execution.
+Required:
 
-Do not say vague things such as "make sure auth works."
+- AUTH dependencies completed/reviewed;
+- AUTH-015 passes;
+- AUTH-016 passes;
+- AUTH-017 passes;
+- typecheck passes;
+- lint passes;
+- backend build passes;
+- relevant frontend build/tests pass if admin UI changed.
 
-Use concrete gates such as:
+Any auth-related P0 test failure = NO-GO.
 
-```text
-AUTH-005 post-backfill audit: 0 unresolved active-user ambiguities
-AUTH-017 E2E: pass
-At least one production active admin mapping: manually verified
-```
+### Gate B - Identity Readiness
 
-### Step 3 - Document required operator access
-
-List categories:
-
-- source/deployment;
-- hosting;
-- database;
-- Clerk production instance;
-- app admin access;
-- logs/monitoring.
-
-Never include credentials.
-
-### Step 4 - Document change-window communication
-
-Before rollout, note:
-
-- who is executing;
-- who can approve rollback;
-- expected maintenance/user impact if any;
-- where operational communication occurs.
-
-Do not overbuild incident management. A simple named owner and rollback approver is sufficient.
-
-### Step 5 - Document database recovery point
-
-Before production mapping changes:
-
-1. create/verify provider-supported restore point/branch/snapshot;
-2. record timestamp/identifier in private operational evidence;
-3. verify how restoration would be performed;
-4. confirm no destructive migration is being run casually.
-
-Do not proceed without practical recovery for data-migration mistakes.
-
-### Step 6 - Run AUTH-005 production audit in dry-run mode
-
-Record safe counts only:
-
-- local users scanned;
-- already mapped;
-- safe backfills;
-- no-match;
-- ambiguous;
-- broken existing mappings;
-- provider-ID conflicts.
-
-Do not commit raw PII output.
-
-### Step 7 - Verify administrator mappings manually
-
-For each planned production admin smoke-test account:
-
-- local user exists;
-- status = active;
-- role = ADMIN;
-- `clerkUserId` matches the intended production Clerk account;
-- account can sign into Clerk before strict deploy if current system permits validation.
-
-Prefer two admins.
-
-### Step 8 - Apply only approved deterministic mapping backfills
-
-Use AUTH-005 apply mode.
-
-Then rerun dry-run audit.
-
-Required deploy gate:
+Required production AUTH-005 result:
 
 ```text
 ambiguous active users requiring access = 0
 broken active-user mappings = 0
-unsafe conflicts = 0
+duplicate/conflicting provider mappings = 0
+approved safe backfills applied
+post-backfill audit completed
 ```
 
-Do not force strict deploy through unresolved identity ambiguity.
+No email fallback is allowed to bypass this gate.
 
-### Step 9 - Run automated validation gate
+### Gate C - Administrative Access Readiness
 
-At minimum:
+Minimum:
+
+- at least one mapped active ADMIN manually verified.
+
+Preferred:
+
+- two mapped active ADMINs independently verified.
+
+If only one exists:
+
+- document elevated risk;
+- verify application rollback and recovery path;
+- do not perform risky final-admin production tests.
+
+### Gate D - Recovery Readiness
+
+Required:
+
+- DB restore point available and identified privately;
+- prior known-good application commit/release identified;
+- deployment rollback procedure known;
+- operator knows how to distinguish code rollback from data correction;
+- lockout recovery procedure reviewed.
+
+### Gate E - Observability Readiness
+
+Required:
+
+- health/startup logs accessible;
+- safe auth reason codes visible;
+- operator can identify `AUTH_USER_NOT_PROVISIONED`, invalid-token/config errors, non-active denials, role denials, provider cleanup failures;
+- no reliance on logging real tokens/emails for diagnosis.
+
+### Gate F - Change Ownership
+
+Required:
+
+- named operator;
+- rollback approver/reviewer;
+- change window/communication channel;
+- stop authority understood.
+
+---
+
+## Step-by-Step Execution Plan for an Intern Writing the Runbook
+
+The intern may author/document the runbook. Production execution must be performed/approved by authorized operators.
+
+### Phase 0 - Read Every Dependency Completion Record
+
+Do not write the runbook from memory.
+
+Extract from AUTH-005 through AUTH-017:
+
+- final architecture decisions;
+- commands actually implemented;
+- test names/commands;
+- bootstrap command;
+- audit event taxonomy;
+- provider cleanup contract;
+- config cleanup status;
+- STOP/known-risk items.
+
+### Phase 1 - Create `docs/AUTH_HARDENING_RUNBOOK.md`
+
+Add a warning at the top:
+
+```text
+Do not store secrets or raw production identity exports in this document.
+```
+
+### Phase 2 - Write Architecture Invariants
+
+Copy the approved invariants from this ticket and dependency completion records.
+
+Do not invent a fallback path.
+
+### Phase 3 - Write Exact Go/No-Go Checklist
+
+Use checkboxable, measurable gates.
+
+Bad:
+
+```text
+Make sure authentication looks okay.
+```
+
+Good:
+
+```text
+AUTH-005 post-backfill audit shows 0 ambiguous active users requiring access.
+AUTH-017 passes.
+Admin A local role=ADMIN/status=active and clerkUserId manually verified.
+```
+
+### Phase 4 - Document Required Access and Ownership
+
+List access categories and operator roles, never credentials.
+
+### Phase 5 - Document Recovery Anchors
+
+Explain how operator records privately:
+
+- DB restore point identifier/timestamp;
+- currently deployed known-good release/commit;
+- target release/commit;
+- rollback operator.
+
+### Phase 6 - Document AUTH-005 Production Audit/Apply
+
+Include exact safe command names from implemented scripts.
+
+Require dry run first.
+
+Record safe counts only in version-controlled completion evidence.
+
+### Phase 7 - Document Admin Verification
+
+For each designated production admin tester, verify privately:
+
+- local row exists;
+- role=ADMIN;
+- status=active;
+- `clerkUserId` points to intended production Clerk user;
+- account can authenticate to correct Clerk tenant/instance.
+
+### Phase 8 - Document Automated Validation Gate
+
+Use exact repository commands after implementation. At minimum equivalent to:
 
 ```bash
 npm run typecheck
@@ -298,481 +452,790 @@ npm run test:e2e -w ired-propertyos-backend
 npm run build
 ```
 
-Also run frontend tests/build if root scripts/current CI require them.
+### Phase 9 - Document Disposable Bootstrap Verification
 
-Any auth-related test failure is a no-go.
+Verify AUTH-008 in a new/disposable environment:
 
-### Step 10 - Verify bootstrap in disposable environment only
+```text
+first run -> creates exactly one admin
+second run -> refuses
+normal runtime -> does not auto-bootstrap
+```
 
-Confirm AUTH-008 script exists and its documentation works.
+Do not run bootstrap against initialized production merely as a smoke test.
 
-Test first-run/second-run behavior outside initialized production.
+### Phase 10 - Document Deployment Sequence
 
-Do not run production bootstrap just to "make sure it works."
+The hardened code deployment occurs **before** obsolete live master-admin values are removed.
 
-### Step 11 - Record rollback anchor
+### Phase 11 - Document Immediate Smoke Tests
 
-Before deployment record:
+Health first, then Admin A, then Admin B if available.
 
-- currently deployed known-good commit/release;
-- target commit;
-- DB recovery point identifier location;
-- operator who can execute rollback.
+### Phase 12 - Document Lifecycle/Audit/Provider Smoke Tests
 
-Do not put secrets in this record.
+Use a designated disposable production test user, not a random employee.
 
-### Step 12 - Deploy hardened backend
+### Phase 13 - Document Live Config Cleanup
 
-Use normal approved production deployment process.
+Only after hardened admin login is proven:
 
-If Prisma migrations exist, use production migration command/process, never `prisma migrate dev` against production.
+- remove obsolete master-admin env values;
+- apply hosting change;
+- health check;
+- admin smoke again.
 
-Do not remove `MASTER_ADMIN_*` live values yet. First prove the new auth path works.
+### Phase 14 - Document Monitoring Window
 
-### Step 13 - Immediate health/startup check
+State what signals to watch and what spike triggers rollback/investigation.
 
-Before login smoke tests verify:
+### Phase 15 - Write Rollback Decision Tree
 
-- deployment completed;
-- health endpoint/application startup is healthy;
-- no migration/startup crash;
-- logs do not show widespread auth/config initialization errors.
+Separate:
 
-If backend is unhealthy, rollback code/deploy before experimenting with user data.
+- app unhealthy;
+- admin mapping failure;
+- widespread mapped-user failure;
+- wrong backfill/data;
+- provider cleanup failure only;
+- audit failure;
+- obsolete-config cleanup failure.
 
-### Step 14 - Smoke-test Admin A immediately
+### Phase 16 - Write Lockout Recovery Procedure
 
-Using verified production Admin A:
+The procedure must explicitly say what **not** to do:
 
-1. authenticate through production Clerk;
-2. open basic protected route/page;
-3. open ADMIN-only route/page;
-4. verify correct local user/role/status;
-5. confirm no unexpected role/status/mapping mutation occurred.
+- do not reintroduce special-email auth;
+- do not run first-admin bootstrap in initialized production unless approved recovery design says so;
+- do not manually promote arbitrary users without identity verification/audit.
 
-If this fails, **stop**. Do not remove old live config or make unrelated changes.
+### Phase 17 - Review The Runbook As If On-Call
 
-### Step 15 - Smoke-test Admin B if available
+A second engineer should be able to execute it without asking the author what a step means.
 
-Repeat independently.
+Every step should say:
 
-If Admin A works but Admin B fails, investigate B's mapping/data. Do not declare migration fully successful for all admins until understood.
+```text
+precondition
+action
+expected result
+failure/stop action
+evidence to record
+```
 
-### Step 16 - Verify unmapped identity fails closed
+---
 
-Using a designated test identity:
+# Production Execution Procedure
 
-- valid Clerk identity;
-- no local mapping.
+The final committed runbook should contain the following operational sequence adapted to actual commands/platform.
+
+## Step 1 - Declare Change Window
+
+Record privately/safely:
+
+- deployment operator;
+- reviewer/rollback approver;
+- expected start;
+- communication channel;
+- target commit/release.
+
+## Step 2 - Freeze Unrelated Auth/User-Admin Changes
+
+Avoid merging/deploying unrelated auth changes during the migration window.
+
+## Step 3 - Confirm Gate A: Code Readiness
+
+Run/verify CI and required commands.
+
+If any auth test fails: STOP.
+
+## Step 4 - Create/Verify Database Recovery Point
+
+Before mapping writes:
+
+- create provider-supported snapshot/branch/restore point;
+- record identifier privately;
+- verify restore procedure is understood.
+
+Do not simply assume automatic backups are sufficient without knowing recovery mechanics.
+
+## Step 5 - Record Current Application Rollback Anchor
+
+Record current production commit/release and how to restore it.
+
+## Step 6 - Confirm Correct Production Clerk Instance
+
+Avoid backfilling IDs from test/dev tenant.
+
+Verify tenant/instance context using safe operational identifiers, not secrets in Git.
+
+## Step 7 - Run AUTH-005 Production Dry Run
+
+Record safe counts:
+
+```text
+users scanned
+already mapped
+safe backfills
+no match
+ambiguous
+broken existing mappings
+provider-ID conflicts
+```
+
+Raw identity report stays in authorized operational channel only.
+
+## Step 8 - Resolve Ambiguous/Broken Active Users
+
+Do not continue strict rollout while a legitimate active user/admin remains ambiguously mapped.
+
+## Step 9 - Apply Approved Deterministic Backfills
+
+Use explicit apply mode.
+
+Then rerun dry-run audit.
+
+Deploy gate requires zero unresolved active-user conflicts.
+
+## Step 10 - Manually Verify Admin A
+
+Before deploying strict auth, verify intended Clerk ID/local row/role/status.
+
+## Step 11 - Manually Verify Admin B If Available
+
+Prefer independent second admin.
+
+## Step 12 - Confirm Gate D Recovery Readiness Again
+
+Operators must know both app rollback and DB recovery before deployment starts.
+
+## Step 13 - Deploy Hardened Application Code
+
+Use approved production deploy path.
+
+Use production Prisma migration process if migrations exist. Never use `prisma migrate dev` against production.
+
+Do **not** remove old live `MASTER_ADMIN_*` variables yet.
+
+## Step 14 - Check Health/Startup Before Login Tests
+
+Verify:
+
+- deployment finished;
+- health endpoint green;
+- no migration crash;
+- no widespread provider/config initialization error.
+
+If app is unhealthy: rollback application before changing user data/config further.
+
+## Step 15 - Smoke Test Admin A Immediately
+
+Admin A must:
+
+1. sign in through production Clerk;
+2. reach a normal protected route/page;
+3. reach an ADMIN-only route/page;
+4. observe expected role/status;
+5. not be mutated by login.
+
+If this fails: STOP. Do not remove old config. Diagnose mapping/config/deployment and use rollback decision tree.
+
+## Step 16 - Smoke Test Admin B
+
+Repeat independently if available.
+
+If A succeeds and B fails, investigate B specifically before declaring admin redundancy healthy.
+
+## Step 17 - Validate Designated Unmapped Identity
+
+Use a safe test identity with no local user.
 
 Expected:
 
-- access denied;
+- denied;
 - no local user created;
-- user/admin count unchanged.
+- no identity mapping written;
+- admin/user counts unchanged.
 
-Never use an unknown real employee as an experiment.
+If a local row appears: P0 failure, stop rollout.
 
-### Step 17 - Verify inactive/suspended persistence
+## Step 18 - Validate Suspended User Behavior
 
-Using disposable test user:
+With designated test user:
 
 1. confirm active access;
-2. suspend through admin UI/API;
-3. verify immediate denial;
-4. refresh/re-login and confirm no reactivation;
-5. verify DB state;
-6. explicitly reactivate;
-7. verify access returns only afterward.
+2. suspend through normal admin flow with reason;
+3. confirm DB status/timestamp;
+4. confirm immediate access denial;
+5. refresh/re-login and confirm no auto-reactivation.
 
-If redeploy/restart is practical/safe, perform it; otherwise rely on AUTH-017 restart test and monitor after actual deploy restart.
+## Step 19 - Validate Explicit Reactivation
 
-### Step 18 - Verify last-admin protection safely
+Reactivate the same designated user.
 
-Do not test by disabling the only real production admin.
+Expected:
 
-Use a designated test/admin setup with another active admin guaranteed.
+- status active;
+- `deactivatedAt=null`;
+- activation audit exists;
+- user can sign in again;
+- old revoked provider sessions do not magically reappear.
 
-Confirm backend rejects the final-admin boundary according to approved test method.
+## Step 20 - Validate Deactivation Separately If Safe
 
-### Step 19 - Verify semantic audit
+Use disposable test user and restore explicitly afterward if appropriate.
 
-Perform one safe test lifecycle/role action.
+## Step 21 - Validate Last-Admin Safety Without Risking Lockout
 
-Confirm audit record contains:
+Do not attempt to disable the only production admin.
 
-- authenticated actor;
-- target user;
-- previous/new value;
-- reason if required;
-- no token/secret/raw request body.
+Use a safe setup where another verified admin remains, and validate the documented boundary through a non-destructive/reversible scenario.
 
-### Step 20 - Verify Clerk session revocation
+If backend allows a true zero-admin result: P0 blocker.
 
-With disposable production/test user and multiple sessions if practical:
+## Step 22 - Validate Semantic Audit
+
+Perform one safe role/lifecycle action.
+
+Verify:
+
+- actor local ID correct;
+- target correct;
+- previous/new value correct;
+- reason/request ID correct;
+- no token/password/raw request body.
+
+## Step 23 - Validate Session Revocation
+
+With designated user and multiple sessions if practical:
 
 - suspend/deactivate;
-- confirm PropertyOS denies immediately;
-- confirm provider sessions end according to AUTH-011.
+- local API denial must happen immediately;
+- provider sessions should be revoked according to AUTH-011.
 
-If provider cleanup fails while local access is denied, record/provider-remediate separately. Do not reactivate the user to make session cleanup look green.
+If provider cleanup fails but local denial holds, treat cleanup as a provider-remediation issue, not a reason to reactivate.
 
-### Step 21 - Remove obsolete live `MASTER_ADMIN_*` values
+## Step 24 - Validate Auth Logging Privacy
 
-Only after real admin access is proven:
+Inspect safe production logs around test requests.
+
+Expected:
+
+- reason codes visible;
+- request correlation works;
+- no bearer token/email/provider subject/secret dumped by changed auth guards.
+
+## Step 25 - Remove Obsolete Live Master-Admin Configuration
+
+Only after Admin A/B hardened access is proven:
 
 1. remove `MASTER_ADMIN_EMAIL`;
 2. remove `MASTER_ADMIN_PASSWORD`;
-3. save/redeploy/restart if platform requires;
-4. verify health;
-5. re-smoke-test Admin A and preferably Admin B.
+3. apply hosting change/restart if required;
+4. check health;
+5. smoke Admin A again;
+6. smoke Admin B again if available.
 
-Do not write removed values into runbook/PR.
+Do not record old values.
 
-### Step 22 - Perform credential rotation decision
+## Step 26 - Credential Rotation Decision
 
 Determine whether any real account ever used the old committed fallback password.
 
-If yes:
+If yes/possible:
 
-- rotate/reset through supported identity-provider flow;
-- revoke applicable sessions;
-- record `Completed` without recording credential.
+- reset/rotate using approved auth-provider flow;
+- revoke relevant sessions;
+- record completion only, never credential.
 
-If definitively never used, record `Not Required`.
+If unknown, keep as unresolved security follow-up. Do not mark ticket fully complete until disposition is accepted.
 
-If unknown, record `Pending` and treat as unresolved security follow-up rather than claiming done.
+## Step 27 - Monitoring Window
 
-### Step 23 - Monitor post-deploy auth signals
+Watch:
 
-Watch safe reason codes/error rates such as:
+- health/startup;
+- `AUTH_USER_NOT_PROVISIONED` spike;
+- token verification/config errors;
+- inactive/suspended denial counts;
+- unexpected ADMIN role denials;
+- session cleanup failure rates;
+- user support reports of legitimate lockout.
 
-- `AUTH_USER_NOT_PROVISIONED`;
-- token invalid/config errors;
-- inactive/suspended denials;
-- role denials;
-- session cleanup failures.
+Compare expected test denials vs broad user impact.
 
-Distinguish expected denials from a sudden spike affecting legitimate mapped users.
+## Step 28 - Final Sign-Off
 
-### Step 24 - Update documentation/index
+Record:
 
-Ensure `FREE_TIER_DEPLOYMENT.md`, `docs/INDEX.md`, bootstrap docs, and runbook tell one consistent story.
+- target deployment commit;
+- gates passed;
+- safe mapping counts;
+- admin smoke results;
+- lifecycle/audit/session checks;
+- config cleanup result;
+- credential rotation disposition;
+- rollback not needed / used and outcome;
+- remaining follow-ups.
 
-### Step 25 - Complete sign-off evidence
+No secrets/raw PII.
 
-Record safe evidence/check results and move AUTH-018 to Completed only after real rollout/sign-off.
+---
 
-## Detailed Production Validation Cases
+# Detailed Production Validation Cases
 
-These are operational tests, not unit tests. Execute only with safe designated accounts/data.
-
-### PROD-AUTH018-01: Verified Admin A can authenticate after hardened deploy
+### PROD-AUTH018-01: Admin A authenticates after hardened deploy
 
 **Purpose:** Prevent production administrative lockout.
 
-**Setup:** Admin A mapping verified before deployment.
+**Precondition:** mapping manually verified.
 
-**Action:** Sign in and access protected + ADMIN-only function.
+**Action:** login + protected + ADMIN-only action/page.
 
-**Expected Result:** Success with correct stored role/status.
+**Expected Result:** success with stored ADMIN/active state.
 
-**Evidence:** Pass/fail, timestamp, operator; no token/email secret dump.
+**Evidence:** pass/fail, timestamp, operator, target deploy reference.
 
-**Why It Exists:** This is the first production go/no-go check after deploy.
+**Failure Action:** STOP rollout; no config cleanup; diagnose/rollback.
 
-**If It Fails:** Stop rollout. Do not clean config. Follow rollback decision tree and inspect mapping/config/code.
+### PROD-AUTH018-02: Admin B independently authenticates
 
-### PROD-AUTH018-02: Verified Admin B independently succeeds
+**Purpose:** Verify redundancy.
 
-**Purpose:** Reduce single-account recovery risk.
+**Expected Result:** success.
 
-**Setup:** Second verified active admin available.
+**If unavailable:** document single-admin risk and approved recovery readiness.
 
-**Action:** Independent login/access test.
+### PROD-AUTH018-03: Unmapped designated identity is denied without provisioning
 
-**Expected Result:** Success.
+**Purpose:** Confirm removed login-time creation in real production wiring.
 
-**Evidence:** Pass/fail or N/A with documented reason.
+**Expected Result:** denied; no new user/mapping/admin.
 
-**If It Fails:** Investigate B mapping before calling administrator redundancy healthy.
+**Failure Action:** P0 stop/rollback.
 
-### PROD-AUTH018-03: Unmapped designated identity is denied without auto-provisioning
+### PROD-AUTH018-04: Inactive designated user remains denied
 
-**Purpose:** Confirm old fallback/provisioning behavior is absent in production.
+**Purpose:** Verify local lifecycle authority.
 
-**Setup:** Safe test Clerk identity with no local user.
+**Required Assertions:** no role/status/deactivatedAt mutation from login attempt.
 
-**Action:** Attempt PropertyOS access.
+### PROD-AUTH018-05: Suspended user stays denied across refresh/re-login
 
-**Expected Result:** Denied.
+**Purpose:** Confirm no auto-reactivation.
 
-**Evidence/Assertions:** User count/mapping check confirms no new local user; no ADMIN created.
+### PROD-AUTH018-06: Explicit reactivation restores access
 
-**If It Fails:** Stop rollout and rollback/hotfix auth before further cleanup.
+**Purpose:** Prove intended recovery path.
 
-### PROD-AUTH018-04: Suspended user remains denied across refresh/re-login
+**Expected Result:** access only after admin action; activation audit present.
 
-**Purpose:** Verify local lifecycle authority in production.
+### PROD-AUTH018-07: Last-admin safeguard demonstrated safely
 
-**Setup:** Disposable test user active/mapped.
+**Purpose:** Verify lockout prevention without risking actual lockout.
 
-**Action:** Suspend, attempt access/re-login.
+**Failure Action:** P0 rollout blocker.
 
-**Expected Result:** Denied and stays suspended.
+### PROD-AUTH018-08: Semantic audit is correct
 
-**Evidence:** Status/timestamp check and pass/fail.
+**Purpose:** Validate security investigation trail.
 
-**If It Fails:** Stop. Auto-reactivation/security regression exists.
+**Expected Result:** trusted actor, target, before/after, reason/request ID; no secret/raw body.
 
-### PROD-AUTH018-05: Explicit reactivation restores access
+### PROD-AUTH018-09: Session revocation works for designated user
 
-**Purpose:** Confirm approved lifecycle recovery works.
+**Purpose:** Validate defense-in-depth sign-out.
 
-**Setup:** Same suspended test user.
+**Expected Result:** local denial immediately; provider sessions revoked when provider available.
 
-**Action:** Reactivate explicitly then sign in/access.
+### PROD-AUTH018-10: Clerk cleanup failure still leaves local denial
 
-**Expected Result:** Access returns only after successful admin action.
+**Purpose:** Validate fail-closed cross-system behavior.
 
-**Evidence:** Pass/fail + audit event verification.
+**Setup:** only if failure can be simulated safely in production-like staging; production execution may rely on AUTH-017 rather than deliberately breaking provider.
 
-**If It Fails:** Fix lifecycle path; do not restore login-time repair.
+**Expected Result:** never reactivate due to provider failure.
 
-### PROD-AUTH018-06: Last-admin safeguard is demonstrated safely
+### PROD-AUTH018-11: Removing live `MASTER_ADMIN_*` does not affect health/admin access
 
-**Purpose:** Verify lockout prevention under real deployment.
+**Purpose:** Prove obsolete config is truly unused.
 
-**Setup:** Safe scenario where another active admin/test admin ensures no actual lockout risk.
+**Action:** remove values after hardened admin smoke, apply config, re-smoke.
 
-**Action:** Exercise documented last-admin boundary test.
+**Expected Result:** healthy service and successful mapped admins.
 
-**Expected Result:** Dangerous operation rejected.
+### PROD-AUTH018-12: Normal seed/redeploy does not create/reactivate admin
 
-**Evidence:** Pass/fail; target state unchanged.
+**Purpose:** Confirm operational architecture.
 
-**If It Fails:** Treat as P0 rollout blocker.
+**Execute in safe disposable/staging environment if production seed is not normally run.**
 
-### PROD-AUTH018-07: Semantic audit contains correct actor/target/before/after
+### PROD-AUTH018-13: Auth logs show safe reason codes without credential/PII leakage
 
-**Purpose:** Verify security audit integration in production.
+**Purpose:** Validate AUTH-014 in deployed environment.
 
-**Setup:** Safe test lifecycle/role change.
+**Use only designated test traffic.**
 
-**Action:** Execute action and inspect audit.
+### PROD-AUTH018-14: No unexplained `AUTH_USER_NOT_PROVISIONED` spike after deploy
 
-**Expected Result:** Correct semantic event; no secrets.
+**Purpose:** Detect missed production mappings.
 
-**Evidence:** Sanitized description only, no raw PII export.
+**Action:** monitor during change window.
 
-**If It Fails:** If audit is mandatory, treat as rollout blocker; otherwise follow explicitly approved audit reliability policy.
+**Expected Result:** only expected designated test events or understood cases.
 
-### PROD-AUTH018-08: Session revocation removes external sessions without affecting local fail-closed state
+### PROD-AUTH018-15: Active-admin count remains healthy after validation actions
 
-**Purpose:** Verify provider cleanup integration.
+**Purpose:** Final database safety check.
 
-**Setup:** Test user signed into two sessions if practical.
+**Expected Result:** >=1 active ADMIN, preferably >=2.
 
-**Action:** Suspend/deactivate.
+---
 
-**Expected Result:** PropertyOS denies immediately; Clerk sessions revoked.
+# Rollback Decision Tree
 
-**Evidence:** Pass/partial/fail counts or manual result, no tokens.
+## Scenario A - Backend Fails Health/Startup
 
-**If It Fails:** If local denial still works, record provider cleanup incident and remediate. Do not reactivate user.
+Likely category:
 
-### PROD-AUTH018-09: Service remains healthy after live config removal
+- build/runtime config/migration issue.
 
-**Purpose:** Prove obsolete `MASTER_ADMIN_*` config is truly unnecessary.
+Action:
 
-**Setup:** New auth path already verified; rollback anchor known.
+1. stop rollout;
+2. do not modify more user/config data;
+3. roll application back to known-good deployment;
+4. verify health;
+5. investigate offline.
 
-**Action:** Remove obsolete live values and restart/redeploy if required.
+## Scenario B - Admin A Cannot Authenticate, Health Is Good
 
-**Expected Result:** Service healthy; Admin A/B still work.
+Check in order:
 
-**Evidence:** health + admin smoke pass.
+1. correct production Clerk instance;
+2. deployed commit;
+3. Admin A `clerkUserId` mapping;
+4. Admin A role/status;
+5. token verification config/authorized parties;
+6. safe auth reason code.
 
-**If It Fails:** Roll back deploy/config per runbook and find stale dependency. Do not permanently restore privileged behavior.
+Do not:
 
-### PROD-AUTH018-10: Monitoring shows no unexpected mapped-user failure spike
+- add email fallback;
+- auto-reactivate;
+- run first-admin bootstrap casually.
 
-**Purpose:** Catch issues not covered by selected smoke accounts.
+If widespread/unclear, roll back application while preserving audited mapping data for investigation.
 
-**Setup:** Access to logs/monitoring with safe reason codes.
+## Scenario C - Many Legitimate Users Become `AUTH_USER_NOT_PROVISIONED`
 
-**Action:** Observe agreed initial post-deploy window.
+Likely identity migration/readiness problem.
 
-**Expected Result:** No unexplained spike in `AUTH_USER_NOT_PROVISIONED`/token failures for legitimate users.
+Action:
 
-**Evidence:** High-level pass/incident reference, no PII dump.
+- stop rollout;
+- compare AUTH-005 audit/backfill with production Clerk instance;
+- roll back strict-auth application if needed;
+- correct deterministic mappings;
+- rerun audit before redeploy.
 
-**If It Fails:** Pause further cleanup/change, investigate affected mapping/config cohort and decide rollback vs targeted correction.
+## Scenario D - Wrong Identity Mapping Was Applied
 
-## Rollback Decision Tree
+This is a data integrity/security issue.
 
-The runbook must contain a concrete decision tree similar to:
+Action:
 
-```text
-Backend unhealthy immediately after deploy?
-  YES -> roll back application deployment to known-good commit.
+1. stop rollout/user activity if risk warrants;
+2. identify exact affected mapping(s);
+3. verify real identities manually;
+4. correct targeted records or use DB recovery procedure as appropriate;
+5. do not mass-relink by email blindly;
+6. re-audit before redeploy.
 
-Backend healthy but verified mapped admins all fail?
-  -> STOP config cleanup
-  -> inspect token verification config + Clerk environment + mapping audit
-  -> if code regression confirmed -> roll back application
-  -> if mapping error confirmed -> correct only verified affected mapping / restore data as approved
+## Scenario E - Suspension Works But Clerk Session Cleanup Fails
 
-Admin A works, specific users fail as not provisioned?
-  -> do not restore global fallback
-  -> run targeted AUTH-005 audit for affected users
-  -> correct deterministic mappings
+Local security is still effective.
 
-Provider session revocation fails but local non-active denial works?
-  -> keep secure local state
-  -> remediate provider cleanup separately
-  -> do not reactivate
+Action:
 
-Audit mandatory write fails and blocks lifecycle operations?
-  -> follow approved audit rollback/incident plan
-  -> do not silently disable mandatory audit
-```
+- keep user non-active;
+- remediate/retry provider cleanup according to approved process;
+- do not roll local status back to active merely for cleanup success.
 
-## Lockout Recovery Procedure
+Application rollback is usually unnecessary if only defense-in-depth provider cleanup is degraded and local denial is correct, subject to approved policy.
 
-If zero administrators can access production:
+## Scenario F - Semantic Audit Missing/Incorrect
 
-1. stop further config/deploy changes;
-2. verify application health independently of login;
-3. inspect production DB via authorized operator access for admin rows/status/mappings;
-4. verify corresponding Clerk production IDs;
-5. determine whether problem is mapping, status, provider configuration, or code;
-6. correct only proven data/config error through controlled operator procedure;
-7. roll back application if code regression is the cause;
-8. use bootstrap only if its documented preconditions actually apply;
-9. do not weaken AUTH-008 or create a hidden email fallback as emergency normal behavior;
-10. create/retain audit evidence of recovery action.
+If audit is mandatory for sensitive mutations:
 
-A permanent break-glass system is outside this ticket unless architect-approved.
+- stop using affected administrative mutation path;
+- decide rollback/hotfix according to scope;
+- do not continue silently unaudited privilege changes.
 
-## Runbook Self-Test / Review Cases
+## Scenario G - Removing Obsolete Hosting Variables Breaks Deployment
 
-Before production execution, another engineer/reviewer must read the runbook and be able to answer:
+Action:
 
-- What exactly blocks deployment if mapping audit has ambiguity?
-- Which admin account is tested first?
-- At what point are `MASTER_ADMIN_*` values removed?
-- What do we do if Clerk session revocation fails?
-- What do we do if local admin login fails immediately after deploy?
-- What data can be safely recorded in Git and what must remain private?
-- How do we recover without restoring the old privileged fallback?
+- restore previous known-good hosting config temporarily if necessary for service availability;
+- identify stale dependency;
+- do not restore privileged runtime behavior as permanent design;
+- fix/redeploy and repeat cleanup.
 
-If the runbook cannot answer those questions unambiguously, it is not ready.
+---
 
-## PR / Deployment Evidence Required
+# Lockout Recovery Rules
 
-Record safely:
+If legitimate admins cannot access PropertyOS:
 
-- runbook file/commit;
-- target production commit SHA;
-- previous known-good commit/release;
-- AUTH-005 safe audit counts;
-- automated validation results;
-- Admin A/B smoke-test results;
-- unmapped-user test result;
-- lifecycle/restart/reactivation result;
-- last-admin safeguard result;
-- semantic audit result;
-- session cleanup result;
-- live obsolete-config removal result;
-- credential rotation status;
-- monitoring review result;
-- deployment operator + reviewer names.
+1. confirm application health;
+2. confirm correct production Clerk tenant/config;
+3. inspect safe auth reason code;
+4. verify local admin role/status/mapping directly through authorized DB/operator access;
+5. compare target Clerk identity exactly;
+6. roll application back if strict-auth code/config is defective;
+7. correct proven mapping/data errors through authorized deterministic process;
+8. document recovery action/audit.
 
-Do not include raw tokens, secrets, DB URLs, full production identity lists, or credential values.
+Do **not**:
+
+- reintroduce special-email auth;
+- change inactive admin to active through login logic;
+- promote a random user;
+- choose a Clerk user by approximate name/email match when ambiguous;
+- run initial bootstrap in an initialized production environment unless an approved recovery design explicitly allows it.
+
+---
+
+# Evidence Checklist
+
+Version-controlled/safe evidence may include:
+
+- deployment commit/release IDs;
+- pass/fail test results;
+- safe aggregate mapping counts;
+- admin smoke pass/fail identifiers such as `Admin A`/`Admin B` rather than raw PII;
+- timestamp/operator names according to team policy;
+- config cleanup complete/pending;
+- credential rotation complete/not required/pending;
+- rollback used/not used;
+- unresolved follow-up ticket IDs.
+
+Do not include raw production identity exports or credentials.
+
+---
+
+## Failure Diagnosis Guide For Runbook Author
+
+### A step says “verify auth works”
+
+Too vague. Rewrite with exact action, expected result, failure action, evidence.
+
+### Runbook removes old live config before new admin smoke
+
+Unsafe order. Move config cleanup after hardened admin verification.
+
+### Runbook uses bootstrap as normal recovery
+
+Architecture mismatch. Stop for explicit break-glass decision.
+
+### Runbook has no DB recovery point before identity backfill
+
+Incomplete. Data migration requires recovery planning.
+
+### Runbook says rollback but does not name rollback anchor/process
+
+Incomplete operational instruction.
+
+### Runbook contains real emails/tokens/DB URLs
+
+Remove them. Use role labels/placeholders and private operational channels.
+
+### Runbook treats provider cleanup failure as local suspension failure
+
+Wrong architecture. Local denial is authoritative.
+
+### Production smoke requires disabling only admin
+
+Unsafe test design. Use designated account/redundant admin setup.
+
+---
+
+## Reviewer Walkthrough
+
+The reviewer should simulate execution line by line and verify:
+
+1. dependency tickets are explicit prerequisites;
+2. identity data is audited before strict deploy;
+3. DB and app rollback anchors exist;
+4. admin mapping is manually verified;
+5. two-admin preference is documented;
+6. bootstrap is disposable-environment-only by default;
+7. hardened code deploy precedes old-config removal;
+8. immediate Admin A/B smoke has a STOP condition;
+9. unmapped user test proves zero provisioning;
+10. lifecycle test proves non-active persistence and explicit reactivation;
+11. last-admin test cannot cause real lockout;
+12. audit/session/logging validations are included;
+13. credential rotation is not confused with string deletion;
+14. monitoring reasons and rollback thresholds are understandable;
+15. lockout recovery does not reintroduce forbidden fallback;
+16. evidence contains no secrets/raw PII.
+
+A reviewer unfamiliar with implementation should still be able to operate safely from the document.
+
+---
+
+## PR Evidence Required For This Ticket
+
+The implementation PR/runbook completion should include:
+
+- link/path to runbook;
+- confirmation FREE_TIER/deployment docs agree;
+- go/no-go checklist;
+- dependency completion references;
+- exact automated validation command results;
+- production dry-run/backfill safe counts;
+- Admin A/B smoke results;
+- lifecycle/audit/session smoke results;
+- live config cleanup result;
+- credential rotation disposition;
+- monitoring result;
+- rollback used/not used;
+- final sign-off names/roles according to team policy;
+- unresolved follow-up tickets.
+
+No secrets/raw PII.
+
+---
 
 ## Acceptance Criteria
 
-- [ ] `docs/AUTH_HARDENING_RUNBOOK.md` exists and answers the required recovery/go-no-go questions.
-- [ ] Production identity audit/backfill is complete.
-- [ ] Hardened code passes unit/service/E2E/build validation.
-- [ ] At least one legitimate production admin is verified after deploy; two preferred.
-- [ ] Unmapped user cannot auto-provision.
-- [ ] Inactive/suspended user cannot auto-reactivate.
-- [ ] Explicit reactivation works.
-- [ ] Last-admin safety works.
-- [ ] Semantic audit works according to approved reliability contract.
-- [ ] Provider session cleanup is verified or safely recorded as a separate partial issue while local denial remains secure.
-- [ ] Obsolete live master-admin config is removed.
-- [ ] Exposed fallback credential is rotated if ever used.
-- [ ] Monitoring review shows no unresolved widespread auth regression.
-- [ ] Rollback and lockout recovery are documented and understood.
+### Documentation
+
+- [ ] `docs/AUTH_HARDENING_RUNBOOK.md` exists.
+- [ ] All required sections exist.
+- [ ] Deployment docs are consistent with runbook.
+- [ ] No secrets/raw PII are committed.
+
+### Pre-Deployment
+
+- [ ] All dependency tickets are complete/reviewed.
+- [ ] AUTH-015/016/017 pass.
+- [ ] Typecheck/lint/build pass.
+- [ ] Production AUTH-005 audit/backfill is complete.
+- [ ] No unresolved active-user identity ambiguity remains.
+- [ ] At least one mapped active ADMIN is verified; two preferred.
+- [ ] DB recovery point exists.
+- [ ] Application rollback anchor exists.
+
+### Production Rollout
+
+- [ ] Hardened app deploy is healthy.
+- [ ] Admin A succeeds.
+- [ ] Admin B succeeds or single-admin risk explicitly approved.
+- [ ] Unmapped identity is denied without provisioning.
+- [ ] Non-active user stays denied.
+- [ ] Explicit reactivation restores access.
+- [ ] Last-admin safeguard is validated safely.
+- [ ] Semantic audit is validated.
+- [ ] Session revocation is validated or provider failure is handled fail-closed.
+- [ ] Safe auth logs are validated.
+- [ ] Obsolete live `MASTER_ADMIN_*` values are removed after smoke tests.
+- [ ] Admin smoke passes again after config cleanup.
+- [ ] Credential rotation disposition is complete/approved.
+- [ ] Monitoring shows no unexplained auth regression.
+
+### Closure
+
+- [ ] Completion evidence recorded safely.
+- [ ] No unresolved P0/STOP issue remains.
+- [ ] Follow-up risks have explicit tickets/owners.
+
+---
 
 ## Definition of Done
 
-- [ ] All dependency tickets are Completed or explicitly approved as not applicable.
-- [ ] Runbook committed and reviewed.
-- [ ] Production change window/owners identified.
-- [ ] Recovery point verified.
-- [ ] Identity audit/backfill gate passed.
-- [ ] Automated validation gate passed.
-- [ ] Deployment executed.
-- [ ] Production smoke/validation cases passed or explicitly handled under approved partial-failure rules.
-- [ ] Production config cleanup completed.
-- [ ] Credential rotation completed/not required with evidence status.
-- [ ] Monitoring reviewed after deployment.
-- [ ] Completion evidence recorded safely.
-- [ ] Security/staff reviewer signs off.
-- [ ] Ticket moves to `Completed/` only after actual rollout, never just after writing docs.
+This ticket is complete only when the production rollout is executed and signed off.
+
+A draft runbook alone is **not** Done.
+
+---
 
 ## Forbidden Shortcuts
 
 Do not:
 
-- deploy strict Clerk-ID mapping before mapping audit;
-- delete live config before verifying real admin access;
-- run bootstrap casually in initialized production;
-- paste production secrets/PII exports into Git/PR/ticket;
-- test lockout by disabling the only real admin;
-- restore hardcoded fallback as standard rollback;
-- mass-reactivate users to recover access;
-- mass-clear `clerkUserId` values without verified plan;
-- claim deployment complete based only on CI;
-- continue rollout after a failed hard go/no-go gate without explicit escalation.
+- deploy strict mapping before production identity audit/backfill;
+- add temporary email fallback to make migration easier;
+- remove old live config before verifying hardened admin login;
+- test by disabling the only production admin;
+- run first-admin bootstrap casually in initialized production;
+- use `prisma migrate dev` in production;
+- store raw identity audit output in Git;
+- paste credentials/tokens into ticket evidence;
+- reactivate a user because Clerk cleanup failed;
+- mark rollout successful while legitimate mappings are unexplained;
+- skip rollback preparation because changes are “only auth.”
 
-## STOP - NEEDS ARCHITECT DECISION
+---
 
-Stop deployment if:
+## STOP - NEEDS ARCHITECT / SECURITY DECISION
 
-- there is no verified administrator mapping;
-- identity audit contains unresolved ambiguous active users;
-- database recovery capability is unavailable for planned risky data changes;
-- strict auth behavior differs from approved architecture;
-- a break-glass recovery path is required but not approved;
-- audit reliability contract remains unresolved;
-- production uses another identity/session provider in a way not covered by this runbook.
+Do not begin or continue production rollout if:
+
+- AUTH-017 has an unresolved P0 failure;
+- production mapping audit has ambiguity/conflict for active users;
+- no legitimate mapped active admin is known;
+- last-admin concurrency safety is unresolved but required for production guarantee;
+- no DB recovery point is available for mapping changes;
+- no application rollback path is known;
+- bootstrap/recovery semantics for an initialized zero-admin environment are unclear and rollout depends on them;
+- audit reliability policy is unresolved;
+- provider cleanup API contract is unresolved in a way that affects access-control semantics.
+
+---
+
+## Workstream Closure Statement
+
+When AUTH-018 is truly complete, the intended production security model is:
+
+```text
+Clerk proves external identity.
+clerkUserId maps that identity to an explicitly provisioned PropertyOS user.
+PropertyOS DB decides role/status/organization/geography.
+Authentication is read-only for user security state.
+Inactive/suspended users fail closed.
+Privilege/lifecycle changes are explicit, audited, and protected against final-admin lockout.
+Provider session cleanup is defense-in-depth and cannot reopen local access.
+Normal seed/runtime contain no master-admin fallback.
+Production rollout and rollback are documented and verified.
+```
+
+---
 
 ## Completion Record
 
-**Runbook Written By:**  
-**Deployment Executed By:**  
-**Reviewed By:**  
+**Runbook Authored By:**  
+**Runbook Reviewed By:**  
+**Deployment Operator:**  
+**Database Operator:**  
+**Clerk Operator:**  
+**Rollback Approver:**  
 **PR:**  
-**Production Commit:**  
+**Target Production Commit:**  
 **Previous Known-Good Commit:**  
-**Deployment Date/Time:**  
-**Recovery Point Verified:** Yes / No  
-**Identity Audit:** Pass / Fail  
-**Automated Validation Gate:** Pass / Fail  
-**Admin A Smoke Test:** Pass / Fail  
-**Admin B Smoke Test:** Pass / Fail / N/A  
-**Unmapped User Test:** Pass / Fail  
-**Inactive/Suspended Test:** Pass / Fail  
-**Explicit Reactivation Test:** Pass / Fail  
-**Last-Admin Test:** Pass / Fail  
-**Audit Event Test:** Pass / Fail  
-**Session Revocation Test:** Pass / Partial / Fail  
-**MASTER_ADMIN_* Removed:** Yes / No  
-**Credential Rotation:** Completed / Not Required / Pending  
-**Monitoring Review:** Pass / Incident Opened  
-**Notes:**
+**Deployment Date:**  
+**AUTH-005 Post-Backfill Audit:** Pass / Fail  
+**Admin A Smoke:** Pass / Fail  
+**Admin B Smoke:** Pass / Fail / N/A  
+**Unmapped Identity Test:** Pass / Fail  
+**Lifecycle Test:** Pass / Fail  
+**Last-Admin Safety:** Pass / Fail  
+**Semantic Audit Verification:** Pass / Fail  
+**Session Cleanup Verification:** Pass / Fail / Degraded But Local Fail-Closed  
+**Live Config Cleanup:** Complete / Failed / Rolled Back  
+**Credential Rotation:** Completed / Not Required / Pending Approved Follow-Up  
+**Monitoring Window:** Healthy / Issues Found  
+**Rollback Used:** Yes / No  
+**Remaining Follow-Ups:**  
+**Final Sign-Off:** Approved / Not Approved
