@@ -10,220 +10,377 @@
 
 ## Objective
 
-Create a focused unit/regression test suite for `JwtAuthGuard` that permanently protects the hardened authentication contract.
+Create a focused regression suite that permanently protects the final hardened `JwtAuthGuard` contract.
 
 The suite must prove that request-time authentication:
 
-- verifies identity correctly;
-- maps Clerk `sub` to an existing local user through `clerkUserId`;
-- accepts only active users;
-- never creates users;
-- never reactivates users;
-- never changes roles/status/organization/geography;
-- never falls back to email;
-- does not silently repair missing identity mappings;
-- does not log sensitive identity/token data;
-- preserves existing public-route and authorized-party behavior.
+- preserves public-route behavior;
+- requires and verifies a valid bearer token for Clerk-protected routes;
+- maps verified Clerk `sub` directly to `User.clerkUserId`;
+- never uses email as a fallback identity join;
+- accepts only already-provisioned active local users;
+- never creates a local user;
+- never fills a missing identity mapping during login;
+- never reactivates a user;
+- never changes role/status/organization/geography;
+- remains read-only with respect to user lifecycle/authorization state;
+- preserves authorized-party/token-verification settings;
+- preserves any supported non-Clerk auth mode intentionally;
+- emits useful but PII/credential-minimal logs.
 
-## Junior Engineer Orientation
+This test suite is the permanent guardrail against future “quick login fixes” reintroducing the vulnerabilities removed by AUTH-001 through AUTH-014.
 
-This ticket does not add new product behavior. It creates the safety net that stops later engineers from accidentally undoing AUTH-001 through AUTH-014.
+---
 
-A good security regression test does more than assert:
+## Junior Engineer Mental Model
 
-```text
-request failed
-```
+A security regression test must prove more than the HTTP/auth result.
 
-It also proves:
-
-```text
-why it failed
-which dependency was/was not called
-what database state did not change
-which security fallback did not occur
-what sensitive data did not leak into logs
-```
-
-For example, this is too weak:
+This is too weak:
 
 ```text
-expect(error).toBeUnauthorized()
+expect(authentication).toFail()
 ```
 
-because the guard might have created an ADMIN and then failed for another reason.
+because the guard could have created an administrator, changed status, or linked an identity before failing for another reason.
 
-A stronger test also asserts:
+A strong test asks four questions:
 
 ```text
-user.create was not called
-user.update was not called
-request.user was not set
+1. What result did the guard return/throw?
+2. Which identity lookup did it perform?
+3. Which dangerous writes definitely did NOT occur?
+4. What information did it expose in logs?
 ```
 
-## Why This Exists
+The suite should read like the final authentication state machine.
 
-Jest is already configured under the backend, but the current repository does not have a dedicated `JwtAuthGuard` spec protecting the hardened security behavior.
+---
 
-Authentication code is frequently changed under pressure when login breaks. Without focused regression tests, a future engineer may reintroduce email fallback, auto-provisioning, auto-reactivation, or sensitive debug logging while trying to restore access quickly.
+## Final Authentication Contract Being Tested
 
-## Expected Files
-
-Create:
-
-- `Backend/src/shared/guards/jwt-auth.guard.spec.ts`
-
-Modify production auth code only if a **small behavior-preserving testability refactor** is genuinely required.
-
-Do not redesign authentication simply to make mocking easier.
-
-## Required Reading
-
-1. final `Backend/src/shared/guards/jwt-auth.guard.ts` after dependencies
-2. `Backend/package.json` Jest configuration
-3. `Backend/src/shared/decorators/public.decorator.ts`
-4. at least two existing backend `.spec.ts` files for project style
-5. Prisma `UserRole` and `UserStatus`
-6. `docs/tickets/TICKET_DETAIL_STANDARD.md`
-7. AUTH-001/002/003/004/006/014 completed ticket behavior
-
-Before writing tests, write the final auth flow on paper/PR notes:
+For Clerk mode:
 
 ```text
-public route? -> allow
-protected -> require Bearer token
-verify Clerk token
-lookup local user by clerkUserId=sub
-missing -> reject
-non-active -> reject
-active -> attach stored user -> allow
+Is route public?
+  yes -> allow without auth work
+  no  -> continue
+
+Extract Bearer token
+  missing/malformed -> reject
+
+Validate Clerk configuration
+  invalid/missing -> reject
+
+verifyToken(token, approved options)
+  failure -> reject
+
+sub = verifiedToken.sub
+
+find local User where clerkUserId = sub
+  none -> reject, zero writes
+
+check local status
+  inactive/suspended -> reject, zero writes
+  active -> continue
+
+request.user = stored local user
+return true
 ```
 
-No test should encode obsolete email-mapping behavior as the desired result.
+The following are intentionally **not** in the flow:
 
-## Test Strategy
+```text
+lookup by email
+fetch Clerk profile only to discover email
+create local user
+link clerkUserId during request
+promote ADMIN
+set status active
+clear deactivatedAt
+sync role/org from provider metadata
+```
 
-Unit-test the guard without real Clerk/network/database calls.
+---
+
+## Architecture Discussion and Decisions
+
+### Decision 1: Unit-test the real guard, mock infrastructure boundaries
 
 Mock:
 
-- `verifyToken` from `@clerk/backend`;
+- Clerk `verifyToken`;
+- Prisma service;
 - `Reflector`;
-- `PrismaService` user lookup and write methods;
-- Nest `ExecutionContext` request/handler/class shape;
-- Logger where testing sensitive output.
+- Nest `ExecutionContext`;
+- logger when testing output;
+- superclass Passport behavior only for the explicit legacy-provider compatibility test.
 
-Do not require real Clerk credentials.
+Do **not** mock `JwtAuthGuard.canActivate()` itself.
+
+### Decision 2: Explicitly mock dangerous Prisma writes even though they should never happen
+
+The mock must expose spies for:
+
+```text
+user.create
+user.update
+user.upsert
+```
+
+Why: a future regression adding any of these calls should fail existing tests immediately.
+
+### Decision 3: Assert exact identity query key
+
+A happy-path test must prove the local lookup uses:
+
+```text
+where.clerkUserId = verifiedToken.sub
+```
+
+A test that merely returns a local user from a generic mocked `findUnique` is insufficient because email fallback could silently return later.
+
+### Decision 4: Do not call real Clerk or a real database
+
+These are focused guard tests. AUTH-017 handles assembled E2E behavior with disposable PostgreSQL.
+
+### Decision 5: Use fake sensitive markers and inspect all logger arguments
+
+Logging tests must look for marker absence across all structured arguments, not only the first message string.
+
+### Decision 6: Environment variables are isolated per test
+
+Tests must not depend on developer shell state or execution order.
+
+Capture original values, set only what each test requires, and restore afterward.
+
+### Decision 7: Test behavior, not private implementation trivia
+
+Assert security-significant interactions:
+
+- verification called with correct options;
+- exact identity lookup key;
+- dangerous writes absent;
+- state not mutated;
+- logs privacy-minimal.
+
+Avoid brittle assertions about punctuation, internal local variable names, or harmless log ordering.
+
+---
+
+## Facts, Assumptions, and Unknowns
+
+### Facts / Expected State
+
+- backend uses Jest;
+- final guard supports Clerk mode and may still support a legacy Passport/JWT mode;
+- AUTH-006 makes `clerkUserId` strict identity join;
+- AUTH-014 defines safe logging expectations.
+
+### Assumptions To Verify
+
+- existing Jest module mocking can replace `verifyToken` before guard import/use;
+- `Reflector.getAllAndOverride` or current metadata method can be configured per test;
+- the request object has path/originalUrl/request ID fields used by final logging;
+- `request.user` is mutable in test context.
+
+### Unknowns That Must Not Be Guessed
+
+- exact exception class/status used for each final failure path if implementation changed;
+- exact legacy-auth superclass test seam;
+- exact authorized-party environment variable precedence after final implementation.
+
+Read the final guard before writing assertions.
+
+---
+
+## Scope
+
+### Create / Modify
+
+- `Backend/src/shared/guards/jwt-auth.guard.spec.ts`
+
+Production code may be changed only for a small behavior-preserving testability improvement if genuinely necessary and reviewed.
+
+### Out Of Scope
+
+Do not:
+
+- redesign auth architecture;
+- build integration/E2E DB tests here;
+- call real Clerk;
+- test Clerk cryptography;
+- test full RBAC behavior owned by `RolesGuard` beyond logging/interaction necessary to auth contract;
+- weaken the guard solely to simplify mocks.
+
+---
+
+## Required Reading
+
+Before implementation:
+
+1. final `Backend/src/shared/guards/jwt-auth.guard.ts`
+2. `Backend/src/shared/guards/roles.guard.ts`
+3. public decorator/metadata implementation
+4. backend Jest config/package scripts
+5. at least two current `.spec.ts` examples
+6. Prisma User model/enums
+7. AUTH-001, 002, 003, 004, 006, 014 completion behavior
+8. `docs/tickets/TICKET_DETAIL_STANDARD.md`
+
+Intern must be able to write the final auth state machine from memory before coding the test.
+
+---
 
 ## Test Data Rules
 
-Use fake values only, for example:
+Use fake-only values:
 
 ```text
-clerkUserId: user_test_123
-email: sensitive@example.test
-local user id: 11111111-1111-4111-8111-111111111111
-token: super-secret-test-token
+local user IDs: deterministic fake UUIDs
+clerk IDs: user_test_admin_a, user_test_worker_a
+tokens: token-admin-a, super-secret-test-token
+emails: *.example.test
+request IDs: req-test-001
 ```
 
-Never use a real administrator email, real Clerk ID, production UUID, or live token in fixtures.
+Never place a real personal email, real Clerk ID, production UUID, token, or secret in test fixtures.
 
-## Shared Test Harness Requirements
+---
 
-Build small helpers/fixtures for:
+## Shared Test Harness Design
 
-- protected/public `ExecutionContext`;
-- fake request with mutable `request.user`;
-- active ADMIN/WORKER/RIDER users;
-- inactive/suspended users;
-- safe environment variable setup/restore;
-- logger call serialization for sensitive-marker checks.
+Create small local helpers for:
 
-Keep helpers inside the spec unless they are clearly reusable elsewhere.
+- public/protected execution context;
+- request object with headers/path/request ID/mutable user;
+- active ADMIN/WORKER/RIDER fixtures;
+- inactive/suspended fixture cloning;
+- environment setup/restore;
+- Prisma read/write spies;
+- serialization of all logger calls for sensitive-marker assertions.
 
-## Step-by-Step Implementation
+Prefer small helpers inside the spec. Do not create a new cross-project test framework unless repeated use is already established.
 
-### Step 1 - Inspect existing Jest conventions
+---
 
-Find at least two existing backend unit specs.
+## Step-by-Step Execution Plan for an Intern
 
-Follow repository conventions for:
+### Phase 0 - Baseline
 
-- `describe` structure;
+Run current backend tests before adding the file.
+
+```bash
+npm run typecheck:backend
+npm run test:backend
+```
+
+Record existing failures.
+
+### Phase 1 - Inspect Existing Jest Style
+
+Open two representative backend specs.
+
+Record conventions for:
+
+- `describe` nesting;
+- async rejection assertions;
 - provider mocks;
-- resetting mocks;
-- async exception assertions;
-- environment cleanup.
+- mock reset;
+- Nest testing module use;
+- fake timers/environment cleanup.
 
-Do not add another testing framework.
+### Phase 2 - Create the Spec Skeleton
 
-### Step 2 - Create the spec file and minimal guard instance
+Instantiate real `JwtAuthGuard` with mocked dependencies.
 
-Construct `JwtAuthGuard` with mocked `Reflector` and `PrismaService`.
+If direct construction conflicts with `AuthGuard('jwt')`, use existing Nest testing patterns.
 
-If superclass `AuthGuard("jwt")` makes direct construction tricky, follow Nest testing-module patterns already used in repo. Do not mock `canActivate()` itself.
+Do not replace the guard with a fake.
 
-### Step 3 - Add environment isolation
+### Phase 3 - Build Environment Isolation
 
-Capture original values of auth-related environment variables.
+Capture original auth-related env values.
 
-Each test must explicitly establish what it needs. Restore values in `afterEach`/`afterAll` so test ordering cannot change results.
+Use `beforeEach` to set deterministic defaults and `afterEach`/`afterAll` to restore them.
 
-### Step 4 - Add explicit Prisma write spies
+At minimum consider:
 
-Even though hardened guard should not call them, include mocked/spied methods for:
+```text
+AUTH_PROVIDER
+CLERK_SECRET_KEY
+CLERK_AUTHORIZED_PARTIES or equivalent
+FRONTEND_URL if used for authorized parties
+```
 
-- `user.create`;
-- `user.update`;
-- `user.upsert`.
+### Phase 4 - Build Prisma Mock With Read + Forbidden Write Spies
 
-This is deliberate. A future regression that adds one of these calls should make tests fail.
+Required methods include final lookup plus:
 
-### Step 5 - Build a reusable protected request context
+```text
+user.create
+user.update
+user.upsert
+```
 
-The fake request must support what the guard reads:
+Default forbidden writes to Jest fns so every relevant test can assert zero calls.
 
-- `headers.authorization`;
-- `originalUrl`/`url`;
-- request ID if used by logging;
-- mutable `request.user`.
+### Phase 5 - Build Request/ExecutionContext Helper
 
-Reflector should be configurable per test for public/protected behavior.
+Request fixture must support whatever final guard reads:
 
-### Step 6 - Mock `verifyToken` by outcome
+- authorization header;
+- URL/path;
+- request ID;
+- `request.user`.
 
-Success tests return a known `{ sub }`.
+Reflector result must be configurable for public/protected.
 
-Failure tests throw/reject.
+### Phase 6 - Mock Clerk Verification
 
-Do not test Clerk cryptography. Test PropertyOS behavior based on the SDK result.
+Map fake token -> fake `sub`.
 
-### Step 7 - Implement tests in security-flow order
+For invalid-token tests, throw a fake provider error containing sensitive markers so logging sanitation is also exercised.
 
-Recommended ordering:
+### Phase 7 - Write Tests In State-Machine Order
 
-1. public-route bypass;
-2. token/config failures;
-3. mapped active users;
-4. missing mapping/email fallback regression;
-5. inactive/suspended users;
-6. no-write/privilege immutability;
-7. authorized parties;
-8. safe logging.
+Recommended file order:
 
-This makes the test file readable like the auth flow.
+1. public bypass;
+2. token parsing/config;
+3. token verification options;
+4. active mapped users;
+5. missing mapping / no email fallback;
+6. inactive/suspended;
+7. no-write/immutability;
+8. provider profile/network dependency absence;
+9. safe logging;
+10. legacy provider behavior if supported.
 
-### Step 8 - Add comments only where the security reason is not obvious
+### Phase 8 - Make Negative Assertions Mandatory
 
-Do not narrate every Jest line. Use test names and small comments to explain why a negative assertion matters.
+For every failure path where relevant, assert:
 
-### Step 9 - Run targeted test repeatedly while building
+```text
+user.create not called
+user.update not called
+user.upsert not called
+request.user remains unset
+```
 
-Use backend workspace Jest path/pattern to run only `jwt-auth.guard.spec.ts` until stable.
+### Phase 9 - Run Targeted Test During Development
 
-Then run the entire backend suite.
+Use backend Jest pattern/path to run only this spec while iterating.
 
-### Step 10 - Run full validation
+Do not repeatedly run the entire repo for every line change.
+
+### Phase 10 - Check Coverage Intelligently
+
+Coverage should reveal missed auth branches, but 100% is not the goal.
+
+Do not write meaningless implementation-detail tests solely to increase percentage.
+
+### Phase 11 - Run Full Validation
 
 ```bash
 npm run typecheck:backend
@@ -231,440 +388,447 @@ npm run lint:backend
 npm run test:backend
 ```
 
-Optionally run backend coverage and inspect the guard's untested branches.
+Then confirm AUTH-017 can rely on this suite as a dependency.
 
-Coverage percentage is evidence, not the goal. Do not write meaningless tests only to reach 100%.
+---
 
 ## Detailed Test Catalog
 
-### TEST-AUTH015-01: Public route bypasses auth dependencies
+### TEST-AUTH015-01: Public route bypasses auth work
 
-**Purpose:** Preserve existing public-route contract while hardening protected routes.
+**Purpose:** Preserve intended public endpoints.
 
-**Level:** Unit.
+**Setup:** reflector marks route public; no token.
 
-**Setup:** Reflector marks route public; request has no token.
-
-**Action:** Call `canActivate()`.
-
-**Expected Result:** Returns `true`.
-
-**Required Assertions:** `verifyToken` not called; Prisma user lookup/write methods not called.
-
-**Why This Test Exists:** A security refactor should not accidentally make health/public routes require Clerk.
-
-**If This Test Fails:** Check public metadata handling before debugging token logic.
-
-### TEST-AUTH015-02: Protected route with missing token is rejected before provider/DB work
-
-**Purpose:** Protect authentication entry boundary.
-
-**Level:** Unit.
-
-**Setup:** Protected route, no authorization header.
-
-**Action:** Call guard.
-
-**Expected Result:** Unauthorized.
-
-**Required Assertions:** `verifyToken` not called; Prisma lookup/write methods not called; `request.user` unset.
-
-**Why This Test Exists:** Missing credentials should fail early and read/write nothing.
-
-**If This Test Fails:** Inspect bearer extraction/order.
-
-### TEST-AUTH015-03: Malformed/non-Bearer header behaves like missing token
-
-**Purpose:** Prevent accidental acceptance of unsupported auth schemes.
-
-**Level:** Unit.
-
-**Setup:** `Authorization: Basic ...` or malformed header.
-
-**Action:** Call guard.
-
-**Expected Result:** Unauthorized; no provider/DB work.
-
-**Required Assertions:** Same negative calls as missing-token test.
-
-**Why This Test Exists:** Prefix parsing is part of the security boundary.
-
-**If This Test Fails:** Tighten bearer extraction without logging raw header.
-
-### TEST-AUTH015-04: Clerk mode with missing secret fails before local lookup
-
-**Purpose:** Fail closed on provider misconfiguration.
-
-**Level:** Unit.
-
-**Setup:** `AUTH_PROVIDER=clerk`, token present, `CLERK_SECRET_KEY` unset.
-
-**Action:** Call guard.
-
-**Expected Result:** Unauthorized/config rejection.
-
-**Required Assertions:** No Prisma user lookup/write; no secret value logged.
-
-**Why This Test Exists:** Misconfigured auth must not silently bypass verification.
-
-**If This Test Fails:** Restore explicit secret requirement.
-
-### TEST-AUTH015-05: Invalid Clerk token is rejected with zero DB work
-
-**Purpose:** Ensure local identity is never trusted before external token verification succeeds.
-
-**Level:** Unit.
-
-**Setup:** Fake bearer token; `verifyToken` throws.
-
-**Action:** Call guard.
-
-**Expected Result:** Unauthorized.
-
-**Required Assertions:** No local lookup/write; raw token absent from logs.
-
-**Why This Test Exists:** Verification order must stay provider-first.
-
-**If This Test Fails:** Check ordering and logging.
-
-### TEST-AUTH015-06: Active mapped ADMIN succeeds without writes
-
-**Purpose:** Protect normal administrator authentication after hardening.
-
-**Level:** Unit.
-
-**Setup:** `verifyToken` returns admin sub; `findUnique` by `clerkUserId` returns active ADMIN.
-
-**Action:** Call guard.
+**Action:** `canActivate()`.
 
 **Expected Result:** `true`.
 
-**Required Assertions:** `request.user` is existing local user; exact lookup key is `clerkUserId`; no create/update/upsert; role/status unchanged.
+**Required Assertions:** no `verifyToken`; no Prisma read/write.
 
-**Why This Test Exists:** Security changes should not require privileged repair for legitimate admins.
+**If Fails:** fix public metadata handling, not token logic.
 
-**If This Test Fails:** Inspect strict mapping and status path; do not add fallback.
+### TEST-AUTH015-02: Missing token rejects before provider/DB work
 
-### TEST-AUTH015-07: Active mapped WORKER succeeds without admin-specific logic
+**Purpose:** Fail early at credential boundary.
 
-**Purpose:** Prove auth success is role-neutral.
+**Setup:** protected route, no Authorization header.
 
-**Level:** Unit.
+**Action:** guard.
 
-**Setup:** Active mapped WORKER.
+**Expected Result:** unauthorized.
 
-**Action:** Authenticate.
+**Required Assertions:** no verify; no DB read/write; request.user unset; safe reason log.
 
-**Expected Result:** Allowed; request user stays WORKER.
+### TEST-AUTH015-03: Malformed/non-Bearer header is rejected
 
-**Required Assertions:** No role mutation/writes.
+**Purpose:** Prevent unsupported scheme acceptance.
 
-**Why This Test Exists:** Auth should identify users; RolesGuard decides route permissions later.
+**Setup:** malformed or `Basic` auth header.
 
-**If This Test Fails:** Remove role-specific success behavior from JwtAuthGuard.
+**Expected Result:** same security outcome as missing bearer.
 
-### TEST-AUTH015-08: Active mapped RIDER succeeds
+**Required Assertions:** no provider/DB work; raw header not logged.
 
-**Purpose:** Cover every current role.
+### TEST-AUTH015-04: Clerk mode without required secret fails closed
 
-**Level:** Unit.
+**Purpose:** Prevent misconfiguration from bypassing verification.
 
-**Setup:** Active mapped RIDER.
+**Setup:** Clerk mode, bearer token present, secret unset.
 
-**Action:** Authenticate.
+**Expected Result:** reject before local lookup.
 
-**Expected Result:** Allowed; role unchanged; no writes.
+**Required Assertions:** no DB work; secret values absent from logs.
 
-**Required Assertions:** Same as WORKER case.
+### TEST-AUTH015-05: Invalid token rejects with zero DB work
 
-**Why This Test Exists:** Less-common roles are easy to omit in refactors.
+**Purpose:** Ensure provider verification precedes local trust.
 
-**If This Test Fails:** Ensure guard does not whitelist only ADMIN/WORKER.
+**Setup:** `verifyToken` throws.
 
-### TEST-AUTH015-09: Unknown Clerk ID is rejected with zero writes
+**Expected Result:** unauthorized.
 
-**Purpose:** Protect explicit provisioning requirement.
+**Required Assertions:** no local lookup/write; raw token/provider secret markers absent from logs.
 
-**Level:** Unit.
+### TEST-AUTH015-06: Verification receives authorized-party options
 
-**Setup:** Valid token sub; Prisma lookup by `clerkUserId` returns null.
+**Purpose:** Preserve token validation hardening while identity lookup changes.
 
-**Action:** Authenticate.
+**Setup:** deterministic authorized-party env values.
 
-**Expected Result:** Rejected.
+**Action:** valid token path.
 
-**Required Assertions:** no create/update/upsert; `request.user` unset.
+**Expected Result:** `verifyToken` called with expected verification options.
 
-**Why This Test Exists:** Prevents auto-provisioning and request-time identity repair.
+**Required Assertions:** values used for verification, not exposed in logs unnecessarily.
 
-**If This Test Fails:** Check AUTH-002/AUTH-006 regressions.
+### TEST-AUTH015-07: Active mapped ADMIN authenticates by Clerk ID
 
-### TEST-AUTH015-10: Email collision does not provide fallback access
+**Purpose:** Protect legitimate admin path.
 
-**Purpose:** Prove email is not a second identity key.
+**Setup:** verified `sub=user_test_admin`; Prisma returns active ADMIN for `clerkUserId`.
 
-**Level:** Unit.
+**Expected Result:** success.
 
-**Setup:** Verified `sub` has no local mapping. If needed, model a local row that would match the same fake email, but production guard must never query by email.
+**Required Assertions:** lookup key exactly `clerkUserId`; request.user is stored user; no writes.
 
-**Action:** Authenticate.
+### TEST-AUTH015-08: Active mapped WORKER authenticates without role mutation
 
-**Expected Result:** Rejected.
+**Purpose:** Auth is role-neutral.
 
-**Required Assertions:** Only `clerkUserId` lookup occurred; no email lookup/linking.
+**Expected Result:** success as WORKER.
 
-**Why This Test Exists:** `try ID then email` is the most likely future shortcut.
+**Required Assertions:** no ADMIN logic/update.
 
-**If This Test Fails:** Remove fallback; mapping must be fixed outside auth.
+### TEST-AUTH015-09: Active mapped RIDER authenticates
 
-### TEST-AUTH015-11: Former privileged-email scenario has no special handling
+**Purpose:** Cover all current roles.
+
+**Expected Result:** success; role unchanged; zero writes.
+
+### TEST-AUTH015-10: Unknown Clerk ID is denied with zero writes
+
+**Purpose:** Protect explicit provisioning boundary.
+
+**Setup:** token valid; lookup by `clerkUserId` returns null.
+
+**Expected Result:** reject.
+
+**Required Assertions:** no create/update/upsert; request.user unset.
+
+### TEST-AUTH015-11: Same/similar email cannot provide fallback access
+
+**Purpose:** Permanently protect strict identity join.
+
+**Setup:** unmapped `sub`; model an email-collision local user if needed in mocked DB behavior.
+
+**Expected Result:** reject.
+
+**Required Assertions:** guard never queries local user by email; no link update.
+
+### TEST-AUTH015-12: Former master-email scenario receives no exception
 
 **Purpose:** Permanently protect AUTH-001.
 
-**Level:** Unit.
+**Setup:** fake `example.test` email representing the old special-email branch, but unmapped provider ID.
 
-**Setup:** Fake email representing the old special-email condition, but unknown/unmapped provider ID.
+**Expected Result:** same rejection as any unmapped identity.
 
-**Action:** Authenticate.
+**Required Assertions:** no create/reactivate/promote.
 
-**Expected Result:** Same rejection as any unknown mapping.
+### TEST-AUTH015-13: Inactive mapped user is denied and immutable
 
-**Required Assertions:** No user creation/reactivation/role assignment.
+**Purpose:** Protect AUTH-003.
 
-**Why This Test Exists:** Prevents reintroduction of owner/master-email bypass.
+**Setup:** mapped inactive user with known role/deactivatedAt.
 
-**If This Test Fails:** Search for special email/domain/allowlist logic.
+**Expected Result:** reject.
 
-### TEST-AUTH015-12: Inactive mapped user is denied and immutable
+**Required Assertions:** no update; role/status/deactivatedAt unchanged.
 
-**Purpose:** Permanently protect AUTH-003.
+### TEST-AUTH015-14: Suspended mapped user is denied and immutable
 
-**Level:** Unit.
+**Purpose:** Preserve temporary lock.
 
-**Setup:** Correct mapped user, `status=inactive`, known role/deactivatedAt.
+**Expected Result:** reject; zero writes; remains suspended.
 
-**Action:** Authenticate.
+### TEST-AUTH015-15: Active successful auth never mutates authorization state
 
-**Expected Result:** Rejected.
+**Purpose:** Protect AUTH-004.
 
-**Required Assertions:** no write; status/role/deactivatedAt unchanged.
+**Setup:** active user with known role/status/org/geography-relevant state.
 
-**Why This Test Exists:** Response rejection alone does not prove auto-reactivation is gone.
+**Action:** authenticate multiple times.
 
-**If This Test Fails:** Remove lifecycle mutation from guard.
+**Expected Result:** success every time.
 
-### TEST-AUTH015-13: Suspended mapped user is denied and immutable
+**Required Assertions:** zero user writes; returned authorization fields remain DB values.
 
-**Purpose:** Protect temporary account locks.
+### TEST-AUTH015-16: Provider metadata cannot elevate stored role
 
-**Level:** Unit.
+**Purpose:** Keep authorization source of truth in PropertyOS.
 
-**Setup:** Mapped suspended user.
+**Setup:** if provider mock exposes metadata, make it suggest ADMIN while local role=WORKER.
 
-**Action:** Authenticate.
+**Expected Result:** request.user remains WORKER.
 
-**Expected Result:** Rejected, zero writes.
+**Required Assertions:** no role update.
 
-**Required Assertions:** status remains suspended.
+### TEST-AUTH015-17: Request-time identity mapping cannot be repaired
 
-**Why This Test Exists:** Suspended must never be treated as active/recoverable at login.
+**Purpose:** Protect AUTH-006 migration boundary.
 
-**If This Test Fails:** Restore `status === active` gate.
+**Setup:** strict lookup misses; another mocked local row could conceptually match email.
 
-### TEST-AUTH015-14: Auth never mutates role/status/org for successful user
+**Expected Result:** reject.
 
-**Purpose:** Protect AUTH-004 broader privilege immutability.
+**Required Assertions:** no `user.update` assigning `clerkUserId`.
 
-**Level:** Unit.
+### TEST-AUTH015-18: Normal auth does not require Clerk profile fetch after strict mapping
 
-**Setup:** Active mapped user with known role/status/org.
+**Purpose:** Prevent reintroduction of per-request profile/email dependency.
 
-**Action:** Authenticate repeatedly.
+**Setup:** active mapped user.
 
-**Expected Result:** Success each time.
+**Action:** authenticate.
 
-**Required Assertions:** no user writes; same local authorization state returned each time.
+**Expected Result:** success using verified `sub` + Prisma lookup only, if final design removed profile fetch.
 
-**Why This Test Exists:** Prevents request-time privilege synchronization from external metadata.
+**Required Assertions:** `clerk.users.getUser` equivalent not called.
 
-**If This Test Fails:** Remove auth-side sync/repair writes.
+**If final guard has an approved different provider call, update test to assert the approved reason rather than blindly removing it.**
 
-### TEST-AUTH015-15: Authorized parties are passed to token verification
+### TEST-AUTH015-19: Missing-user log is privacy-minimal
 
-**Purpose:** Preserve token origin/audience-related verification configuration.
+**Purpose:** Protect AUTH-014.
 
-**Level:** Unit.
+**Setup:** fake token/email/provider ID markers; local lookup null.
 
-**Setup:** Set fake `CLERK_AUTHORIZED_PARTIES` or frontend URL.
+**Expected Result:** safe reason log.
 
-**Action:** Authenticate.
+**Required Assertions:** sensitive markers absent across all logger args.
 
-**Expected Result:** `verifyToken` invoked with expected secret/authorized parties shape.
+### TEST-AUTH015-20: Invalid-token log does not leak token/provider error payload
 
-**Required Assertions:** Values are used for verification but not logged.
+**Purpose:** Protect credential/log hygiene.
 
-**Why This Test Exists:** Identity-mapping refactor must not weaken token validation options.
+**Setup:** provider error contains fake secret/token/email.
 
-**If This Test Fails:** Restore provider verification configuration independently of DB lookup.
+**Expected Result:** safe category only.
 
-### TEST-AUTH015-16: Missing-user safe log contains reason code and no sensitive markers
+**Required Assertions:** marker absence.
 
-**Purpose:** Protect AUTH-014 at guard level.
+### TEST-AUTH015-21: Success log excludes email/provider ID/token
 
-**Level:** Unit/log capture.
+**Purpose:** Prevent high-volume PII logs.
 
-**Setup:** Fake token/email/provider ID markers; local lookup returns null.
+**Setup:** active mapped user with fake sensitive markers.
 
-**Action:** Authenticate.
+**Expected Result:** success; only safe local context logged if success logging exists.
 
-**Expected Result:** Rejected with safe reason log.
+### TEST-AUTH015-22: Repeated unmapped attempts remain read-only
 
-**Required Assertions:** token/email/provider ID absent across all logger args; reason/request context present.
+**Purpose:** Catch retry/second-attempt repair behavior.
 
-**Why This Test Exists:** Login regression fixes often add temporary sensitive debug logging.
+**Setup:** unmapped valid identity.
 
-**If This Test Fails:** Sanitize logging, not test expectations.
+**Action:** call guard 3 times.
 
-### TEST-AUTH015-17: Successful auth log excludes email/provider/token
+**Expected Result:** same rejection each time.
 
-**Purpose:** Prevent high-volume success logging from collecting PII.
+**Required Assertions:** zero cumulative writes.
 
-**Level:** Unit/log capture.
+### TEST-AUTH015-23: Repeated non-active attempts remain immutable
 
-**Setup:** Active mapped user with fake sensitive markers.
+**Purpose:** Catch hidden login recovery on retries.
 
-**Action:** Authenticate.
+**Setup:** suspended/inactive fixture.
 
-**Expected Result:** Success.
+**Action:** repeated guard calls.
 
-**Required Assertions:** Sensitive markers absent from logger args; local ID/role may remain.
+**Expected Result:** repeated denial; zero writes.
 
-**Why This Test Exists:** Success paths produce the largest log volume.
+### TEST-AUTH015-24: Public route does not require Clerk environment configuration
 
-**If This Test Fails:** Replace full-object/profile logging with allowlisted fields.
+**Purpose:** Ensure public health/setup routes stay independent of provider config.
 
-### TEST-AUTH015-18: Legacy non-Clerk provider delegates to Passport guard as expected
+**Setup:** public metadata, Clerk secret absent.
 
-**Purpose:** Protect current multi-provider compatibility if still supported.
+**Expected Result:** allow without provider config validation.
 
-**Level:** Unit.
+### TEST-AUTH015-25: Legacy non-Clerk mode delegates to supported Passport behavior
 
-**Setup:** `AUTH_PROVIDER` not `clerk`; configure/method-spy superclass behavior using a safe test seam.
+**Purpose:** Preserve intentional multi-provider compatibility if it still exists.
 
-**Action:** Call guard.
+**Setup:** `AUTH_PROVIDER` set to supported non-Clerk mode.
 
-**Expected Result:** Existing JWT/Passport path is used, without executing Clerk-specific mapping.
+**Action:** call guard through an approved superclass spy/test seam.
 
-**Required Assertions:** `verifyToken` not called in non-Clerk mode.
+**Expected Result:** existing Passport/JWT path runs; Clerk-specific mapping does not.
 
-**Why This Test Exists:** Clerk hardening should not accidentally route every environment through Clerk.
+**STOP:** If legacy mode is no longer supported by final architecture, remove this case intentionally and document that decision rather than preserving dead behavior.
 
-**If This Test Fails:** Confirm whether legacy mode is still intentionally supported. If not, STOP for architecture cleanup rather than silently deleting support in a test ticket.
+### TEST-AUTH015-26: Test environment is isolated between cases
 
-## Negative Assertion Checklist
+**Purpose:** Prevent false passes/failures caused by leaked env/mocks.
 
-Where applicable, every test should consider asserting that these were **not** called:
+**Setup:** one test changes secret/provider/authorized parties.
 
-- `prisma.user.create`;
-- `prisma.user.update`;
-- `prisma.user.upsert`;
-- any email-based local lookup helper;
-- provider profile fetch when AUTH-006 removed it;
-- logger with fake sensitive values.
+**Action:** next test starts.
 
-Do not copy every negative assertion into every test if it adds noise, but high-risk missing/non-active/success cases must explicitly protect zero-write behavior.
+**Expected Result:** deterministic default state restored.
 
-## Checkpoint
+**Required Assertions:** no dependence on test order.
 
-- [ ] Every security-relevant guard branch has a focused test.
-- [ ] Tests assert exact provider-ID lookup behavior.
-- [ ] Tests fail if email fallback is introduced.
-- [ ] Tests fail if user create/update/reactivation is introduced.
-- [ ] Inactive/suspended immutability is asserted.
-- [ ] Sensitive-log regressions are covered.
-- [ ] Environment is restored between tests.
-- [ ] Tests use fake identities/secrets only.
+---
+
+## Test Quality Rules
+
+For security-relevant tests, response/exception assertion alone is insufficient.
+
+Where relevant, also assert:
+
+- exact Prisma lookup key;
+- no forbidden writes;
+- request.user state;
+- provider calls/not-called;
+- logger sensitive-marker absence;
+- environment isolation;
+- role/status/org immutability.
+
+Do not delete a negative assertion merely because new implementation violates it. First determine whether the implementation regressed the security contract.
+
+---
 
 ## Failure Diagnosis Guide
 
-### Tests fail only when run as full suite
+### Happy-path test succeeds even if lookup key changes to email
 
-Likely environment/mocks are leaking between tests. Restore `process.env`, clear/reset Jest mocks, and avoid module-level mutable fixtures.
+Your mock is too permissive. Assert the exact `findUnique` call arguments.
 
-### Guard test is difficult because of `AuthGuard("jwt")` inheritance
+### Missing-user test rejects but `user.create` was called
 
-Use Nest TestingModule/spies around dependencies/super behavior. Do not mock the actual `JwtAuthGuard.canActivate()` implementation.
+The test correctly found a serious regression. Do not weaken it.
 
-### Test needs real Clerk to pass
+### Inactive-user test rejects but `user.update` happened
 
-The unit boundary is wrong. Mock the Clerk SDK call/result. Real-provider behavior belongs in controlled E2E/manual verification, not unit tests.
+Authentication is still mutating lifecycle state. Fix the guard.
 
-### Email collision test seems impossible after email code is removed
+### Logging test only fails on the second argument
 
-That is okay. Assert exact `findUnique` call uses only `clerkUserId` and that no email lookup helper/API exists/calls. The test protects absence of fallback.
+Good catch: structured metadata is leaking. Stop passing full objects.
 
-### Security test breaks after legitimate architecture change
+### Tests pass only in one order
 
-Do not delete it reflexively. Update the ticket/architecture decision first, then change tests while preserving the intended security invariant.
+Environment/mock reset is incomplete.
+
+### Legacy-provider test is hard to implement
+
+Do not fake away the whole guard. Inspect Nest superclass behavior and use the smallest safe spy seam. If legacy mode is obsolete, escalate removal instead.
+
+### Real Clerk credential seems required
+
+The mocking boundary is wrong. Unit tests must not call real Clerk.
+
+---
+
+## Reviewer Walkthrough
+
+Reviewer should verify:
+
+1. tests execute real guard logic;
+2. all external infrastructure is mocked, not security behavior;
+3. exact `clerkUserId` query is asserted;
+4. dangerous write spies exist;
+5. all current roles are covered;
+6. missing/inactive/suspended cases include negative writes;
+7. no email fallback is modeled as acceptable;
+8. provider profile fetch absence/approved purpose is checked;
+9. authorized-party verification survives refactor;
+10. logging tests inspect all arguments;
+11. environment cleanup prevents order dependence;
+12. legacy auth behavior is explicitly preserved or explicitly retired.
+
+---
 
 ## PR Evidence Required
 
 Include:
 
 - test file path;
-- total test count;
-- list of scenarios covered;
-- targeted Jest result;
-- full backend Jest result;
-- typecheck/lint result;
-- optional guard coverage summary;
-- explicit statement that tests use no real Clerk/network/secrets;
-- explicit statement that high-risk tests assert zero DB writes;
-- any intentionally uncovered branch with reason.
+- final auth state-machine summary;
+- list/count of test cases;
+- targeted Jest command/result;
+- full backend test result;
+- typecheck/lint results;
+- coverage notes for significant untested auth branches, if any;
+- explicit proof of exact `clerkUserId` lookup test;
+- explicit proof of no-write assertions;
+- logging sensitive-marker test evidence;
+- legacy-provider decision.
+
+---
 
 ## Acceptance Criteria
 
-- [ ] `jwt-auth.guard.spec.ts` exists under `Backend/src`.
-- [ ] Detailed test catalog above is implemented or an equivalent test is documented for each invariant.
-- [ ] No real Clerk API calls occur in unit tests.
-- [ ] No real secrets/identities are required.
-- [ ] Tests fail if email fallback, auto-provisioning, auto-reactivation, or privilege writes are reintroduced.
-- [ ] Tests fail if sensitive auth logging is reintroduced.
-- [ ] Full backend unit suite passes.
+- [ ] Dedicated JwtAuthGuard spec exists.
+- [ ] Public-route behavior is protected.
+- [ ] Token/config verification paths are protected.
+- [ ] Exact Clerk-ID lookup is asserted.
+- [ ] Email fallback is explicitly regression-tested as forbidden.
+- [ ] Missing user cannot be created/linked.
+- [ ] Inactive/suspended users cannot be reactivated.
+- [ ] Successful auth cannot mutate privilege/lifecycle state.
+- [ ] Provider metadata cannot override local authorization.
+- [ ] Authorized-party verification remains tested.
+- [ ] Sensitive log markers are absent.
+- [ ] Tests are environment/order isolated.
+- [ ] Supported legacy provider behavior is intentionally covered or retired.
+
+---
 
 ## Definition of Done
 
-- [ ] Test file complete.
-- [ ] Targeted test passes.
-- [ ] Full backend tests pass.
-- [ ] Typecheck passes.
-- [ ] Lint passes.
-- [ ] Coverage reviewed for meaningful untested guard branches.
-- [ ] Required PR evidence recorded.
-- [ ] Reviewer verifies assertions test behavior/security invariants rather than implementation trivia.
+- [ ] Test file implemented.
+- [ ] Targeted suite passes repeatedly.
+- [ ] Full backend suite passes.
+- [ ] Typecheck/lint pass.
+- [ ] No real external services required.
+- [ ] PR evidence complete.
+- [ ] Reviewer confirms tests fail for the historical regression patterns they are designed to prevent.
+
+---
 
 ## Rollback
 
-Do not remove security regression tests merely because a future refactor breaks them. Update tests to the newly approved architecture while preserving the security invariants.
+Tests themselves should not be rolled back simply because future code changes fail them.
+
+If a test becomes incompatible with an intentional architecture change, update the ticket/architecture decision first, then change the test with explicit reviewer approval.
+
+---
 
 ## Forbidden Shortcuts
 
 Do not:
 
-- skip difficult negative cases;
-- call real Clerk from unit tests;
-- use former real privileged identity as fixture data;
-- mock the guard method being tested instead of dependencies;
-- delete zero-write assertions;
-- use snapshot-only tests for security behavior;
-- rely only on response status without state/call assertions;
-- lower Jest/lint/typecheck standards to make the suite pass.
+- mock `JwtAuthGuard.canActivate`;
+- use a real Clerk token/secret;
+- let `findUnique` return a user without asserting query key;
+- omit write spies because “the current code has no writes”;
+- test only HTTP/exception status;
+- use real personal identity data;
+- rely on test ordering;
+- assert brittle full log strings instead of security signals;
+- delete failing security assertions to accommodate a regression.
+
+---
 
 ## STOP - NEEDS ARCHITECT DECISION
 
-Stop if final authentication architecture differs materially from the strict Clerk-ID flow described here.
+Stop if:
 
-Also stop if legacy non-Clerk auth mode is being removed as part of a broader architecture change. This test ticket should reflect the approved provider model rather than deciding it implicitly.
+- final auth architecture intentionally removes legacy JWT mode;
+- `verifyToken` cannot be safely mocked without a small abstraction change;
+- final guard intentionally performs a request-time external profile call for a new approved purpose;
+- failure HTTP/exception semantics materially changed from the ticket assumptions.
+
+Update the expected contract before encoding a guessed behavior.
+
+---
+
+## Handoff To AUTH-017
+
+AUTH-017 may assume the unit suite proves:
+
+- exact strict identity mapping;
+- no request-time user/privilege/lifecycle writes;
+- non-active failure behavior;
+- public/token/config semantics;
+- log privacy invariants.
+
+The E2E suite should then focus on proving real routing/guards/controllers/services/DB wiring cannot bypass those tested rules.
+
+---
 
 ## Completion Record
 
@@ -673,8 +837,8 @@ Also stop if legacy non-Clerk auth mode is being removed as part of a broader ar
 **PR:**  
 **Final Commit:**  
 **Completed Date:**  
-**Guard Test Count:**  
-**Guard Coverage:**  
+**Test Count:**  
 **Targeted Suite:** Pass / Fail  
 **Full Backend Suite:** Pass / Fail  
+**Legacy Provider Decision:** Covered / Retired / Needs Decision  
 **Notes:**
