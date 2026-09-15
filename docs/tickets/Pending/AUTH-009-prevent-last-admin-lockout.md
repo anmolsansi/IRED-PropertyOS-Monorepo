@@ -586,3 +586,194 @@ Also stop if the current database transaction/isolation approach cannot reliably
 **Mutation Paths Reviewed:**  
 **Concurrency Test/Review:**  
 **Notes:**
+
+---
+
+## Expanded Architecture Discussion And Decision Record
+
+### Decision 1: The invariant is based on resulting state, not the requested field name
+
+**Decision:** Determine whether an operation removes an active admin by comparing the current user state with the complete resulting role/status state.
+
+**Reason:** Privilege can be removed by role change, status change, combined update, or an alternate delete/deactivate route. Field-specific checks are easy to bypass accidentally.
+
+**Rejected alternative:** Add one guard inside `updateStatus()` and assume the problem is solved.
+
+**Why rejected:** Generic `update()` can demote an admin without touching status, and DELETE can route differently.
+
+### Decision 2: The invariant belongs in the backend service/domain layer
+
+**Decision:** Centralize the safety rule in `UsersService` (or an equivalent domain service), and make all relevant routes reuse it.
+
+**Reason:** UI checks are advisory. The backend owns the final state mutation and must enforce the invariant for every caller.
+
+**Rejected alternative:** Disable the dangerous buttons in the frontend only.
+
+**Why rejected:** Direct API calls, scripts, stale frontends, tests, and future controllers would bypass it.
+
+### Decision 3: Rejection is safer than automatic replacement
+
+**Decision:** When removal would leave zero active admins, return a stable error and perform no mutation.
+
+**Reason:** Automatically promoting/reactivating another user would be an unrequested privilege grant and could create a larger security incident than the lockout being prevented.
+
+### Decision 4: Concurrency is part of correctness
+
+**Decision:** The chosen implementation must document and test how two simultaneous admin-removal transactions cannot both succeed and leave zero active admins.
+
+**Reason:** A sequential unit test is insufficient for a count-then-update invariant. Two callers can each see the other admin before either commit.
+
+## Facts, Assumptions, And Unknowns
+
+### Facts
+
+- `UsersService.updateStatus()` and generic `update()` can affect the active-admin set.
+- DELETE/deactivate behavior ultimately changes status.
+- Current roles include `ADMIN`, `WORKER`, and `RIDER`; statuses include active/inactive/suspended.
+
+### Assumptions to verify
+
+- The current product invariant is global, not one active admin per organization.
+- All role/status writes can be routed through the protected service logic.
+- PostgreSQL/Prisma transaction features available in the deployed versions can support the chosen race-safety strategy.
+
+### Unknowns requiring architect decision
+
+- Whether future organization-scoped admins need a per-organization invariant.
+- Exact isolation/locking strategy if a simple transaction cannot prove race safety.
+- Whether self-deactivation should require an additional UX confirmation beyond the backend invariant (not required for backend correctness).
+
+## Intern Execution Sequence - No Improvisation
+
+### Phase A - Build the mutation-path map
+
+1. Search repository-wide for writes to `role` and `status`.
+2. List controller route -> service method -> Prisma write for each path.
+3. Mark paths that can turn an active ADMIN into anything else.
+4. Verify DELETE/deactivate path is included.
+5. Stop if you find a production direct Prisma write that bypasses the users service and cannot safely be routed through it.
+
+### Phase B - Write a resulting-state helper and unit tests
+
+1. Given current user + partial update, calculate resulting role/status.
+2. Unit-test safe profile-only changes.
+3. Unit-test demotion only.
+4. Unit-test inactive only.
+5. Unit-test suspended only.
+6. Unit-test combined role+status changes.
+7. Do not query DB yet in this pure-resulting-state helper if separation is practical.
+
+### Phase C - Add the active-admin invariant
+
+1. Only invoke expensive safety logic when current user is active ADMIN and resulting state is not active ADMIN.
+2. Count other `ADMIN/active` users, excluding target ID.
+3. If none exist, throw the stable last-admin error before mutation.
+4. If at least one exists, proceed to the normal update.
+5. Confirm non-admin changes do not perform unnecessary admin counts if the implementation can avoid them cleanly.
+
+### Phase D - Make race behavior explicit
+
+1. Put check + mutation into the selected transaction boundary.
+2. Add a concurrency integration test using two active admins.
+3. Fire both removal operations close enough to overlap.
+4. Query final active-admin count.
+5. If it reaches zero, stop and escalate transaction design.
+6. Do not mark ticket complete with a note saying the race is "unlikely."
+
+### Phase E - Verify every route
+
+1. Test generic PATCH update.
+2. Test status-specific route.
+3. Test DELETE/deactivate route.
+4. Test self-targeting if allowed.
+5. Verify every one reaches the same invariant.
+6. Confirm no controller has a direct user write.
+
+## Additional Test Cases And Explanations
+
+### TEST-AUTH009-13: No-op role/status update on last admin is allowed
+
+**Purpose:** Prevent the invariant from blocking an update that leaves the target as active ADMIN.
+
+**Level:** Service unit/integration.
+
+**Setup:** Only active admin. Request explicitly includes `role=ADMIN` and/or `status=active` plus an allowed profile change.
+
+**Action:** Execute update.
+
+**Expected Result:** Allowed because resulting state still contributes one active admin.
+
+**Required Assertions:** No last-admin rejection; final role/status remain active ADMIN.
+
+**Why This Test Exists:** Implementations that trigger purely on presence of `role`/`status` fields can overblock harmless updates.
+
+**False Positive To Avoid:** Omitting role/status entirely, which tests a different profile-only path.
+
+**If This Test Fails:** Base the condition on resulting state, not field presence.
+
+### TEST-AUTH009-14: Failed last-admin operation does not trigger downstream side effects
+
+**Purpose:** Ensure rejection happens before session revocation, audit-success creation, notifications, or other lifecycle effects.
+
+**Level:** Service unit/integration.
+
+**Setup:** Last active admin plus mocks/spies for Clerk session revocation, audit success event, notifications if wired.
+
+**Action:** Attempt deactivation/suspension.
+
+**Expected Result:** Rejected with no downstream success side effects.
+
+**Required Assertions:** User unchanged; provider revoke not called; success audit not created; no lifecycle notification claiming deactivation succeeded.
+
+**Why This Test Exists:** A correct final DB row is not enough if external side effects already happened before the invariant rejected the operation.
+
+**False Positive To Avoid:** Not wiring the side-effect spies, which cannot prove ordering.
+
+**If This Test Fails:** Move the invariant before side effects and align transaction/orchestration ordering.
+
+### TEST-AUTH009-15: Two concurrent distinct removal paths still preserve one admin
+
+**Purpose:** Exercise concurrency across different APIs, not only two identical service calls.
+
+**Level:** Integration/E2E if practical.
+
+**Setup:** Two active admins. Operation A uses status deactivation; Operation B uses role demotion or DELETE path concurrently.
+
+**Action:** Start both operations concurrently.
+
+**Expected Result:** At most one removes active-admin state; final active-admin count remains >= 1.
+
+**Why This Test Exists:** Different mutation paths can have different transaction boundaries even if each passes isolated tests.
+
+**False Positive To Avoid:** Routing both test operations through the same mocked helper without exercising real DB/transaction behavior.
+
+**If This Test Fails:** Centralization/transaction coverage is incomplete.
+
+## Observability And Audit Expectations
+
+Successful privilege removals should later produce semantic audit events through AUTH-012. A rejected last-admin operation must not create a **success** event stating the role/status changed. If rejection attempts are audited, they should be clearly marked as denied attempts rather than state changes.
+
+Use a stable, non-sensitive error code such as `CANNOT_REMOVE_LAST_ACTIVE_ADMIN` so frontend/operator behavior can distinguish this invariant from generic validation failures. Do not include a list of administrator emails in the client error.
+
+## Reviewer Walkthrough
+
+1. Review the repository-wide mutation-path inventory.
+2. Review resulting-state calculation before the DB count.
+3. Review count filter: `ADMIN`, `active`, target excluded.
+4. Review every relevant route and confirm centralized service enforcement.
+5. Review no-op and profile-only safe cases.
+6. Review negative assertions proving rejected operations have zero side effects.
+7. Review the actual DB-backed concurrency test and transaction/isolation explanation.
+8. Query final active-admin count in the concurrency test.
+9. Reject any auto-promotion/reactivation fallback.
+
+## Handoff Notes
+
+After AUTH-009 completes:
+
+- AUTH-010 can expose explicit suspend/reactivate lifecycle operations without risking ordinary removal of the final active admin.
+- AUTH-011 can revoke provider sessions only after a lifecycle transition has passed this invariant.
+- AUTH-012 can audit approved privilege changes at a centralized service boundary.
+- AUTH-016/AUTH-017 can treat `>=1 active ADMIN` as a permanent regression invariant.
+
+If the role model later becomes organization-scoped, revisit this ticket's global invariant explicitly rather than assuming it still matches product semantics.
