@@ -103,6 +103,75 @@ Ticket IDs never change after creation.
 - Preserve existing API behavior unless the ticket explicitly changes it.
 - If a ticket depends on another ticket, complete the dependency first unless the ticket explicitly describes a safe parallel path.
 
+## Current Ticket Pack: Authentication Hardening
+
+This pack removes the privileged authentication fallback and replaces it with explicit identity provisioning, lifecycle controls, testing, and deployment safeguards.
+
+| Ticket | Priority | Purpose |
+|---|---:|---|
+| `AUTH-001` | P0 | Remove hardcoded privileged auth fallback |
+| `AUTH-002` | P0 | Remove login-time admin auto-provisioning |
+| `AUTH-003` | P0 | Remove login-time auto-reactivation |
+| `AUTH-004` | P0 | Make privilege state immutable during authentication |
+| `AUTH-005` | P0 | Audit and backfill Clerk identity mappings |
+| `AUTH-006` | P0 | Enforce Clerk-ID identity mapping |
+| `AUTH-007` | P0 | Remove privileged defaults/admin creation from normal seed |
+| `AUTH-008` | P0 | Build one-time first-admin bootstrap |
+| `AUTH-009` | P0 | Prevent final active-admin lockout |
+| `AUTH-010` | P1 | Make suspension/deactivation/reactivation explicit |
+| `AUTH-011` | P1 | Revoke Clerk sessions when local access is removed |
+| `AUTH-012` | P1 | Add semantic audit events for privilege/status changes |
+| `AUTH-013` | P1 | Remove obsolete master-admin runtime configuration |
+| `AUTH-014` | P1 | Remove unnecessary PII from auth logs |
+| `AUTH-015` | P0 | Add JwtAuthGuard regression tests |
+| `AUTH-016` | P0 | Add user lifecycle/security service tests |
+| `AUTH-017` | P0 | Add Clerk-mode auth hardening E2E regression suite |
+| `AUTH-018` | P1 | Create and execute production deployment runbook |
+
+### Recommended Execution Order
+
+The safest default sequence is:
+
+```text
+AUTH-001
+  -> AUTH-002
+  -> AUTH-003
+  -> AUTH-004
+  -> AUTH-007
+  -> AUTH-008
+  -> AUTH-005
+  -> AUTH-006
+  -> AUTH-009
+  -> AUTH-010
+  -> AUTH-011
+  -> AUTH-012
+  -> AUTH-014
+  -> AUTH-015
+  -> AUTH-016
+  -> AUTH-017
+  -> AUTH-013
+  -> AUTH-018
+```
+
+Notes:
+
+- `AUTH-007`/`AUTH-008` can be developed in parallel with some guard work, but the safe admin bootstrap must exist before the old privileged recovery mechanism is considered fully removed in production.
+- `AUTH-005` must complete its production audit/backfill before `AUTH-006` strict Clerk-ID mapping is deployed.
+- `AUTH-013` live environment-variable removal should happen after hardened auth is proven in production.
+- `AUTH-018` is the final rollout gate and is not complete merely because the runbook file was written.
+
+## Authentication Hardening Completion Gate
+
+The auth-hardening workstream as a whole is complete only when:
+
+- all 18 AUTH tickets are in `Completed/` or explicitly marked not applicable by the project owner;
+- authentication performs no user creation, privilege mutation, identity linking, or reactivation;
+- production users use verified `clerkUserId` mapping;
+- last-admin protection is live;
+- lifecycle/session/audit behavior is live;
+- unit/service/E2E suites pass;
+- production rollout and config cleanup in AUTH-018 are complete.
+
 ## Completion Record
 
 Every ticket contains a Completion Record at the bottom. Before moving the ticket, fill it in with real values:
