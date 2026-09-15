@@ -491,3 +491,169 @@ Also stop if a newly introduced authorization field is intentionally request-syn
 **Privilege Writes After:**  
 **Tests Added/Updated:**  
 **Notes:**
+
+---
+
+## Expanded Architecture Discussion And Decision Record
+
+### Decision 1: Authorization state belongs to PropertyOS, not the identity provider
+
+**Decision:** Role, local status, organization, geography, and future capability data are read from PropertyOS and remain unchanged during authentication.
+
+**Reason:** These values represent application/business authorization decisions. Clerk is responsible for proving identity, not deciding which PropertyOS records a person may access.
+
+**Rejected alternative:** Synchronize role/organization from Clerk metadata on every request.
+
+**Why rejected:** That creates two competing sources of truth, makes provider metadata a hidden admin channel, and can cause silent privilege drift when metadata changes.
+
+### Decision 2: Request-time auth must not be a privilege repair job
+
+**Decision:** If stored privilege data is wrong or missing, fail or repair it through explicit administrative/migration operations.
+
+**Reason:** Privilege changes need an actor, audit trail, validation, and predictable failure semantics. Request auth has none of those responsibilities.
+
+**Rejected alternative:** "Ensure" role/status/org on every login so the system self-heals.
+
+**Why rejected:** Self-healing security state can also self-escalate. It makes intentional deactivation/demotion unreliable.
+
+### Decision 3: Identity-linking is temporarily separate but not a permanent exception
+
+**Decision:** If a `clerkUserId` linking write still exists before AUTH-006, classify it explicitly as identity migration debt rather than normalizing request writes.
+
+**Reason:** Reviewers need a truthful write inventory. AUTH-006 is responsible for removing request-time linking after backfill.
+
+## Facts, Assumptions, And Unknowns
+
+### Facts
+
+- Global guards divide identity, role, organization, and geography concerns.
+- Local user state includes role/status/organization information consumed downstream.
+- Known unsafe auth branches currently mutate privilege state.
+
+### Assumptions to verify
+
+- Clerk metadata is not intentionally the canonical role/organization store.
+- Geographic assignment changes occur through explicit management flows, not authentication.
+
+### Unknowns requiring escalation
+
+- Whether any newer authorization field was added after this ticket was written and is being synchronized during auth.
+- Whether production operations rely on a hidden role-sync helper outside `JwtAuthGuard`.
+
+## Intern Execution Sequence - No Improvisation
+
+### Phase A - Build a complete write inventory
+
+1. Run baseline checks.
+2. Search `JwtAuthGuard` for every Prisma write method.
+3. Search helpers called by the guard for writes as well.
+4. Create a simple table in your notes: `location | write | fields | reason | allowed?`.
+5. Mark role/status/org/geography writes as forbidden.
+6. Mark identity-linking writes as temporary AUTH-006 debt.
+7. Stop if a write cannot be classified confidently.
+
+### Phase B - Map downstream consumers
+
+1. Read `RolesGuard`.
+2. Read `OrgGuard`.
+3. Read `GeographyGuard`.
+4. Write down exactly which `request.user` fields each one consumes.
+5. Confirm the auth change will still populate those fields from the DB row.
+
+### Phase C - Protect behavior with fixtures
+
+Create at minimum:
+
+```text
+Admin A: active ADMIN, org-1
+Worker B: active WORKER, org-1
+Rider C: active RIDER, org-1
+Admin D: inactive ADMIN, org-1
+Worker E: suspended WORKER, org-1
+```
+
+Where practical, add geography assignments to B/C and prove auth does not change them.
+
+### Phase D - Remove privilege mutations
+
+1. Remove forbidden writes.
+2. Keep reads/checks.
+3. Keep `request.user` populated from stored state.
+4. Do not replace writes with Clerk metadata synchronization.
+5. Run focused tests after each removed write group.
+
+### Phase E - Repeat the write inventory
+
+1. Re-run all search patterns.
+2. Compare before/after inventory.
+3. Explain every remaining write in the PR.
+4. A reviewer must be able to see that no remaining write changes authorization state.
+
+## Additional Test Cases And Explanations
+
+### TEST-AUTH004-09: Provider metadata changes between requests but local role does not
+
+**Purpose:** Prove request-time provider metadata cannot cause privilege drift.
+
+**Level:** Unit/regression.
+
+**Setup:** Local user remains `WORKER`. First provider fixture contains neutral metadata; second fixture contains an admin-like metadata value if the seam permits.
+
+**Action:** Authenticate twice using the two provider fixtures.
+
+**Expected Result:** Both requests attach the same local `WORKER` role.
+
+**Required Assertions:** No role write; no local role change; same DB authorization state after both requests.
+
+**Why This Test Exists:** A one-time test can miss a synchronization implementation that changes behavior only when metadata changes.
+
+**False Positive To Avoid:** Mocking out the code that reads provider metadata so the test never exercises the possible sync path.
+
+**If This Test Fails:** Remove provider-to-local privilege synchronization from request auth.
+
+### TEST-AUTH004-10: Failed authentication cannot partially mutate privileges
+
+**Purpose:** Detect write-before-throw bugs.
+
+**Level:** Unit/integration.
+
+**Setup:** Use a request that reaches local-user evaluation and then fails for a controlled reason.
+
+**Action:** Authenticate and capture before/after local role/status/org plus assignment state.
+
+**Expected Result:** Request fails and all authorization state remains identical.
+
+**Required Assertions:** No privilege write methods called; DB state unchanged.
+
+**Why This Test Exists:** A failing response does not imply the database was not modified first.
+
+**False Positive To Avoid:** Only asserting the exception/status code.
+
+**If This Test Fails:** Inspect write ordering and remove the mutation, not the assertion.
+
+## Observability And Audit Expectations
+
+Authentication logs may describe the result of checking stored authorization state but should not claim they synchronized or repaired privileges. Explicit role/status/org/geography changes should be attributable to their administrative workflow and, after AUTH-012, semantic audit events.
+
+Do not add logs containing tokens, authorization headers, secrets, or unnecessary PII. AUTH-014 owns log cleanup.
+
+## Reviewer Walkthrough
+
+1. Compare the documented write inventory before/after.
+2. Inspect `request.user` construction and confirm values come from the local row.
+3. Inspect role/status/org/geography tests.
+4. Review provider-metadata drift test.
+5. Search for indirect helper/service writes from auth.
+6. Verify any remaining identity-link write is explicitly deferred to AUTH-006.
+7. Reject the PR if it merely relocates privilege synchronization.
+
+## Handoff Notes
+
+After AUTH-004:
+
+- AUTH-005/AUTH-006 can focus on identity mapping without privilege synchronization being mixed into the same path.
+- AUTH-009/AUTH-010 can own explicit privilege/lifecycle transitions.
+- AUTH-012 can audit real administrative changes instead of request-time hidden mutations.
+- AUTH-015/AUTH-017 can assert that successful and failed authentication are privilege-idempotent.
+
+Future role/capability features must preserve the same invariant: authentication may load authorization state, never grant or repair it.
