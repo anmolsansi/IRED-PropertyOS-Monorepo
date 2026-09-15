@@ -2,66 +2,177 @@
 
 **Status:** Pending  
 **Priority:** P1  
-**Area:** Security / Logging / Privacy  
-**Complexity:** Small  
+**Area:** Security / Logging / Privacy / Observability  
+**Complexity:** Small-Medium  
 **Depends On:** AUTH-002, AUTH-003, AUTH-006  
-**Blocks:** AUTH-018  
+**Blocks:** AUTH-015, AUTH-018  
 **Primary Files:** `Backend/src/shared/guards/jwt-auth.guard.ts`, `Backend/src/shared/guards/roles.guard.ts`
 
 ## Objective
 
-Make authentication/authorization logs operationally useful without routinely writing user email addresses, Clerk provider IDs, tokens, request authorization headers, or other unnecessary identity data into application logs.
+Make authentication and authorization logs useful for debugging and incident response without routinely writing unnecessary personally identifiable information, provider identifiers, tokens, credentials, or large user/request objects into logs.
 
-After this ticket, auth logs should use safe reason codes plus limited operational context such as request path/request ID, local user ID where appropriate, and role information when needed for authorization debugging.
+After this ticket, auth logs must be based on a small allowlist of safe fields and stable reason codes.
 
-## Junior Engineer Orientation
+A reviewer should be able to diagnose **what kind of auth failure happened** without seeing a user's email address, Clerk subject, bearer token, session token, password, OTP, or full user object.
 
-Logging is not harmless just because it is not returned to the browser.
+---
 
-Logs are often:
+## Junior Engineer Mental Model
 
-- stored longer than normal requests;
-- copied into monitoring systems;
-- visible to more engineers/operators than production database rows;
-- attached to incident tickets;
-- searched/exported during debugging.
+Logs are a second data store.
 
-So the rule is:
+They are often:
 
-```text
-Log enough to understand what kind of auth failure happened.
-Do not log identity/secrets that are unnecessary for that diagnosis.
-```
+- retained longer than request data;
+- copied to monitoring vendors;
+- accessible to more engineers than the production database;
+- attached to tickets and incident reports;
+- searched/exported in bulk.
 
-A useful auth log should answer:
+So use this rule:
 
 ```text
-What request failed?
-Why did auth reject it?
-Which local user was involved, if already safely known?
-What role check failed?
-Which request/correlation ID lets us trace related events?
+Log the reason for the auth decision.
+Do not log identity/credentials that are unnecessary to understand the decision.
 ```
 
-It usually does **not** need:
+A good denial log might tell you:
+
+```text
+reason = AUTH_ROLE_DENIED
+requestId = req-123
+path = /api/v1/users
+localUserId = <safe-local-id>
+role = WORKER
+requiredRoles = ADMIN
+```
+
+It does not need:
 
 ```text
 email
-Clerk provider user ID
+clerkUserId
 Bearer token
-session token
-password
-OTP
+cookies
 full request.user
+raw Clerk response
 ```
 
-## Why This Exists
+---
 
-The current auth guard includes log messages containing values such as email address, Clerk user ID, local user ID, role, request path, and raw provider error text. `RolesGuard` also logs an object containing email information.
+## Architecture Discussion and Decisions
 
-Email addresses and external identity IDs are unnecessary in routine auth logs and increase the impact of log exposure.
+### Decision 1: Use allowlisted log fields
 
-This ticket reduces that exposure without destroying useful diagnostics.
+**Chosen:** Construct log context explicitly from approved fields.
+
+**Rejected:** Pass `request.user`, request headers, provider error objects, or entire request objects to the logger.
+
+**Why:** Structured logging can leak sensitive nested fields even when the visible message string looks harmless.
+
+### Decision 2: Use stable reason codes
+
+Recommended reasons:
+
+```text
+AUTH_TOKEN_MISSING
+AUTH_TOKEN_INVALID
+AUTH_PROVIDER_NOT_CONFIGURED
+AUTH_USER_NOT_PROVISIONED
+AUTH_USER_INACTIVE
+AUTH_USER_SUSPENDED
+AUTH_SUCCESS
+AUTH_ROLE_DENIED
+AUTH_ORG_DENIED
+AUTH_GEOGRAPHY_DENIED
+```
+
+Stable codes are easier to search/monitor and do not require exposing identity details.
+
+### Decision 3: Local user ID may be logged only after local user resolution
+
+A local PropertyOS user ID is generally safer and more useful for internal troubleshooting than email/provider ID.
+
+If no local user exists, do not log the external provider subject to compensate.
+
+### Decision 4: Provider errors are categorized, not dumped
+
+**Chosen:** Log a safe category/class/name after inspection.
+
+**Rejected:** Serialize arbitrary provider error objects or blindly interpolate `error.message` if it may contain request/provider details.
+
+### Decision 5: Client-facing errors remain generic
+
+Internal safe reason codes may be more detailed than public responses, but API responses must not reveal whether a specific external identity/email exists or expose provider internals.
+
+### Decision 6: Request ID replaces excessive identity logging for correlation
+
+Use the request/correlation ID already established by the application. Do not generate a new independent ID inside each guard.
+
+---
+
+## Facts, Assumptions, and Unknowns
+
+### Facts / Expected Current State
+
+- `JwtAuthGuard` and `RolesGuard` currently contain logging around auth success/failure.
+- historical logging has included email and/or provider/local identity context.
+- request ID middleware/interceptor exists in the backend.
+- AUTH-006 removes email-based request-time identity mapping.
+
+### Assumptions To Verify
+
+- Nest `Logger` or current logger supports structured context consistently;
+- request ID is accessible from the request object used by guards;
+- `RolesGuard` does not require email to make its decision;
+- safe local user ID and role are enough for normal authorization debugging.
+
+### Unknowns That Must Not Be Guessed
+
+- whether provider SDK error messages are guaranteed secret-safe;
+- whether organization/geography guards contain additional PII-rich logs outside the primary files;
+- whether production monitoring depends on exact old message text.
+
+If existing alerts parse old free-text messages, preserve/migrate the signal through stable reason codes rather than silently breaking observability.
+
+---
+
+## Logging Data Policy
+
+### Allowed When Operationally Useful
+
+- stable reason code;
+- request ID/correlation ID;
+- route/path;
+- HTTP method if useful;
+- local PropertyOS user ID after resolution;
+- current role;
+- required role names;
+- organization/geography decision category, not raw sensitive dataset;
+- provider operation category;
+- safe error class/category;
+- latency/duration if already supported.
+
+### Prohibited In Routine Auth Logs
+
+- email;
+- phone number;
+- Clerk user ID / provider subject;
+- bearer token/JWT;
+- authorization header;
+- refresh/session token;
+- cookies containing auth material;
+- password/password hash/temp password;
+- OTP;
+- Clerk/API secret;
+- raw decoded token payload;
+- entire `request.user`;
+- entire request object;
+- raw provider error/response/request config;
+- raw lifecycle/audit reason text unless policy explicitly allows it.
+
+---
 
 ## Scope
 
@@ -71,249 +182,266 @@ This ticket reduces that exposure without destroying useful diagnostics.
 - `Backend/src/shared/guards/roles.guard.ts`
 - focused auth/logging tests
 
-### Inspect For Related Auth Logging
+### Inspect For Related One-Line Fixes
 
 - `Backend/src/shared/guards/org.guard.ts`
 - `Backend/src/shared/guards/geography.guard.ts`
-- auth controllers/services touched by this auth-hardening work
+- auth controller/service files modified during hardening
 
-Do not turn this into a repository-wide privacy cleanup. Record unrelated findings for separate tickets.
+### Out Of Scope
 
-## Logging Policy
+Do not:
 
-### Allowed when useful
+- perform a repository-wide privacy rewrite;
+- introduce a new logging vendor/framework;
+- redact every business-domain log in the application;
+- remove all auth observability;
+- change product privacy policy;
+- log hashed email/provider IDs as a new tracking identity unless explicitly approved.
 
-- stable reason code;
-- request ID/correlation ID;
-- route/path;
-- local PropertyOS user ID after a local user is known;
-- current/required role names;
-- provider operation category, not secret payload;
-- safe error class/category;
-- duration/latency where already supported.
+Record unrelated findings as follow-up tickets.
 
-### Avoid in routine auth logs
-
-- email;
-- phone number;
-- Clerk user ID/provider subject;
-- bearer token/JWT;
-- authorization header;
-- refresh/session token;
-- cookie values;
-- password/password hash/temp password;
-- OTP;
-- Clerk secret/API key;
-- entire `request.user` object;
-- raw provider response/error body.
-
-## Recommended Reason Codes
-
-Use stable internal strings equivalent to:
-
-- `AUTH_TOKEN_MISSING`
-- `AUTH_TOKEN_INVALID`
-- `AUTH_PROVIDER_NOT_CONFIGURED`
-- `AUTH_USER_NOT_PROVISIONED`
-- `AUTH_USER_INACTIVE`
-- `AUTH_USER_SUSPENDED`
-- `AUTH_SUCCESS`
-- `AUTH_ROLE_DENIED`
-
-Do not build a large new logging framework just for this ticket. A small constants/helper pattern is sufficient if it improves consistency.
+---
 
 ## Required Reading
 
-1. `Backend/src/shared/guards/jwt-auth.guard.ts`
-2. `Backend/src/shared/guards/roles.guard.ts`
-3. request-ID middleware/interceptor registration
-4. shared logging conventions
-5. completed AUTH-006 final auth lookup flow
-6. `Backend/src/shared/guards/org.guard.ts`
-7. `Backend/src/shared/guards/geography.guard.ts`
+Before editing:
+
+1. final `jwt-auth.guard.ts`
+2. `roles.guard.ts`
+3. `org.guard.ts`
+4. `geography.guard.ts`
+5. request ID middleware/interceptor
+6. shared logger conventions
+7. completed AUTH-006 strict mapping behavior
 8. `docs/tickets/TICKET_DETAIL_STANDARD.md`
 
-Before editing, identify every log statement in the primary files and write down which data values it currently interpolates/serializes.
+The intern must be able to answer:
 
-## Architecture Contract
+- Why is a provider ID still sensitive/unnecessary even if it is not an email?
+- Why is full-object structured logging dangerous?
+- When is a local user ID available safely?
+- How should provider verification errors be categorized?
 
-Auth logging should be **allowlist-based**, not object-dump-based.
+---
 
-Prefer:
+## Pre-Flight Log Inventory
 
-```text
-reason=AUTH_ROLE_DENIED requestId=req-123 path=/api/v1/users userId=<local-id> role=WORKER requiredRoles=ADMIN
-```
-
-Avoid:
-
-```text
-user={ id, email, clerkUserId, role, ... }
-headers={ authorization: Bearer ... }
-error=<raw provider response>
-```
-
-### Client errors vs internal logs
-
-Client-facing errors stay generic and do not disclose provider/account-existence details.
-
-Internal logs may be slightly more descriptive through safe reason codes, but must still avoid credentials/PII that are not necessary.
-
-## Step-by-Step Implementation
-
-### Step 1 - Inventory every auth/authorization log call
-
-Search primary and inspected files for:
-
-- `logger.debug`
-- `logger.log`
-- `logger.warn`
-- `logger.error`
-- `console.`
-
-Create a PR table with:
+Search auth-related files for:
 
 ```text
-file | condition | current fields | sensitive fields | replacement reason/context
+logger.debug
+logger.log
+logger.warn
+logger.error
+console.
 ```
 
-**Why:** It prevents missing one branch and gives reviewer a clear before/after picture.
+Build a PR table:
 
-### Step 2 - Identify token/header handling near logs
+```text
+file | branch/condition | current logged fields | sensitive? | replacement reason/context
+```
 
-Review bearer extraction and token verification blocks.
+Also search log statements for:
 
-Confirm no log statement serializes:
+```text
+email
+clerkUserId
+verifiedToken.sub
+authorization
+token
+request.user
+headers
+```
 
-- the `authorization` header;
-- the `token` variable;
-- decoded raw token data;
-- secrets.
+Do not edit until the inventory is complete.
 
-If any does, replace with a reason code immediately.
+---
 
-### Step 3 - Replace missing-token log
+## Step-by-Step Execution Plan for an Intern
 
-Use a stable reason such as `AUTH_TOKEN_MISSING` with safe request context.
+### Phase 0 - Baseline
 
-Do not echo the authorization header or email.
+Run:
 
-### Step 4 - Replace invalid-token/provider-verification log
+```bash
+npm run typecheck:backend
+npm run test:backend
+```
 
-Log a stable `AUTH_TOKEN_INVALID` category.
+Record pre-existing failures.
 
-If you retain provider error information, use a safe class/name/category only after verifying it cannot contain token/request data.
+### Phase 1 - Inspect Bearer Extraction Logging
 
-Do not blindly interpolate arbitrary `error.message` if the SDK can include sensitive provider details.
+Find the code that reads `Authorization` and extracts bearer token.
 
-### Step 5 - Clean missing-local-user log
+Confirm no logger receives:
 
-Under strict AUTH-006 mapping, missing local user can be logged as `AUTH_USER_NOT_PROVISIONED`.
+- header value;
+- token variable;
+- decoded token body.
 
-Do not log email or `verifiedToken.sub`.
+If it does, remove those values first.
 
-If no local user exists, there is no local user ID to log. Request ID/path are enough.
+**Verify:** missing-token path can be understood using only reason + path/request ID.
 
-### Step 6 - Clean inactive/suspended logs
+### Phase 2 - Standardize Missing-Token Logging
 
-Once a local user is known, local user ID may be useful.
+Use a stable reason such as:
 
-Use separate safe reasons where possible:
+```text
+AUTH_TOKEN_MISSING
+```
 
-- `AUTH_USER_INACTIVE`
-- `AUTH_USER_SUSPENDED`
+Safe fields:
 
-Do not include email/provider ID.
+```text
+requestId
+path
+method? 
+```
 
-### Step 7 - Clean successful-auth debug log
+Do not log headers.
 
-If success logging is kept, it may include:
+### Phase 3 - Standardize Invalid-Token Logging
 
-- local user ID;
-- role;
-- request ID/path.
+Use:
 
-Do not include email or Clerk ID.
+```text
+AUTH_TOKEN_INVALID
+```
 
-If success logs are too noisy and existing conventions allow removing them, that can be considered, but do not remove all auth visibility without review.
+Map provider exceptions to a safe error category.
 
-### Step 8 - Clean `RolesGuard`
+Do not serialize provider error object.
 
-Remove serialized user objects and email.
+**Verify:** insert fake token/secret strings in the mocked error and prove they are absent from logger arguments.
 
-For a denial, safe context is typically:
+### Phase 4 - Clean Missing-Local-User Logging
 
-- local user ID;
-- current role;
-- required roles;
-- request ID/path.
+Under AUTH-006 strict mapping, no local user means:
 
-Do not log the entire request object.
+```text
+AUTH_USER_NOT_PROVISIONED
+```
 
-### Step 9 - Inspect Org/Geography guards
+Log request correlation only.
 
-Check for full-user serialization or email/provider fields.
+Do not log provider subject or email to identify the caller.
 
-Include direct one-line safe fixes only if clearly part of auth authorization logging. Record broader issues separately.
+### Phase 5 - Clean Inactive/Suspended Logging
 
-### Step 10 - Preserve request ID consistently
+Once local user exists:
 
-Use the existing request ID set by middleware/header conventions.
+```text
+AUTH_USER_INACTIVE
+AUTH_USER_SUSPENDED
+```
 
-Do not generate a new unrelated ID inside each guard.
+Safe context may include local user ID and role.
 
-### Step 11 - Sanitize provider errors
+Do not include profile/provider identity.
 
-Prefer explicit error categories over arbitrary object/string serialization.
+### Phase 6 - Clean Success Logging
 
-Never log entire provider error response, headers, request config, or raw body.
+If success logs are retained:
 
-### Step 12 - Keep client responses generic
+```text
+AUTH_SUCCESS
+localUserId
+role
+requestId/path
+```
 
-While touching failure branches, ensure response text does not expose:
+Avoid email/provider ID.
 
-- whether a specific email exists in Clerk;
-- provider user ID;
-- secret/config values;
-- internal stack/provider messages.
+If current conventions allow dropping high-volume success logs, reviewer may approve that, but do not silently remove all useful signal.
 
-### Step 13 - Add logger-capture regression tests
+### Phase 7 - Clean `RolesGuard`
 
-Capture Nest logger calls or a small extracted logging helper.
+For denial, log:
 
-Use fake sensitive markers such as:
+```text
+AUTH_ROLE_DENIED
+localUserId
+currentRole
+requiredRoles
+requestId/path
+```
 
-- `sensitive@example.test`
-- `user_sensitive_provider_id`
-- `Bearer super-secret-test-token`
-- `fake-clerk-secret`
+Never serialize full `request.user`.
 
-Assert those markers never appear in serialized log arguments.
+### Phase 8 - Inspect Org/Geography Guards
 
-### Step 14 - Avoid brittle full-string assertions
+Review for:
 
-Tests should verify:
+- full user object dumps;
+- email/provider ID;
+- raw assignment objects that expose more than needed.
 
-- required reason code is present;
-- expected safe fields may be present;
-- sensitive marker strings are absent.
+Make narrowly scoped auth-logging fixes if obvious. Do not expand into unrelated logging work.
 
-Do not make tests fail because punctuation/order changes.
+### Phase 9 - Preserve Existing Request ID
 
-### Step 15 - Run changed-file static sanity search
+Trace exactly where request ID is placed on request/context.
 
-Search for suspicious log interpolation around:
+Use that value consistently.
 
-- `.email`
-- `clerkUserId`
-- `verifiedToken.sub`
-- `authorization`
-- `token`
-- `request.user`
+Do not create a separate ID per guard.
+
+### Phase 10 - Clean Client-Facing Error Leakage
+
+While touching catch/rejection blocks, verify returned errors do not echo:
+
+- provider messages;
+- emails;
+- provider IDs;
+- config/secrets;
+- stack traces.
+
+### Phase 11 - Add Log-Capture Test Helper
+
+Capture all logger arguments and serialize them for sensitive-marker tests.
+
+Important: check **all logger arguments**, not only the first message string.
+
+### Phase 12 - Add Fake Sensitive Markers
+
+Use fake test-only values:
+
+```text
+sensitive@example.test
+user_sensitive_provider_id
+Bearer super-secret-test-token
+fake-clerk-secret-value
+fake-session-token
+```
+
+These must never appear in captured auth logs.
+
+### Phase 13 - Add Detailed Tests
+
+Implement cases below.
+
+### Phase 14 - Static Post-Change Search
+
+Search changed auth files for suspicious logging expressions around:
+
+```text
+.email
+clerkUserId
+verifiedToken.sub
+authorization
+token
+request.user
+```
 
 Review every match manually.
 
-### Step 16 - Validate
+### Phase 15 - Validate
+
+Run:
 
 ```bash
 npm run typecheck:backend
@@ -321,318 +449,340 @@ npm run lint:backend
 npm run test:backend
 ```
 
+---
+
 ## Detailed Test Specification
 
-### TEST-AUTH014-01: Missing-token log contains reason code but no credentials/PII
+### TEST-AUTH014-01: Missing-token log has safe reason only
 
-**Purpose:** Ensure the most common auth failure is safe and diagnosable.
+**Purpose:** Diagnose common auth failure without identity/credential data.
 
-**Level:** Unit/log-capture test.
+**Setup:** protected request, no authorization header.
 
-**Setup:** Protected request with no Authorization header; capture logger output.
+**Action:** execute guard.
 
-**Action:** Execute auth guard.
+**Expected Result:** rejection and `AUTH_TOKEN_MISSING` log.
 
-**Expected Result:** Rejected; warning contains `AUTH_TOKEN_MISSING` or equivalent.
+**Required Assertions:** no header/token/email/provider ID/secret in any logger argument.
 
-**Required Assertions:** Log does not contain email, token placeholder, authorization header serialization, provider ID, or secrets.
+### TEST-AUTH014-02: Invalid-token log never prints raw token
 
-**Why This Test Exists:** Missing-token handling should never need identity information.
+**Purpose:** Prevent the most tempting debugging leak.
 
-**If This Test Fails:** Replace broad request/header logging with reason + path/request ID.
+**Setup:** fake sensitive bearer token; `verifyToken` throws.
 
-### TEST-AUTH014-02: Invalid-token log does not contain raw token
+**Action:** authenticate.
 
-**Purpose:** Prevent credential exposure while debugging verification failures.
+**Expected Result:** `AUTH_TOKEN_INVALID`.
 
-**Level:** Unit.
+**Required Assertions:** fake token and full authorization header absent.
 
-**Setup:** Authorization header contains fake sensitive token; `verifyToken()` throws.
+**If Fails:** remove token/header interpolation, not the assertion.
 
-**Action:** Authenticate.
+### TEST-AUTH014-03: Provider error cannot leak fake secret payload
 
-**Expected Result:** `AUTH_TOKEN_INVALID` logged safely.
+**Purpose:** Prove arbitrary SDK errors are sanitized.
 
-**Required Assertions:** Fake token string and full Authorization header are absent from every captured log call.
+**Setup:** mocked error contains fake secret, fake email, provider ID, token.
 
-**Why This Test Exists:** Invalid token is exactly when developers are tempted to print the token for debugging.
+**Action:** trigger provider failure.
 
-**If This Test Fails:** Remove token/header interpolation and sanitize provider error handling.
+**Expected Result:** safe category only.
 
-### TEST-AUTH014-03: Provider verification error cannot leak fake secret/error payload
+**Required Assertions:** sensitive markers absent.
 
-**Purpose:** Ensure arbitrary provider errors are not dumped.
+### TEST-AUTH014-04: Missing local mapping log contains no provider identity
 
-**Level:** Unit.
+**Purpose:** Protect privacy of unprovisioned external identities.
 
-**Setup:** Mock provider error whose message/object contains `fake-clerk-secret` and fake email/provider ID.
+**Setup:** valid token, local lookup null.
 
-**Action:** Trigger verification/provider failure.
+**Action:** authenticate.
 
-**Expected Result:** Safe error category/name logged.
+**Expected Result:** `AUTH_USER_NOT_PROVISIONED`.
 
-**Required Assertions:** Sensitive marker strings absent.
+**Required Assertions:** provider subject/email absent; request ID/path may appear.
 
-**Why This Test Exists:** SDK error objects may contain more information than expected.
+### TEST-AUTH014-05: Inactive-user log uses local ID, not email/provider ID
 
-**If This Test Fails:** Stop interpolating raw message/object; map to safe category.
+**Purpose:** Retain useful DB correlation safely.
 
-### TEST-AUTH014-04: Missing local user log contains no email/provider ID
+**Setup:** mapped inactive user with fake sensitive profile/provider values.
 
-**Purpose:** Protect unprovisioned identity privacy.
+**Action:** authenticate.
 
-**Level:** Unit.
+**Expected Result:** `AUTH_USER_INACTIVE`.
 
-**Setup:** Valid token with fake provider ID/email data if test seam still exposes it; local lookup returns null.
+**Required Assertions:** local ID may be present; sensitive markers absent.
 
-**Action:** Authenticate.
+### TEST-AUTH014-06: Suspended-user log has distinct reason
 
-**Expected Result:** `AUTH_USER_NOT_PROVISIONED` logged.
+**Purpose:** Preserve lifecycle diagnostic value.
 
-**Required Assertions:** No fake email or provider ID in log; path/request ID may appear.
+**Setup:** mapped suspended user.
 
-**Why This Test Exists:** There is no need to expose external identity values when local mapping is missing.
+**Action:** authenticate.
 
-**If This Test Fails:** Use strict ID lookup and safe reason code only.
+**Expected Result:** `AUTH_USER_SUSPENDED`.
 
-### TEST-AUTH014-05: Inactive user log uses local ID and safe reason only
+**Required Assertions:** no email/provider/token.
 
-**Purpose:** Keep useful internal correlation without email exposure.
+### TEST-AUTH014-07: Success log is privacy-minimal
 
-**Level:** Unit.
+**Purpose:** Prevent high-volume PII collection on normal traffic.
 
-**Setup:** Mapped local inactive user with fake email/provider ID.
+**Setup:** active mapped user with fake email/provider ID.
 
-**Action:** Authenticate.
+**Action:** authenticate successfully.
 
-**Expected Result:** `AUTH_USER_INACTIVE` logged.
+**Expected Result:** optional `AUTH_SUCCESS` with safe local context only.
 
-**Required Assertions:** Local user ID may be present; fake email/provider ID absent.
+**Required Assertions:** fake email/provider/token absent.
 
-**Why This Test Exists:** Once local identity is known, local ID is sufficient for database investigation.
+### TEST-AUTH014-08: Role denial logs role context without full user object
 
-**If This Test Fails:** Remove profile/provider fields from log template.
+**Purpose:** Keep authorization troubleshooting useful.
 
-### TEST-AUTH014-06: Suspended user gets distinct safe reason
+**Setup:** WORKER calls ADMIN-only route; request user has fake sensitive fields.
 
-**Purpose:** Keep lifecycle diagnosis useful without PII.
+**Action:** RolesGuard runs.
 
-**Level:** Unit.
+**Expected Result:** denied + `AUTH_ROLE_DENIED`.
 
-**Setup:** Mapped suspended user.
+**Required Assertions:** role/required roles may appear; full user/email/provider fields absent.
 
-**Action:** Authenticate.
+### TEST-AUTH014-09: Request ID is preserved
 
-**Expected Result:** `AUTH_USER_SUSPENDED` or equivalent safe reason.
+**Purpose:** Ensure privacy cleanup does not destroy correlation.
 
-**Required Assertions:** No email/provider/token data.
+**Setup:** request with known request ID.
 
-**Why This Test Exists:** Operators should distinguish temporary suspension from generic auth failure.
+**Action:** trigger failure.
 
-**If This Test Fails:** Preserve safe status-specific reason after status check.
+**Expected Result:** safe log contains existing request ID.
 
-### TEST-AUTH014-07: Successful auth debug log excludes email/provider ID
+**Required Assertions:** guard does not invent unrelated ID.
 
-**Purpose:** Prevent routine successful traffic from creating a large PII log dataset.
+### TEST-AUTH014-10: Structured metadata cannot hide PII
 
-**Level:** Unit.
+**Purpose:** Catch nested object leaks.
 
-**Setup:** Active mapped user with fake email/provider ID.
+**Setup:** request/user contains fake sensitive markers.
 
-**Action:** Authenticate successfully.
+**Action:** exercise success and denial logs.
 
-**Expected Result:** Optional success log contains only safe local context.
+**Expected Result:** serialized union of all logger arguments contains none of the markers.
 
-**Required Assertions:** Fake email/provider ID/token absent; local ID/role may be present.
+### TEST-AUTH014-11: Client error remains generic
 
-**Why This Test Exists:** Success logs are high volume and therefore especially important to minimize.
+**Purpose:** Prevent equivalent leakage through API responses.
 
-**If This Test Fails:** Use explicit safe fields or remove unnecessary success log under existing conventions.
+**Setup:** provider throws detailed fake error.
 
-### TEST-AUTH014-08: Role denial log contains role context without full user object
+**Action:** protected request.
 
-**Purpose:** Keep authorization debugging useful and privacy-minimal.
+**Expected Result:** generic auth error according to contract.
 
-**Level:** Unit test of `RolesGuard`.
+**Required Assertions:** response excludes provider/error/identity/secret detail.
 
-**Setup:** WORKER requests ADMIN-only route; fake email/provider ID on `request.user`.
+### TEST-AUTH014-12: No authorization header appears in logs from any tested branch
 
-**Action:** Execute role guard.
+**Purpose:** Make credential leakage a cross-branch invariant.
 
-**Expected Result:** Denied; reason `AUTH_ROLE_DENIED`/equivalent.
+**Setup:** run missing/invalid/active/non-active/role-denied cases with fake header values where applicable.
 
-**Required Assertions:** Current role + required role may be logged; fake email/provider ID/full user serialization absent.
+**Action:** collect logs.
 
-**Why This Test Exists:** Existing role logging is one known PII source.
+**Expected Result:** no full Authorization value in any case.
 
-**If This Test Fails:** Replace object logging with an explicit allowlist of fields.
+### TEST-AUTH014-13: No full `request.user` serialization
 
-### TEST-AUTH014-09: Request ID survives safe log refactor
+**Purpose:** Prevent future helper refactor from reintroducing sensitive nested values.
 
-**Purpose:** Ensure removing PII does not destroy correlation ability.
+**Setup:** request user with many fake fields.
 
-**Level:** Unit/integration.
+**Action:** role/auth success/denial.
 
-**Setup:** Request carries known test request ID according to existing middleware convention.
+**Expected Result:** logger receives explicit primitive/safe metadata, not user object.
 
-**Action:** Trigger an auth failure.
+### TEST-AUTH014-14: Static search catches untested logging branches
 
-**Expected Result:** Captured log includes that request ID.
+**Purpose:** Supplement runtime tests.
 
-**Required Assertions:** No new unrelated correlation ID is generated.
+**Action:** search changed files for logger calls plus sensitive-field references.
 
-**Why This Test Exists:** Request IDs are the preferred replacement for broad identity logging during incident tracing.
+**Expected Result:** every remaining match is reviewed/justified and not routine PII logging.
 
-**If This Test Fails:** Use the backend's existing request ID source.
-
-### TEST-AUTH014-10: Nested/JSON log arguments do not hide PII
-
-**Purpose:** Prevent a superficial fix that removes email from message text but leaves it in a logged metadata object.
-
-**Level:** Unit/log-capture.
-
-**Setup:** `request.user` contains fake sensitive fields.
-
-**Action:** Exercise success/denial logs.
-
-**Expected Result:** Serialized combination of all logger arguments contains no fake sensitive markers.
-
-**Required Assertions:** Do not check only first string argument.
-
-**Why This Test Exists:** Structured logging can leak fields even when the message itself is clean.
-
-**If This Test Fails:** Stop passing full objects and construct explicit safe metadata.
-
-### TEST-AUTH014-11: Client error does not echo provider/internal details
-
-**Purpose:** Keep external error surface generic while internal logs remain useful.
-
-**Level:** Unit/E2E.
-
-**Setup:** Provider verification throws detailed fake internal error.
-
-**Action:** Request protected endpoint.
-
-**Expected Result:** Generic Unauthorized/Forbidden response according to auth contract.
-
-**Required Assertions:** Response body excludes fake provider error, email, provider ID, secrets.
-
-**Why This Test Exists:** Log sanitization should not leave equivalent leakage in API responses.
-
-**If This Test Fails:** Map internal/provider errors to approved generic client errors.
-
-### TEST-AUTH014-12: Static search finds no obvious PII logging in changed auth files
-
-**Purpose:** Catch untested branches.
-
-**Level:** Manual/static verification.
-
-**Setup:** Final changed files.
-
-**Action:** Search suspicious interpolation/object-dump patterns.
-
-**Expected Result:** Every remaining email/provider/token reference is necessary program logic, not routine logging.
-
-**Required Assertions:** Record reviewed matches in PR evidence.
-
-**Why This Test Exists:** Tests cannot guarantee every dormant log branch was executed.
-
-**If This Test Fails:** Clean or explicitly justify the remaining log usage.
+---
 
 ## Manual Verification
 
-Run backend locally with debug logging enabled and fake test users only.
+Run backend locally with fake/test identities and debug logs enabled.
 
 Exercise:
 
-1. successful active-user request;
-2. missing-token request;
-3. invalid-token request;
-4. missing-local-user request;
-5. inactive-user request;
-6. suspended-user request;
-7. role-denied request.
+1. successful active user;
+2. missing token;
+3. invalid token;
+4. unmapped identity;
+5. inactive user;
+6. suspended user;
+7. role denial;
+8. org/geography denial if relevant.
 
-Review terminal output and confirm:
+Read the terminal output manually.
 
-- each event category is understandable;
-- request correlation remains possible;
-- no email/provider ID/token/secret appears.
+A human should be able to understand the category of failure while seeing no email, provider ID, token, secret, or full user object.
+
+---
 
 ## Failure Diagnosis Guide
 
 ### Tests pass but terminal still shows email
 
-The tests do not cover all logger arguments/branches. Capture all debug/log/warn/error methods and run static search/manual scenarios.
+Your test coverage missed a branch/file. Repeat log inventory and static search.
 
-### Removing provider error message makes debugging too vague
+### Email removed from message but still appears in JSON metadata
 
-Add a safe error class/category or request ID. Do not restore arbitrary raw error payloads.
+Stop passing full objects. Build an explicit allowlist.
 
-### Role denial has no way to identify affected user
+### Provider error message contains sensitive data
 
-Use local PropertyOS user ID, not email/provider ID/full object.
+Do not log arbitrary `.message`. Map exception to safe category/class.
 
-### Someone proposes hashing email/token before logging
+### Logs become too vague to diagnose role failures
 
-Do not add pseudonymous identifiers without a concrete operational need and review. Request/local user ID should usually be enough.
+Add safe role/required-role/local-ID/request-ID fields. Do not re-add email/provider subject.
+
+### Request IDs disappear
+
+Trace the existing request ID source. Privacy cleanup should preserve correlation.
+
+### Monitoring alert stops firing after reason-code migration
+
+Update alert/query to stable reason code. Do not retain PII-rich legacy message solely for alert compatibility.
+
+---
+
+## Observability Contract After This Ticket
+
+Auth logs should support queries such as:
+
+```text
+count AUTH_USER_NOT_PROVISIONED over time
+count AUTH_TOKEN_INVALID over time
+count AUTH_ROLE_DENIED by route
+find all auth events for requestId X
+find denials for localUserId Y after local mapping exists
+```
+
+They should not support accidental bulk export of user emails/provider IDs because those values should not be routinely present.
+
+---
+
+## Reviewer Walkthrough
+
+Reviewer should verify:
+
+1. complete pre/post log inventory exists;
+2. all changed logs use allowlisted fields;
+3. token/header values never enter logs;
+4. provider errors are sanitized;
+5. unmapped identity logs do not substitute provider ID for email;
+6. success logs are minimal;
+7. role-denial logs still have enough context;
+8. request ID is preserved;
+9. structured arguments are tested, not just message strings;
+10. client-facing errors remain generic;
+11. static search reviewed all suspicious matches.
+
+---
 
 ## PR Evidence Required
 
 Include:
 
-- before/after auth log inventory;
-- safe reason codes used;
-- fields deliberately allowed vs removed;
-- logger-capture test results with fake sensitive markers;
-- static-search review result;
-- manual debug-log review result;
-- validation command results;
-- any unrelated logging findings filed separately.
+- before/after log inventory table;
+- chosen reason-code list;
+- changed files;
+- logger-capture test names/results;
+- list of fake sensitive markers used;
+- static-search results/justifications;
+- manual terminal verification summary;
+- monitoring/alert update note if relevant;
+- typecheck/lint/test results.
+
+Never paste real production log lines containing PII/secrets into the PR.
+
+---
 
 ## Acceptance Criteria
 
-- [ ] Authentication logs use safe reason codes.
-- [ ] Routine auth logs contain no email addresses.
-- [ ] Routine auth logs contain no Clerk/provider IDs unless explicitly approved.
-- [ ] No secrets/tokens/authorization headers are logged.
-- [ ] `RolesGuard` no longer logs full identity objects/PII.
-- [ ] Provider errors are safely categorized instead of dumped.
-- [ ] Request ID/local ID keeps logs operationally useful.
-- [ ] Automated tests inspect all logger arguments for sensitive markers.
+- [ ] Auth logs use stable reason codes.
+- [ ] Routine auth logs contain no email/provider ID.
+- [ ] Tokens/authorization headers/secrets are never logged.
+- [ ] Full request/user/provider objects are not logged.
+- [ ] Local user ID/role/request ID remain available where useful.
+- [ ] Provider errors are safely categorized.
+- [ ] Client errors remain generic.
+- [ ] Tests scan all logger arguments for sensitive markers.
+- [ ] Manual terminal review confirms useful but privacy-minimal logs.
+
+---
 
 ## Definition of Done
 
-- [ ] Auth log inventory completed.
-- [ ] Unsafe fields removed.
-- [ ] Detailed logger/security tests pass.
-- [ ] Typecheck passes.
-- [ ] Lint passes.
-- [ ] Manual log review passes.
-- [ ] Required PR evidence recorded.
-- [ ] Reviewer confirms useful-but-minimal logging.
+- [ ] Logging changes implemented.
+- [ ] Tests complete.
+- [ ] Typecheck/lint/backend tests pass.
+- [ ] Static search reviewed.
+- [ ] Manual log review completed.
+- [ ] PR evidence complete.
+- [ ] Reviewer approves privacy/observability balance.
+
+---
 
 ## Rollback
 
-If operators lose needed diagnostics, add a safe correlation field such as request ID/local user ID or safe error category. Do not restore routine email/token logging as the first solution.
+If log changes break operational troubleshooting/alerts, restore the needed **safe signal**, not the PII-heavy payload.
+
+Prefer adding reason code, route, request ID, local user ID, or role context over restoring email/provider/token information.
+
+---
 
 ## Forbidden Shortcuts
 
 Do not:
 
-- hash tokens/emails and log the hash without approved need;
-- log full request headers;
-- serialize `request.user`;
-- move sensitive data from `debug` to `error` and call it fixed;
-- hide email inside JSON metadata;
-- suppress all auth logs entirely;
-- sanitize only the message string while leaving sensitive structured arguments.
+- hash email and call the privacy problem solved without review;
+- log provider subject because email was removed;
+- log raw token “only at debug level”;
+- log full request/user/provider objects;
+- serialize arbitrary provider errors;
+- remove every log and destroy observability;
+- weaken tests because a sensitive debug line seems temporarily useful;
+- include real production log samples with secrets/PII in PR evidence.
+
+---
 
 ## STOP - NEEDS ARCHITECT DECISION
 
-Stop if compliance/incident-response policy explicitly requires a particular identity field in security logs.
+Stop if:
 
-Also stop if a centralized logging/observability standard already mandates structured field names/retention controls that this ticket would conflict with. Document the requirement rather than independently changing mandated security logging.
+- current production alerting depends on old message content and migration requires coordinated monitoring changes;
+- compliance/security policy requires different retention/redaction rules;
+- another logger middleware automatically captures headers/body regardless of guard changes;
+- provider SDK errors cannot be safely categorized without losing required diagnostic information.
+
+---
+
+## Handoff To AUTH-015 / AUTH-018
+
+AUTH-015 should permanently regression-test these logging invariants inside `JwtAuthGuard`.
+
+AUTH-018 should monitor safe reason codes during production rollout instead of inspecting PII-heavy logs.
+
+---
 
 ## Completion Record
 
@@ -641,7 +791,8 @@ Also stop if a centralized logging/observability standard already mandates struc
 **PR:**  
 **Final Commit:**  
 **Completed Date:**  
-**Automated Sensitive-Marker Tests:** Pass / Fail  
+**Reason Codes Added/Confirmed:**  
+**Sensitive Marker Tests:** Pass / Fail  
 **Manual Log Review:** Pass / Fail  
-**Static Search Review:** Pass / Fail  
+**Monitoring Changes Required:** Yes / No  
 **Notes:**
