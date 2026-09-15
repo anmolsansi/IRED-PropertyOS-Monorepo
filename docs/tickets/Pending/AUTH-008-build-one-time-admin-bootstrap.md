@@ -617,3 +617,211 @@ Those are broader security design decisions.
 **Second Run Refused:** Pass / Fail  
 **Normal Admin Login:** Pass / Fail  
 **Notes:**
+
+---
+
+## Expanded Architecture Discussion And Decision Record
+
+### Decision 1: Bootstrap is initialization, not recovery
+
+**Decision:** The bootstrap command exists to create the first administrator in a genuinely fresh environment. It is not a reusable way to restore access after administrators were intentionally disabled.
+
+**Reason:** A reusable zero-admin recovery command can become a second privileged bypass. Recovery after an initialized environment loses all admins requires a separately designed break-glass process with stronger operational controls.
+
+**Rejected alternative:** Allow bootstrap whenever active-admin count is zero.
+
+**Why rejected:** An attacker/operator could first deactivate the last admin, then invoke bootstrap to create a new privileged identity if command access were available.
+
+**Future reconsideration trigger:** If the business formally requires emergency recovery, create a separate reviewed ticket for break-glass design rather than broadening this script silently.
+
+### Decision 2: Exact provider identity is required before local privilege creation
+
+**Decision:** Operator supplies exact Clerk user ID plus expected email, and the script verifies both before creating the local admin.
+
+**Reason:** The provider ID is the stable identity key. Email provides an additional operator sanity check without being used as the runtime identity join.
+
+**Rejected alternative:** Search Clerk by email and bootstrap the first result.
+
+**Why rejected:** Search ambiguity or provider-data mistakes could bind admin privilege to the wrong external account.
+
+### Decision 3: Existing local records are conflicts, not promotion candidates
+
+**Decision:** If email or provider ID is already attached to a local user, bootstrap refuses rather than promoting/reactivating/relinking that row.
+
+**Reason:** Existing local state may encode intentional role/status/security decisions. First-admin bootstrap is not authorized to overwrite them.
+
+### Decision 4: No reusable password is introduced for Clerk bootstrap
+
+**Decision:** The bootstrap must not create a known/default reusable credential. If schema requirements make that impossible, stop for architecture review.
+
+**Reason:** The entire auth-hardening effort would be undermined by replacing one fallback credential with another.
+
+## Facts, Assumptions, And Unknowns
+
+### Facts
+
+- After AUTH-002/003/007 there is no approved login-time or seed-time privileged creation path.
+- Clerk is the intended identity provider for this bootstrap design.
+- PropertyOS local DB owns role/status.
+
+### Assumptions to verify
+
+- A fresh environment can be distinguished operationally from an initialized environment needing recovery.
+- Operator can securely obtain the intended Clerk user ID without committing it as a permanent secret/config default.
+- Schema permits creation of a Clerk-managed user without a reusable fallback password, or has an already-approved sentinel approach.
+
+### Unknowns requiring architect decision
+
+- Whether a persistent environment-initialized marker is needed beyond active-admin count.
+- Whether audit creation must be transactionally mandatory with the user create.
+- Whether the product needs a formal break-glass recovery path.
+
+## Intern Execution Sequence - No Improvisation
+
+### Phase A - Prove the script cannot run accidentally
+
+1. Find package/start/build/deploy/seed scripts.
+2. Add bootstrap only as a standalone explicit command.
+3. Search all package/deploy files for the command name.
+4. Confirm no automatic script references it.
+5. Search controllers for any bootstrap route.
+6. Record these search results before implementing business logic.
+
+### Phase B - Implement pure precondition validation first
+
+1. Validate required inputs.
+2. Validate email syntax/normalization using existing project patterns where available.
+3. Reject blank/malformed provider ID.
+4. Query active-admin count.
+5. Do not create/update anything in this phase.
+6. Add tests proving each failed precondition performs zero writes.
+
+### Phase C - Verify provider identity
+
+1. Fetch exact Clerk user by supplied ID.
+2. Extract the approved primary/verified email field.
+3. Compare normalized email to explicit operator input.
+4. Treat provider lookup errors/timeouts as failure, not permission to continue.
+5. Do not dump the provider object in logs.
+
+### Phase D - Detect local conflicts
+
+1. Query by `clerkUserId`.
+2. Query by normalized email.
+3. If either record exists, refuse and print a safe conflict reason.
+4. Do not update that record.
+5. Add tests for inactive user, non-admin user, and mismatched mapping conflicts.
+
+### Phase E - Create atomically
+
+1. Construct the minimal create payload only after all checks pass.
+2. If semantic audit event is required in the same transaction, create user + audit atomically.
+3. Confirm exactly one user becomes active ADMIN.
+4. Never set unrelated organization/geography automatically unless explicitly required by current schema/product design.
+5. Return/print a safe success summary.
+
+### Phase F - Repeat-safety and real login proof
+
+1. Run bootstrap in disposable environment.
+2. Query exact resulting row.
+3. Authenticate normally using the mapped Clerk identity.
+4. Verify an admin-only route.
+5. Run bootstrap a second time.
+6. Confirm refusal and zero DB change.
+7. Restart the backend and verify the bootstrapped admin still works through normal auth, not bootstrap behavior.
+
+## Additional Test Cases And Explanations
+
+### TEST-AUTH008-12: Concurrent bootstrap attempts create at most one admin
+
+**Purpose:** Protect against two operators/processes invoking bootstrap at nearly the same time.
+
+**Level:** Integration/concurrency test if feasible.
+
+**Setup:** Fresh disposable DB with zero active admins. Two invocations use the same valid test identity and begin close together.
+
+**Action:** Execute both concurrently.
+
+**Expected Result:** At most one successful privileged user creation. The other invocation fails cleanly due to uniqueness/precondition/transaction conflict.
+
+**Required Assertions:** Final active-admin count is exactly one; no duplicate local rows; no partial conflict state.
+
+**Database Assertions:** Unique `clerkUserId`/email constraints remain satisfied.
+
+**Why This Test Exists:** A simple `count admin -> create` sequence is race-prone without DB constraints/transaction reasoning.
+
+**False Positive To Avoid:** Running the commands sequentially, which does not exercise the race.
+
+**If This Test Fails:** Strengthen the transaction/constraint strategy. Do not introduce a force flag.
+
+### TEST-AUTH008-13: Clerk timeout refuses without local mutation
+
+**Purpose:** Ensure external uncertainty fails closed.
+
+**Level:** Unit/integration.
+
+**Setup:** Fresh DB and valid-looking explicit inputs. Clerk exact-user lookup times out/throws transient error.
+
+**Action:** Run bootstrap.
+
+**Expected Result:** Non-zero failure, zero local user/audit creation unless a failure audit is intentionally supported separately.
+
+**External-Service Assertions:** No fallback email search or locally fabricated identity.
+
+**Why This Test Exists:** Operator pressure during provider outages is exactly when unsafe fallback behavior tends to be introduced.
+
+**False Positive To Avoid:** Returning provider `not found`; timeout and confirmed absence are different error paths.
+
+**If This Test Fails:** Move all local writes after successful exact provider verification.
+
+### TEST-AUTH008-14: Previously initialized environment with zero active admins does not silently become bootstrap-eligible without approved recovery design
+
+**Purpose:** Protect the initialization-vs-recovery boundary.
+
+**Level:** Manual/integration depending on chosen initialization marker/design.
+
+**Setup:** Environment history indicates it was initialized, but all admins are now inactive/suspended.
+
+**Action:** Attempt bootstrap.
+
+**Expected Result:** Follow the architect-approved behavior. If no explicit recovery design exists, this is a STOP condition, not a successful bootstrap.
+
+**Required Assertions:** No new admin is created merely because active-admin count is zero if the environment is known initialized.
+
+**Why This Test Exists:** Zero active admins can mean either "fresh" or "locked/revoked." Those are security-different states.
+
+**False Positive To Avoid:** Using a brand-new empty DB, which tests initial bootstrap rather than recovery misuse.
+
+**If This Test Fails:** Do not patch around it ad hoc. Escalate break-glass/environment-marker design.
+
+## Observability And Audit Expectations
+
+A successful bootstrap should leave enough evidence to answer: when it ran, which local user was created, which provider ID was linked, and that the result was an active ADMIN. Do not record secrets or raw provider payloads.
+
+If AUTH-012 semantic auditing is available, prefer an event concept such as `user.bootstrap_admin_created` with system/operator context that can be safely represented. If audit atomicity is not yet approved, document the behavior rather than silently inventing reliability guarantees.
+
+Failed preconditions may be logged to operator output with safe reason codes. Never echo `CLERK_SECRET_KEY`, `DATABASE_URL`, tokens, or reusable credentials.
+
+## Reviewer Walkthrough
+
+1. Prove the command is manual-only by reviewing package/deploy/start references.
+2. Review all precondition checks before the create statement.
+3. Confirm exact Clerk ID fetch plus email consistency check.
+4. Confirm existing email/ID rows are refused, never promoted.
+5. Inspect the minimal user create payload.
+6. Inspect transaction/audit behavior.
+7. Review second-run and concurrent-run tests.
+8. Verify no default password/fallback identity exists.
+9. Verify normal auth, not bootstrap, is used after creation.
+10. Verify recovery semantics are not silently mixed into initialization.
+
+## Handoff Notes
+
+After AUTH-008 completes:
+
+- production can remove privileged login/seed fallbacks without losing a documented fresh-environment initialization path;
+- AUTH-013 can remove persistent master-admin runtime variables confidently;
+- AUTH-018 can document exactly when/how the one-time command is used and what evidence to capture;
+- future emergency recovery must not reuse this mechanism unless separately designed and approved.
+
+This ticket creates the first admin. It does not define ongoing admin lifecycle safety. AUTH-009/AUTH-010 own that responsibility.
