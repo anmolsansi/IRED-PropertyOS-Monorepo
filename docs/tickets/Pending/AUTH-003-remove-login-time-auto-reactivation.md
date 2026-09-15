@@ -515,3 +515,191 @@ Also stop if another documented subsystem intentionally changes user status duri
 **Tests Added/Updated:**  
 **Manual Persistence Test:** Pass / Fail  
 **Notes:**
+
+---
+
+## Expanded Architecture Discussion And Decision Record
+
+### Decision 1: PropertyOS local status is authoritative for access denial
+
+**Decision:** `inactive` and `suspended` in the PropertyOS database deny access even when the external identity is valid.
+
+**Reason:** A local administrator must be able to revoke application access immediately and predictably. The identity provider answers "who is this?"; it does not override the application's decision that the user currently has no access.
+
+**Rejected alternative:** Treat a successful Clerk login as evidence that the account should become active again.
+
+**Why rejected:** Successful identity verification proves identity, not employment status, security clearance, HR state, or application approval.
+
+### Decision 2: Reactivation is an explicit lifecycle transition
+
+**Decision:** Any transition from `inactive`/`suspended` to `active` must occur through an explicit user-management operation owned by AUTH-010.
+
+**Reason:** Explicit transitions have an actor, target, reason/context, auditability, last-admin protections, and a deterministic place to add session/audit side effects.
+
+**Rejected alternative:** Keep auto-reactivation only for `ADMIN` because administrators need recovery access.
+
+**Why rejected:** That creates the exact group whose suspension is hardest to enforce. Recovery must use AUTH-008/authorized admin operations, not a bypass that defeats suspension.
+
+### Decision 3: External provider failure must not weaken local suspension
+
+**Decision:** If Clerk or another external provider fails, local non-active status remains denied. Provider availability can never be used as a reason to rewrite status.
+
+**Reason:** Security state must fail closed. A provider outage is an operational issue, not permission to restore access.
+
+## Facts, Assumptions, And Unknowns
+
+### Facts
+
+- The current guard contains a request-time reactivation mutation for a privileged scenario.
+- The local model supports at least `active`, `inactive`, and `suspended`.
+- The users service already contains status-update behavior outside the auth guard.
+
+### Assumptions to verify
+
+- `deactivatedAt` semantics are intended to describe access removal and should not be cleared except by explicit lifecycle operations.
+- No supported feature intentionally treats `suspended` as equivalent to `active`.
+
+### Unknowns requiring escalation
+
+- Whether production currently has inactive/suspended administrators relying on the auto-reactivation path.
+- Whether an operator recovery procedure already exists outside the repository.
+
+Do not infer those from code alone.
+
+## Intern Execution Sequence - No Improvisation
+
+### Phase A - Capture the exact unsafe mutation
+
+1. Run baseline tests/typecheck.
+2. Open the guard.
+3. Find the non-active branch.
+4. Record every field written by the recovery update.
+5. Record the exact condition that triggers it.
+6. Search for other request-time status mutations.
+7. Stop if another undocumented reactivation path exists.
+
+### Phase B - Build immutable-state fixtures
+
+Create at least these fixtures:
+
+```text
+Admin A: role=ADMIN, status=inactive, deactivatedAt=<known timestamp>
+Admin B: role=ADMIN, status=suspended, deactivatedAt=<known timestamp>
+Worker C: role=WORKER, status=inactive, deactivatedAt=<known timestamp>
+Admin D: role=ADMIN, status=active
+```
+
+For each non-active fixture, capture the full security-relevant before-state before invoking auth.
+
+### Phase C - Remove the request-time lifecycle mutation
+
+1. Delete the special update branch.
+2. Preserve the general non-active rejection.
+3. Do not replace the update with a service call.
+4. Do not mutate `deactivatedAt` separately.
+5. Do not force the role to ADMIN.
+6. Run focused tests.
+7. Query/mock-assert that zero lifecycle writes occurred.
+
+### Phase D - Verify explicit lifecycle ownership
+
+1. Inspect `UsersService.updateStatus()`.
+2. Identify the explicit active/inactive/suspended transition path.
+3. Confirm auth does not call it.
+4. Record any lifecycle weakness for AUTH-010 rather than fixing unrelated behavior here unless required to keep tests valid.
+
+### Phase E - Persistence validation
+
+1. Mark a disposable user inactive.
+2. Attempt auth.
+3. Query the row.
+4. Restart the backend against the same DB.
+5. Attempt auth again.
+6. Query the row again.
+7. Confirm status/role/deactivatedAt are identical to the original state.
+
+## Additional Test Cases And Explanations
+
+### TEST-AUTH003-08: Stale valid token cannot reactivate an account disabled after token issuance
+
+**Purpose:** Prove deactivation takes effect even if the user already possesses a token that was issued while active.
+
+**Level:** Integration/E2E where the auth seam allows it.
+
+**Setup:** Start with an active user and obtain/use a valid test token. Change the local user status to `inactive` without changing the token fixture.
+
+**Action:** Call a protected endpoint using the still-valid identity token.
+
+**Expected Result:** Denied because local status is non-active.
+
+**Required Assertions:** Local status/role/deactivatedAt remain unchanged; no reactivation update occurs.
+
+**Why This Test Exists:** Real suspensions often happen while sessions/tokens already exist. The local status check must override token freshness for application access.
+
+**False Positive To Avoid:** Creating a new token after deactivation and concluding the same property is proven. The important case is a previously valid identity credential.
+
+**If This Test Fails:** Check whether auth trusts token validity without re-reading local user status.
+
+### TEST-AUTH003-09: Provider outage while user is suspended remains fail-closed
+
+**Purpose:** Ensure an external error path never invokes recovery/reactivation behavior.
+
+**Level:** Unit/regression.
+
+**Setup:** Suspended local user plus injected provider/profile failure at the appropriate seam.
+
+**Action:** Authenticate.
+
+**Expected Result:** Request fails; local status remains suspended.
+
+**External-Service Assertions:** Failure may be logged generically, but no lifecycle write is attempted.
+
+**Database Assertions:** No update of role/status/deactivatedAt/emailVerifiedAt.
+
+**Why This Test Exists:** Catch blocks and "self-healing" code are common places for unsafe recovery behavior to return.
+
+**False Positive To Avoid:** Failing before the guard loads the user and therefore never proving the suspended-state path. Structure the test so the intended branch is exercised.
+
+**If This Test Fails:** Inspect provider error handling and any retry/recovery helper.
+
+## Observability And Audit Expectations
+
+A non-active login attempt may produce a safe auth denial log/reason code, but it must not create a lifecycle audit event that says the user was activated. After AUTH-012, explicit activation should create a semantic lifecycle audit event; mere login attempts should not.
+
+Never log:
+
+- auth tokens;
+- full authorization headers;
+- provider secret material;
+- personal data merely to explain the denial.
+
+A useful conceptual reason code is:
+
+```text
+AUTH_USER_INACTIVE
+AUTH_USER_SUSPENDED
+```
+
+The exact logging implementation is primarily owned by AUTH-014.
+
+## Reviewer Walkthrough
+
+1. Open the removed reactivation branch in the diff.
+2. Verify the entire lifecycle mutation is gone, not only `status=active`.
+3. Confirm the remaining rule is role-neutral: only active users continue.
+4. Inspect tests for inactive ADMIN, suspended ADMIN, inactive WORKER, and active ADMIN.
+5. Confirm tests inspect DB/mock mutation state, not only HTTP errors.
+6. Confirm stale-token/non-active behavior is protected where practical.
+7. Search for `deactivatedAt`, `status: active`, and recovery helper names in request auth.
+8. Reject any emergency email/admin bypass introduced as replacement.
+
+## Handoff Notes
+
+After AUTH-003 completes:
+
+- AUTH-010 may assume login will never reactivate a user and can own explicit lifecycle transitions.
+- AUTH-011 may assume local access removal is effective immediately and can add Clerk-session revocation only as defense-in-depth.
+- AUTH-015/AUTH-017 may encode non-active-state immutability as a permanent auth invariant.
+- AUTH-009 can protect the final active administrator without competing login-time repair behavior.
+
+This ticket does not itself define all lifecycle authorization/audit/session-revocation semantics. Those remain in AUTH-009 through AUTH-012.
