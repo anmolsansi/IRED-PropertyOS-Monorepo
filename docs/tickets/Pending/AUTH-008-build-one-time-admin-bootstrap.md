@@ -14,6 +14,32 @@ Provide a safe, explicit way to create the first PropertyOS administrator in a n
 
 This mechanism is for **initial bootstrap only**. It must not run during normal application startup, deployment, authentication, or ordinary database seeding.
 
+## Junior Engineer Orientation
+
+Once AUTH-002/003/007 remove automatic privileged recovery, a brand-new environment has a practical question:
+
+```text
+If no admin exists yet, who creates the first admin?
+```
+
+The answer must be an **explicit operator action**, not a hidden login fallback.
+
+Think of this script like initial infrastructure provisioning. It is intentionally hard to trigger accidentally and refuses to run once the environment already has an active administrator.
+
+You are not building a permanent break-glass system. You are building a one-time initialization path.
+
+### Security goals
+
+The script must be:
+
+- manual;
+- deterministic;
+- fail-closed;
+- repeat-safe;
+- tied to an exact Clerk identity;
+- impossible to trigger from a public HTTP request;
+- unable to silently promote/reactivate an existing conflicting user.
+
 ## Why This Exists
 
 Once authentication can no longer auto-create/reactivate an administrator and `db:seed` no longer creates a master admin, a fresh environment needs an intentional first-admin provisioning procedure.
@@ -46,7 +72,7 @@ The bootstrap must satisfy all of these rules:
 - verifies supplied email corresponds to the supplied Clerk user;
 - refuses to run if an active PropertyOS `ADMIN` already exists;
 - never silently promotes/reactivates an existing conflicting user;
-- creates an audit record if the audit schema supports it safely;
+- creates an audit record if the audit architecture supports it safely;
 - exits non-zero when preconditions fail.
 
 ## Required Inputs
@@ -79,6 +105,9 @@ Potentially use existing Prisma and Clerk dependencies. Do not add a new auth li
 4. `Backend/prisma/seed.ts` after AUTH-007
 5. `Backend/package.json`
 6. existing audit-event schema/service if used
+7. `docs/tickets/TICKET_DETAIL_STANDARD.md`
+
+Before coding, explain in your own words why this script must refuse to promote an existing local user automatically even if the email matches.
 
 ## Target Flow
 
@@ -98,15 +127,29 @@ Operator explicitly runs bootstrap command
   -> exit 0
 ```
 
+## Important Fresh-Environment Boundary
+
+This ticket intentionally uses `active ADMIN exists` as the main refusal condition for initial bootstrap, but do not assume that means the script is a valid emergency recovery tool later.
+
+If a previously initialized environment later has zero active admins because all admins were disabled, automatically allowing bootstrap again may create a security bypass.
+
+If the product needs a persistent "environment already initialized" marker or a separate break-glass process, that is an architect decision. Do not silently turn this bootstrap into recovery logic.
+
 ## Step-by-Step Implementation
 
 ### Step 1 - Inspect existing script conventions
 
-Search `Backend/` for existing operational scripts.
+Search `Backend/` for operational scripts.
 
 If a `scripts/` directory already exists, use it. Otherwise create `Backend/scripts/`.
 
-Do not place bootstrap logic inside `src/main.ts`, module initialization, Prisma seed, or migrations.
+Do not place bootstrap logic inside:
+
+- `src/main.ts`;
+- module constructors/on-init hooks;
+- Prisma seed;
+- migrations;
+- frontend code.
 
 ### Step 2 - Add an explicit package command
 
@@ -127,57 +170,63 @@ Do not chain it into:
 
 ### Step 3 - Validate environment inputs before database changes
 
-Read the required values.
+Read required values.
 
-If either bootstrap identity value is missing/blank:
+If any required bootstrap identity value is missing/blank:
 
-- print a safe error explaining which variable is missing;
+- print a safe error naming the missing variable;
 - perform zero writes;
 - exit non-zero.
 
-Normalize the email for comparison only. Do not modify the Clerk ID.
+Normalize email only for comparison. Do not transform the Clerk ID.
 
 ### Step 4 - Initialize Prisma and Clerk
 
-Use the repository's existing Prisma client conventions and `@clerk/backend` dependency.
+Use repository's existing Prisma/Clerk patterns.
 
-Do not print secret values.
+Do not print `DATABASE_URL`, `CLERK_SECRET_KEY`, tokens, or provider response bodies containing sensitive material.
 
-### Step 5 - Check whether bootstrap is still allowed
+### Step 5 - Check whether bootstrap is allowed
 
-Query for active users whose role is `ADMIN`.
+Query active ADMIN users.
 
 If count >= 1:
 
-- print `Bootstrap refused: an active administrator already exists.`;
+- print a safe refusal message;
 - perform zero writes;
 - exit non-zero.
 
-This makes normal repeated execution safe.
+Do not add `--force` as a shortcut unless an architect explicitly designs one.
 
-### Step 6 - Verify the exact Clerk identity
+### Step 6 - Fetch the exact Clerk identity by supplied ID
 
-Fetch Clerk user using `BOOTSTRAP_ADMIN_CLERK_ID`.
-
-Determine the appropriate verified/primary email from the provider record using the same normalized comparison rules established by the auth integration.
+Use `BOOTSTRAP_ADMIN_CLERK_ID` directly.
 
 If the Clerk user cannot be found, refuse.
 
-If the Clerk email does not match `BOOTSTRAP_ADMIN_EMAIL`, refuse.
+Do not search by name or choose an account by a loose query.
 
-Do not search by display name.
+### Step 7 - Verify email consistency
 
-### Step 7 - Check local conflicts by Clerk ID
+Read the appropriate primary/verified email from the Clerk user according to the installed SDK/data model.
+
+Compare normalized provider email with `BOOTSTRAP_ADMIN_EMAIL`.
+
+If they differ, refuse with zero writes.
+
+**Why:** The operator must prove both the exact provider ID and the expected human account identity match.
+
+### Step 8 - Check local conflict by Clerk ID
 
 Query local `User` by `clerkUserId`.
 
-If a user already exists with that ID:
+If any local user already owns that provider ID:
 
-- do not change role/status automatically;
-- report the local user ID and safe conflict reason;
+- do not promote/reactivate/change it;
+- report a safe conflict reason;
 - stop for manual review.
 
-### Step 8 - Check local conflicts by email
+### Step 9 - Check local conflict by email
 
 Query local `User` by normalized email.
 
@@ -186,60 +235,59 @@ If a user exists with that email but different/missing Clerk identity:
 - do not promote;
 - do not reactivate;
 - do not relink automatically;
-- stop and instruct operator to resolve identity through AUTH-005-style verification.
+- stop and require identity reconciliation.
 
-### Step 9 - Create the initial administrator
+### Step 10 - Prepare the exact create payload
 
-Only after all checks pass, create exactly one local user with:
+Only after all checks pass, prepare one new user with:
 
-- supplied normalized email;
-- supplied verified Clerk user ID;
-- appropriate full name from Clerk or explicit safe value;
+- normalized email;
+- verified exact Clerk user ID;
+- appropriate full name from Clerk or explicit safe source;
 - `role = ADMIN`;
 - `status = active`;
-- fields required by the current schema.
+- schema-required fields only.
 
-Do not create a reusable/default password for Clerk-based production auth.
+Do not create a reusable/default password.
 
-If `passwordHash` is schema-required, use the repository's approved Clerk-managed sentinel pattern only if it is still architecturally required; do not invent a login-capable fallback password.
+If `passwordHash` remains schema-required, use only the project's approved Clerk-managed sentinel/non-login pattern after reviewer confirmation. Do not generate a real fallback credential.
 
-### Step 10 - Use a transaction for local writes
+### Step 11 - Use a transaction where multiple local writes must be atomic
 
-If creating both the user and an audit event, use a Prisma transaction so partial bootstrap state is not left behind.
+If creating both user and audit event, use a Prisma transaction so you do not leave half-bootstrap state.
 
-If audit-event creation is not possible without unsupported required fields, complete user creation only after reviewer decision and record the limitation for AUTH-012.
+If audit persistence is intentionally best-effort in current architecture and transaction semantics are unclear, stop for reviewer decision rather than inventing a different audit reliability model.
 
-### Step 11 - Print a safe result
+### Step 12 - Print a safe result
 
-On success print only what the authorized operator needs, for example:
+On success print only what operator needs:
 
 - local user ID;
-- normalized email if operator output policy permits;
-- role;
-- status;
-- confirmation that bootstrap is now disabled by the active-admin precondition.
+- role/status;
+- optionally normalized email if operator-output policy permits;
+- confirmation bootstrap succeeded.
 
-Never print secrets/tokens.
+Never print secrets/tokens/passwords.
 
-### Step 12 - Ensure cleanup
+### Step 13 - Ensure cleanup and exit codes
 
 Always disconnect Prisma in a `finally` path or equivalent.
 
-Return non-zero exit code on failure.
+Success -> exit code 0.
 
-### Step 13 - Add tests
+Precondition/provider/conflict/write failure -> non-zero.
 
-Extract testable business logic or mock Prisma/Clerk appropriately.
+### Step 14 - Add tests before manual execution
 
-Required cases are below.
+Mock Clerk and DB logic. Test every refusal path and exact success payload.
 
-### Step 14 - Validate locally
+### Step 15 - Validate in a disposable environment
 
-Use a disposable database and mocked/test Clerk identity.
+Run bootstrap once -> exactly one admin.
 
-Run bootstrap once: expect one admin.
+Run it again -> refusal, still exactly one admin.
 
-Run it again: expect refusal and no changes.
+Then verify normal Clerk login for the bootstrapped identity in that disposable environment.
 
 ## Checkpoint
 
@@ -249,41 +297,209 @@ Run it again: expect refusal and no changes.
 - [ ] Exact Clerk ID is verified.
 - [ ] Email/ID conflict fails closed.
 - [ ] Existing active admin causes refusal.
+- [ ] Existing conflicting local user is not promoted/reactivated.
 - [ ] Second run is safe.
+- [ ] No public bootstrap endpoint exists.
 
-## Tests Required
+## Detailed Test Specification
 
-### Test 1 - missing inputs
+### TEST-AUTH008-01: Missing email input refuses with zero writes
 
-Expected: failure, zero writes.
+**Purpose:** Prove bootstrap requires explicit operator intent/data.
 
-### Test 2 - existing active admin
+**Level:** Unit/script test.
 
-Expected: failure, zero writes.
+**Setup:** `BOOTSTRAP_ADMIN_EMAIL` absent/blank; other dependencies mocked.
 
-### Test 3 - Clerk ID not found
+**Action:** Run bootstrap logic.
 
-Expected: failure, zero writes.
+**Expected Result:** Non-zero/failure before DB mutation.
 
-### Test 4 - Clerk email mismatch
+**Required Assertions:** No user create/update; no Clerk lookup if validation happens first.
 
-Expected: failure, zero writes.
+**Why This Test Exists:** A script with fallback values recreates the original privileged-default problem.
 
-### Test 5 - local Clerk-ID conflict
+**If This Test Fails:** Remove fallback/default email and validate inputs before side effects.
 
-Expected: failure, no role/status changes.
+### TEST-AUTH008-02: Missing Clerk ID refuses with zero writes
 
-### Test 6 - local email conflict
+**Purpose:** Ensure bootstrap cannot identify the provider account only by email.
 
-Expected: failure, no promotion/reactivation.
+**Level:** Unit/script.
 
-### Test 7 - clean new environment
+**Setup:** Email present, `BOOTSTRAP_ADMIN_CLERK_ID` missing.
 
-Expected: exactly one active ADMIN linked to exact Clerk ID.
+**Action:** Run.
 
-### Test 8 - run command second time
+**Expected Result:** Refusal; zero writes.
 
-Expected: refusal because active admin exists; total admin count remains one.
+**Required Assertions:** No email-only provider selection.
+
+**Why This Test Exists:** Exact provider ID is part of the security proof.
+
+**If This Test Fails:** Make Clerk ID mandatory.
+
+### TEST-AUTH008-03: Existing active admin blocks bootstrap
+
+**Purpose:** Make one-time behavior repeat-safe.
+
+**Level:** Service/script integration.
+
+**Setup:** DB contains at least one active ADMIN.
+
+**Action:** Run bootstrap with otherwise valid inputs.
+
+**Expected Result:** Refused.
+
+**Required Assertions:** No Clerk/user create/update needed after refusal point; admin count unchanged.
+
+**Why This Test Exists:** Prevents bootstrap from becoming a general privilege-escalation command.
+
+**If This Test Fails:** Ensure active-admin check occurs before creation and cannot be bypassed by ordinary flags.
+
+### TEST-AUTH008-04: Clerk ID not found refuses
+
+**Purpose:** Prevent creation tied to a nonexistent external identity.
+
+**Level:** Unit.
+
+**Setup:** Zero active admins; provider fetch by supplied ID throws/not found.
+
+**Action:** Run.
+
+**Expected Result:** Refused; zero local writes.
+
+**Required Assertions:** No user created.
+
+**Why This Test Exists:** Local admin must be linked to a real verified provider account.
+
+**If This Test Fails:** Move local creation after successful provider verification.
+
+### TEST-AUTH008-05: Clerk email mismatch refuses
+
+**Purpose:** Catch operator typo/wrong Clerk ID.
+
+**Level:** Unit.
+
+**Setup:** Supplied Clerk ID exists but provider email differs from supplied bootstrap email.
+
+**Action:** Run.
+
+**Expected Result:** Refusal; zero local writes.
+
+**Required Assertions:** Existing provider/local data unchanged.
+
+**Why This Test Exists:** It creates a two-piece identity consistency check.
+
+**If This Test Fails:** Add normalized email comparison before local creation.
+
+### TEST-AUTH008-06: Existing local Clerk-ID conflict refuses without promotion
+
+**Purpose:** Prevent bootstrap from hijacking an existing account mapping.
+
+**Level:** Unit/integration.
+
+**Setup:** No active admin, but local non-admin/inactive user already owns supplied `clerkUserId`.
+
+**Action:** Run.
+
+**Expected Result:** Refused.
+
+**Required Assertions:** Existing user's role/status/mapping unchanged; no second user created.
+
+**Why This Test Exists:** A pre-existing identity mapping is security evidence requiring review.
+
+**If This Test Fails:** Remove any auto-promotion/reactivation path.
+
+### TEST-AUTH008-07: Existing local email conflict refuses without relinking
+
+**Purpose:** Prevent email-based privilege promotion.
+
+**Level:** Unit/integration.
+
+**Setup:** Local user exists with bootstrap email but different/null Clerk ID.
+
+**Action:** Run.
+
+**Expected Result:** Refused.
+
+**Required Assertions:** No role/status/clerkUserId change.
+
+**Why This Test Exists:** Otherwise bootstrap would recreate privileged email matching in another form.
+
+**If This Test Fails:** Require AUTH-005-style identity reconciliation.
+
+### TEST-AUTH008-08: Clean fresh environment creates exactly one active admin
+
+**Purpose:** Prove the intended success path works.
+
+**Level:** Integration with disposable DB + mocked/test Clerk.
+
+**Setup:** Zero active admins, no email/ID conflicts, Clerk identity exists and email matches.
+
+**Action:** Run bootstrap.
+
+**Expected Result:** Success.
+
+**Required Assertions:** Exactly one local user created; exact Clerk ID; role ADMIN; status active; no default password; only intended fields written.
+
+**Why This Test Exists:** Security controls are useful only if legitimate initialization still works.
+
+**If This Test Fails:** Fix the explicit bootstrap path; do not restore login-time provisioning.
+
+### TEST-AUTH008-09: Second execution is refused and idempotent
+
+**Purpose:** Prove bootstrap cannot be reused after successful initialization.
+
+**Level:** Integration.
+
+**Setup:** Run successful Test 08 first or pre-create active admin.
+
+**Action:** Run command again.
+
+**Expected Result:** Refused.
+
+**Required Assertions:** Total user/admin count unchanged; no modifications to first admin.
+
+**Why This Test Exists:** Repeat-safe behavior prevents accidental/admin-sprawl during deployment troubleshooting.
+
+**If This Test Fails:** Ensure active-admin precondition is checked every invocation.
+
+### TEST-AUTH008-10: Script is not reachable through application HTTP routes
+
+**Purpose:** Ensure bootstrap remains an operator command, not an attackable API.
+
+**Level:** Static/E2E route inspection.
+
+**Setup:** Running application/routes or repository search.
+
+**Action:** Search controllers/routes for bootstrap endpoint and inspect package/start scripts.
+
+**Expected Result:** No public/admin HTTP endpoint invokes bootstrap; start/build/seed do not chain it.
+
+**Required Assertions:** Bootstrap only exists as explicit script/command.
+
+**Why This Test Exists:** A protected-looking HTTP endpoint can still become a severe privilege escalation surface.
+
+**If This Test Fails:** Remove route/automatic invocation and retain CLI/operator path only.
+
+### TEST-AUTH008-11: Failure during audit-event creation follows approved atomicity
+
+**Purpose:** Prevent partially-created privileged state when the implementation intends transactional user+audit creation.
+
+**Level:** Unit/integration.
+
+**Setup:** Clean success preconditions; force audit write failure inside transaction if audit is transactionally required.
+
+**Action:** Run bootstrap.
+
+**Expected Result:** According to approved design, transaction rolls back and no admin remains if audit is mandatory.
+
+**Required Assertions:** No partial privileged user when transaction contract says atomic.
+
+**Why This Test Exists:** Partial bootstrap state is difficult to reason about operationally.
+
+**If This Test Fails:** Fix transaction boundary or escalate if audit is intentionally best-effort.
 
 ## Manual Verification
 
@@ -297,15 +513,43 @@ On a fresh/disposable environment:
 6. confirm admin can access an ADMIN-only route;
 7. run bootstrap command again;
 8. confirm second run refuses;
-9. confirm no second admin created.
+9. confirm no second admin created;
+10. confirm no bootstrap route exists in Swagger/router output.
 
-## Recovery Boundary
+## Failure Diagnosis Guide
 
-This ticket does **not** create a permanent break-glass account.
+### Script creates admin despite an existing active admin
 
-If all production admins are later disabled, recovery must use an authorized operational runbook with explicit human review. Do not make the bootstrap automatically re-enable itself merely because active-admin count reaches zero after the system has already been initialized.
+Check precondition query/order. It must execute before creation and use `role=ADMIN AND status=active`.
 
-If a persistent marker is required to distinguish "never bootstrapped" from "all admins later disabled," that is a separate architect decision. Do not guess.
+### Existing local user gets promoted instead of conflict error
+
+This violates the ticket. Remove auto-promotion/reactivation and require manual identity reconciliation.
+
+### Script requires/prints a password
+
+For Clerk-based bootstrap, do not create a reusable fallback password. Review schema-required password handling and escalate if a safe sentinel design is unclear.
+
+### Second run creates another admin
+
+One-time guard is broken. Verify first admin is committed as active before command completes and that subsequent count sees it.
+
+### Operator wants `--force`
+
+Do not add it casually. A force mode is effectively privileged recovery and needs separate architect review/audit controls.
+
+## PR Evidence Required
+
+Include:
+
+- command/script path and package command;
+- proof it is not chained to start/build/seed/deploy;
+- list of preconditions/refusal paths;
+- test results for every refusal and success case;
+- disposable bootstrap first-run and second-run output summary (no secrets);
+- proof normal Clerk login works for bootstrapped test admin;
+- confirmation no default password exists;
+- audit-event behavior/decision.
 
 ## Acceptance Criteria
 
@@ -313,23 +557,27 @@ If a persistent marker is required to distinguish "never bootstrapped" from "all
 - [ ] Bootstrap requires explicit verified identity input.
 - [ ] No default credential exists.
 - [ ] Existing active admin prevents another bootstrap.
-- [ ] Existing conflicting user is not silently promoted/reactivated.
+- [ ] Existing conflicting user is not silently promoted/reactivated/relinked.
 - [ ] Script never runs automatically.
-- [ ] Tests cover all refusal paths.
+- [ ] No HTTP bootstrap endpoint exists.
+- [ ] Tests cover all refusal paths and second-run behavior.
 
 ## Definition of Done
 
 - [ ] Script/command implemented.
-- [ ] Tests pass.
+- [ ] Detailed tests pass.
 - [ ] Typecheck passes.
 - [ ] Lint passes.
 - [ ] Disposable-environment manual test passes.
 - [ ] AUTH-018 documentation references the command.
+- [ ] Required PR evidence recorded.
 - [ ] Security reviewer approves bootstrap conditions.
 
 ## Rollback
 
-Removing the bootstrap script does not require DB rollback. If a test bootstrap created an unwanted disposable user, remove it only through normal test cleanup. Never delete a legitimate production admin without explicit authorization.
+Removing the bootstrap script does not require DB rollback. If a test bootstrap created an unwanted disposable user, remove it only through normal test cleanup.
+
+Never delete or demote a legitimate production admin without explicit authorization.
 
 ## Forbidden Shortcuts
 
@@ -342,11 +590,21 @@ Do not:
 - auto-reactivate inactive users;
 - accept frontend-provided bootstrap requests;
 - expose a public `/bootstrap-admin` HTTP endpoint;
-- allow repeated bootstrap after an active admin exists.
+- allow repeated bootstrap after an active admin exists;
+- add an unreviewed `--force` bypass.
 
 ## STOP - NEEDS ARCHITECT DECISION
 
-Stop if the current Prisma schema requires a password representation that cannot safely support a Clerk-only bootstrap without creating a fake reusable credential. Also stop if the business requires a formal break-glass recovery account; that is a broader security design and must not be improvised here.
+Stop if the current Prisma schema requires a password representation that cannot safely support a Clerk-only bootstrap without creating a fake reusable credential.
+
+Also stop if:
+
+- business requires a formal break-glass recovery account;
+- an initialized environment with zero active admins must reuse this bootstrap;
+- you need a persistent environment-initialized marker;
+- bootstrap must operate in a multi-organization future role model.
+
+Those are broader security design decisions.
 
 ## Completion Record
 
@@ -356,4 +614,6 @@ Stop if the current Prisma schema requires a password representation that cannot
 **Final Commit:**  
 **Completed Date:**  
 **Disposable Bootstrap Test:** Pass / Fail  
+**Second Run Refused:** Pass / Fail  
+**Normal Admin Login:** Pass / Fail  
 **Notes:**
