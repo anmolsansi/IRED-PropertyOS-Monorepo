@@ -645,3 +645,205 @@ Do not invent those architecture changes in this ticket.
 **Partial Failure Test:** Pass / Fail  
 **Manual Multi-Session Test:** Pass / Fail  
 **Notes:**
+
+---
+
+## Expanded Architecture Discussion And Decision Record
+
+### Decision 1: Local denial is authoritative, provider revocation is defense-in-depth
+
+**Decision:** Commit the PropertyOS status transition first, then revoke Clerk sessions.
+
+**Reason:** Access removal must remain effective even if Clerk is unavailable. The auth guard rechecks local status on protected requests, so local non-active state is the reliable security boundary.
+
+**Rejected alternative:** Revoke provider sessions first and only deactivate locally if all revocations succeed.
+
+**Why rejected:** Provider outage or one bad session would leave a user locally authorized after an administrator explicitly removed access.
+
+### Decision 2: Provider cleanup is best-effort inline unless a separate async guarantee is explicitly designed
+
+**Decision:** In this ticket, attempt cleanup after local commit and report `success/partial/skipped/failed`. Do not invent a queue/retry infrastructure silently.
+
+**Reason:** The repository currently has Redis/background-job constraints and the core security requirement is already satisfied locally. Guaranteed eventual provider cleanup may be valuable but needs a dedicated reliability design.
+
+**Rejected alternative:** Roll back local status when cleanup is partial/failed.
+
+**Why rejected:** That weakens access control to preserve sign-out UX.
+
+### Decision 3: Identity for cleanup is `clerkUserId`, never email
+
+**Decision:** Session operations use the stable mapping from AUTH-006. Missing mapping means cleanup is skipped/reported, not resolved by email lookup.
+
+**Reason:** External cleanup must not reintroduce the identity ambiguity removed from request authentication.
+
+### Decision 4: Revocation must be multi-session and retry-safe
+
+**Decision:** Process all relevant sessions with pagination and tolerate already-ended sessions/duplicate cleanup attempts.
+
+**Reason:** Users may have multiple browsers/devices and lifecycle operations can be retried after network uncertainty.
+
+## Facts, Assumptions, And Unknowns
+
+### Facts
+
+- AUTH-010 establishes a central successful local lifecycle transition.
+- AUTH-006 establishes `clerkUserId` as the provider mapping key.
+- Clerk is an external dependency whose API can fail independently of the local database.
+
+### Assumptions to verify
+
+- Installed Clerk SDK supports the required session-list/revoke operations without package upgrade.
+- The backend sees local status on each protected request after AUTH-003/006.
+- Inline cleanup latency is acceptable for current user-admin operations.
+
+### Unknowns requiring architect decision
+
+- Whether failed/partial cleanup needs guaranteed asynchronous retry/SLA.
+- Whether role demotion alone should force session revocation in the future.
+- Whether the API needs a first-class partial-success response envelope rather than internal/logged cleanup status.
+
+## Intern Execution Sequence - No Improvisation
+
+### Phase A - Inspect the installed provider API, do not code from memory
+
+1. Check exact `@clerk/backend` version.
+2. Inspect TypeScript definitions for user-session listing and revoke methods.
+3. Write down pagination shape and session status values.
+4. Find the existing Clerk client construction in backend code.
+5. Stop if the SDK lacks the required supported operations rather than writing raw HTTP calls.
+
+### Phase B - Build and test the provider helper in isolation
+
+1. Accept only `clerkUserId`.
+2. Return a structured result with counts.
+3. Implement first page.
+4. Add multi-page fixture.
+5. Add empty-final-page fixture.
+6. Add mixed active/ended fixture.
+7. Add per-session failure fixture and continue remaining attempts.
+8. Add full list failure fixture.
+9. Ensure logs sanitize provider objects/errors.
+
+### Phase C - Attach cleanup after local lifecycle success
+
+1. Call AUTH-010 transition first.
+2. If it throws/rejects, return immediately, no Clerk call.
+3. If target result is active, do not revoke.
+4. If result is suspended/inactive and provider mode is Clerk, attempt cleanup.
+5. If cleanup fails, preserve the local successful non-active state.
+6. Return/record cleanup status without claiming the local transition failed.
+
+### Phase D - Verify failure ordering
+
+1. Inject DB failure before local commit, assert zero Clerk calls.
+2. Inject Clerk listing failure after local commit, assert local user remains non-active.
+3. Inject one revoke failure, assert remaining sessions are attempted.
+4. Repeat cleanup, assert idempotent handling of already-ended sessions.
+
+### Phase E - Real test-environment verification
+
+1. Open two independent sessions for a disposable Clerk test user.
+2. Verify both can access PropertyOS.
+3. Suspend from an admin account.
+4. Confirm API access denies immediately even before checking browser sign-out.
+5. Confirm both Clerk sessions become invalid/revoked.
+6. Reactivate and prove old sessions do not magically return.
+7. Sign in again to restore normal access.
+
+## Additional Test Cases And Explanations
+
+### TEST-AUTH011-14: Slow Clerk cleanup does not change already-committed local denial
+
+**Purpose:** Prove external latency cannot leave the user locally active while the request waits.
+
+**Level:** Integration/service with controllable promise.
+
+**Setup:** Local suspension succeeds. Mock Clerk session listing/revoke with a delayed promise.
+
+**Action:** Start suspension, pause provider completion, query the local user/attempt protected access through an independent request if test architecture permits.
+
+**Expected Result:** Local user is already non-active and protected access is denied while provider cleanup is still pending.
+
+**Required Assertions:** No temporary reactivation; local status committed before provider await.
+
+**Why This Test Exists:** Correct call order in source can still be obscured by transaction boundaries. This proves the security effect is visible before slow external work completes.
+
+**False Positive To Avoid:** Mocking cleanup to resolve immediately, which does not prove ordering under latency.
+
+**If This Test Fails:** Move external calls outside the local transaction/after committed lifecycle change.
+
+### TEST-AUTH011-15: Provider cleanup is never performed inside a long-lived DB transaction
+
+**Purpose:** Avoid holding database locks/transactions open while waiting on network I/O.
+
+**Level:** Architecture/static/integration verification.
+
+**Setup:** Inspect/spy on transaction boundary and delayed Clerk call.
+
+**Action:** Run access removal with slow provider response.
+
+**Expected Result:** Local DB transaction has completed before external session-list/revoke work begins.
+
+**Required Assertions:** Network call is not awaited from inside the mutation transaction callback where this can be tested/verified.
+
+**Why This Test Exists:** Holding DB transactions across external network calls increases contention and complicates failure semantics.
+
+**False Positive To Avoid:** Merely checking function call order without confirming the transaction has actually committed/closed.
+
+**If This Test Fails:** Refactor orchestration so local atomic work completes first.
+
+### TEST-AUTH011-16: Cleanup result never leaks raw provider error/session data to API client
+
+**Purpose:** Keep provider internals and sensitive fields server-side.
+
+**Level:** Controller/service response test.
+
+**Setup:** Mock Clerk to throw an error containing fake sensitive headers/session fields.
+
+**Action:** Suspend/deactivate through API/service boundary.
+
+**Expected Result:** Client sees approved local-success/cleanup-status semantics, not the raw provider exception body.
+
+**Required Assertions:** Fake sensitive strings absent from response and logs unless sanitized reason only.
+
+**Why This Test Exists:** External SDK errors can contain more detail than should be exposed to users/admin UI.
+
+**False Positive To Avoid:** Testing only successful provider calls.
+
+**If This Test Fails:** Translate provider failures into safe internal result/reason codes.
+
+## Observability And Audit Expectations
+
+For each access-removal operation, operators should be able to distinguish:
+
+```text
+local lifecycle = succeeded/failed
+provider cleanup = success/partial/skipped/failed
+```
+
+Useful structured fields include target local user ID, request ID, target status, sessions seen/attempted/revoked/failed, and safe provider failure category. Do not log raw session objects, tokens, authorization headers, Clerk secret key, or provider response bodies.
+
+AUTH-012 should record the local lifecycle event. Provider cleanup result can be attached as safe metadata if the final semantic-audit design supports it. A cleanup failure must not rewrite the lifecycle event into "deactivation failed" when local access was successfully removed.
+
+## Reviewer Walkthrough
+
+1. Verify local status transition/last-admin validation completes before any Clerk call.
+2. Verify no external call is held inside the local DB transaction.
+3. Verify helper takes `clerkUserId`, never email.
+4. Review pagination and termination logic against installed SDK types.
+5. Review partial-failure continuation.
+6. Review local-success/provider-failure test.
+7. Review delayed-provider ordering test.
+8. Review multi-session manual evidence.
+9. Verify raw provider errors/tokens are not exposed.
+10. Reject any rollback-to-active behavior caused by Clerk failure.
+
+## Handoff Notes
+
+After AUTH-011 completes:
+
+- AUTH-012 can add semantic lifecycle audit events including safe cleanup outcome metadata if desired.
+- AUTH-016 can test complete lifecycle side-effect ordering at service level.
+- AUTH-017 can prove a deactivated/suspended user is denied locally and signed out externally in a controlled staging/manual smoke path.
+
+If guaranteed eventual Clerk cleanup becomes required, create a separate background-retry ticket rather than weakening the local-first contract in this ticket.
