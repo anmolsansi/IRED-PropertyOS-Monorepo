@@ -572,3 +572,208 @@ Do not invent a replacement privileged mechanism.
 **Tests Added/Updated:**  
 **Manual Verification:** Pass / Fail  
 **Notes:**
+
+---
+
+## Expanded Architecture Discussion And Decision Record
+
+This section records the reasoning that must survive beyond the immediate code change.
+
+### Decision 1: A person's email address is not a privilege-granting credential
+
+**Decision:** Remove the master-admin email concept from request-time authentication entirely.
+
+**Reason:** Email is useful profile data and may be used during explicit onboarding, but it is not a safe runtime authorization primitive. A code path that says "this email gets special treatment" creates a hidden privilege channel that is separate from the actual PropertyOS role/status model.
+
+**Rejected alternative:** Keep `MASTER_ADMIN_EMAIL`, but move it to a safer environment variable with no hardcoded default.
+
+**Why rejected:** The architectural problem is not only the hardcoded value. The problem is that request authentication contains a special identity that can bypass ordinary provisioning/lifecycle rules. Moving the value to configuration preserves that problem.
+
+**Future reconsideration trigger:** None for request-time privilege. If the company later needs emergency access, design a separately reviewed break-glass procedure with explicit activation, audit, expiration, and operator controls. Do not reuse an email equality check.
+
+### Decision 2: Recovery from missing admin access must happen outside login
+
+**Decision:** If removing the fallback exposes that no legitimate administrator is provisioned, stop and repair provisioning/bootstrap data rather than restoring the bypass.
+
+**Reason:** Authentication must not become the mechanism that repairs privileged state. AUTH-008 exists specifically to give operators an explicit, auditable bootstrap path.
+
+**Rejected alternative:** Keep the fallback temporarily until someone logs in once.
+
+**Why rejected:** "Temporary" bypasses tend to survive because the successful login hides the underlying provisioning problem. It also makes deployment behavior depend on who logs in and when.
+
+### Decision 3: This ticket intentionally does not finish the whole authentication migration
+
+**Decision:** Keep this ticket focused on removing the privileged email primitive. Let AUTH-002, AUTH-003, AUTH-005, AUTH-006, and AUTH-008 own their specific lifecycle/identity responsibilities.
+
+**Reason:** Small security changes are easier to review and prove. Combining identity backfill, provider-ID migration, user lifecycle, bootstrap, and fallback removal into one undifferentiated change makes rollback and regression diagnosis harder.
+
+## Facts, Assumptions, And Unknowns
+
+### Facts from the repository
+
+- `JwtAuthGuard` currently contains the master-admin email primitive described above.
+- The local `User` model already carries application-owned role/status information.
+- Other tickets in this auth pack cover privileged seed defaults, Clerk identity mapping, explicit lifecycle, and bootstrap.
+
+### Assumptions the implementer must verify before deployment
+
+- At least one legitimate active administrator will remain usable after the fallback is removed.
+- Normal active users do not intentionally rely on the master-admin comparison.
+- Any dependent branch referencing the helper is removed/updated in the coordinated auth-hardening change.
+
+### Unknowns that must not be guessed
+
+- Which production identities currently depend on the fallback.
+- Whether a production administrator row was historically auto-created by the fallback.
+- Whether production has any undocumented operational runbook that assumes `MASTER_ADMIN_EMAIL` exists.
+
+If any unknown materially affects deployment safety, record it and escalate before production rollout.
+
+## Intern Execution Sequence - No Improvisation
+
+Use this sequence even if the code change itself appears to be only a few lines.
+
+### Phase A - Prove you understand the current branch
+
+1. Pull the latest branch.
+2. Run `git status`; ensure the worktree is clean.
+3. Run the baseline typecheck/tests.
+4. Open `jwt-auth.guard.ts` and read it from top to bottom.
+5. Search the repository for `DEFAULT_MASTER_ADMIN_EMAIL`, `MASTER_ADMIN_EMAIL`, `getMasterAdminEmail`, and the known fallback concept.
+6. Write the search results in your working notes.
+7. Identify the exact missing-user and inactive-user branches that depend on the helper.
+8. Stop if the repository no longer matches this ticket.
+
+### Phase B - Build the regression protection first when practical
+
+1. Locate/create the focused guard test file.
+2. Create the missing-user test fixture.
+3. Make the token/provider verification succeed in the fixture.
+4. Make local-user lookup return `null`.
+5. Add spies for all user write methods exposed by the mock.
+6. Add the former-special-email scenario using fake test data.
+7. Confirm the current unsafe implementation fails at least one new assertion when the test seam can reproduce it.
+8. Only then change the guard.
+
+If reproducing the exact old branch requires excessive test-only coupling, document why and ensure AUTH-015 provides the full regression matrix. Do not weaken the desired invariant.
+
+### Phase C - Remove the primitive and dependent special branch behavior
+
+1. Delete the constant/helper.
+2. Remove only the special behavior that depended on it, coordinating with AUTH-002/AUTH-003.
+3. Do not change normal token verification.
+4. Do not change normal active-user loading.
+5. Do not add a replacement configuration variable.
+6. Run focused tests immediately.
+7. Run typecheck immediately.
+
+### Phase D - Perform static security review
+
+Search again for:
+
+```text
+MASTER_ADMIN
+master admin
+getMasterAdminEmail
+normalizedEmail ===
+email ===
+```
+
+Inspect every runtime auth-code match manually. A textual match is not automatically a bug, but every privilege-affecting email comparison must be removed or justified outside this ticket.
+
+### Phase E - Full validation and evidence
+
+1. Run backend lint.
+2. Run backend unit tests.
+3. Run relevant E2E tests if available.
+4. Inspect the final diff.
+5. Record test names/results in the PR.
+6. Record static-search result in the PR.
+7. Record manual active-user and missing-user verification.
+8. Ask reviewer to verify the invariant, not merely the deletion of the named constant.
+
+## Additional Test Cases And Why They Matter
+
+### TEST-AUTH001-06: Active ADMIN does not require any master-email match
+
+**Purpose:** Prove that legitimate privilege comes from the local role, not an email comparison.
+
+**Level:** Unit/service regression.
+
+**Setup:** Existing local user with `role=ADMIN`, `status=active`, valid provider identity, and a fake email that does not resemble any former privileged value.
+
+**Action:** Authenticate normally.
+
+**Expected Result:** Authentication succeeds according to the normal existing-user path.
+
+**Required Assertions:** Existing local role remains `ADMIN`; no privilege write occurs; no email-specific helper is called.
+
+**Database Assertions:** User role/status remain unchanged.
+
+**External-Service Assertions:** Only ordinary provider verification/profile calls required by the current implementation occur.
+
+**Why This Test Exists:** It demonstrates the replacement mental model to future engineers: administrators are administrators because PropertyOS says so, not because their email matches a magic string.
+
+**False Positive To Avoid:** A test that simply mocks the entire guard to return `true` proves nothing. It must exercise the real branch under test.
+
+**If This Test Fails:** Check whether the implementation accidentally made normal ADMIN authentication depend on the removed helper.
+
+### TEST-AUTH001-07: Suspicious config cannot re-enable the bypass
+
+**Purpose:** Ensure leaving `MASTER_ADMIN_EMAIL` set in a developer/production environment cannot silently restore special behavior after code removal.
+
+**Level:** Unit/config regression or manual verification.
+
+**Setup:** Set `MASTER_ADMIN_EMAIL` to a fake value while using the updated guard. Configure a valid provider identity with that email but no local PropertyOS user.
+
+**Action:** Attempt authentication.
+
+**Expected Result:** Rejected exactly like any other unprovisioned user.
+
+**Required Assertions:** Guard does not read/use the variable for authorization; zero user/role/status writes.
+
+**Why This Test Exists:** Configuration often lingers after code changes. This proves stale configuration is inert while AUTH-013 cleans it up.
+
+**False Positive To Avoid:** Merely checking that the environment variable is absent on one machine. The point is that even if present, request auth does not consume it.
+
+**If This Test Fails:** Search for configuration reads in the guard or helper code. AUTH-001 is incomplete.
+
+## Observability And Logging Expectations
+
+This ticket is not primarily a logging ticket, but the implementation must not introduce logs that reveal the old privileged identity mechanism.
+
+Acceptable auth diagnostics are generic reason codes such as missing token, invalid token, user not provisioned, inactive user, or success. Do not log statements like:
+
+```text
+special admin email matched
+master admin login detected
+fallback admin not found
+```
+
+Do not log full bearer tokens, Clerk secrets, refresh tokens, session cookies, or passwords. AUTH-014 owns the broader log-cleanup work.
+
+## Reviewer Walkthrough
+
+The reviewer should verify in this order:
+
+1. Open `jwt-auth.guard.ts` and search for the removed primitive.
+2. Confirm normal active-user lookup/status logic still exists.
+3. Confirm missing-user and inactive-user branches do not contain an email exception.
+4. Inspect tests for both positive and negative behavior.
+5. Confirm tests assert forbidden writes did not happen.
+6. Search the final diff for a renamed replacement fallback or new environment-variable privilege rule.
+7. Confirm the PR does not mix unrelated auth/tenant/refactor work.
+8. Confirm any deployment unknown about real admins is explicitly handed to AUTH-005/AUTH-008/AUTH-018 rather than hidden.
+
+## Handoff Notes
+
+After AUTH-001 is truly complete, dependent tickets may assume:
+
+- request-time auth has no approved master-admin email primitive;
+- future code must not reintroduce an email-based privileged bypass;
+- AUTH-002 can focus on removing missing-user creation without preserving a master-email exception;
+- AUTH-003 can focus on inactive-user behavior without preserving a master-email exception;
+- AUTH-013 can remove stale runtime configuration without changing runtime auth behavior;
+- AUTH-015 can encode the final guard regression suite against the new invariant.
+
+This ticket does **not** prove that production users are correctly mapped to Clerk IDs or that a safe first-admin bootstrap exists. Those remain owned by AUTH-005/AUTH-006/AUTH-008.
