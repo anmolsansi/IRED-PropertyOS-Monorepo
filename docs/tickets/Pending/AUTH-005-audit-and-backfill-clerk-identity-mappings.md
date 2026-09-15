@@ -697,3 +697,221 @@ Those conditions change the identity architecture and must be resolved before AU
 **Unresolved Active Identities:**  
 **Post-Apply Audit:** Pass / Fail  
 **Notes / Unresolved Identities:**
+
+---
+
+## Expanded Architecture Discussion And Decision Record
+
+### Decision 1: `clerkUserId` is the durable identity binding, email is only a controlled migration aid
+
+**Decision:** Runtime identity will be based on Clerk's provider-issued subject. During this migration only, normalized verified email may be used to propose a mapping for an otherwise unmapped local user, and only when the match is exactly one-to-one.
+
+**Reason:** The migration needs a bridge from the old email-based world to the stable provider-ID world. Email is useful evidence for this one-time controlled operation, but it is too mutable/ambiguous to remain a runtime identity join.
+
+**Rejected alternative:** Continue matching by email indefinitely and merely store `clerkUserId` as optional metadata.
+
+**Why rejected:** That leaves identity ambiguity in every login request and makes the stored provider ID non-authoritative.
+
+### Decision 2: Migration is classify-first, write-second
+
+**Decision:** Every record is classified in a read-only pass before apply mode is allowed to write safe mappings.
+
+**Reason:** Identity migration is high-impact. Operators must see counts/conflicts before mutation, and reviewers need evidence that ambiguous records were isolated rather than silently handled.
+
+**Rejected alternative:** Iterate through users and write immediately when a likely match is found.
+
+**Why rejected:** Mid-run surprises can leave a partially guessed identity dataset with no clear review boundary.
+
+### Decision 3: Ambiguity is a hard stop for that record
+
+**Decision:** Zero matches, multiple matches, broken existing mappings, and conflicting evidence produce a report item, not an automatic repair.
+
+**Reason:** Mapping the wrong external identity to a privileged local account is worse than temporarily blocking that user's login.
+
+**Rejected alternative:** Use secondary fuzzy signals such as display name, phone, or first result ordering to break ties.
+
+**Why rejected:** Those signals are not strong enough to prove identity ownership automatically.
+
+### Decision 4: Existing non-null mappings are evidence, not disposable hints
+
+**Decision:** A populated `clerkUserId` is verified against Clerk. If it conflicts with email-derived evidence, do not overwrite automatically.
+
+**Reason:** A conflict may indicate stale data, account replacement, provider-environment mismatch, or a security issue. Automatic overwrite would destroy evidence.
+
+## Facts, Assumptions, And Unknowns
+
+### Facts
+
+- `User.clerkUserId` is currently modeled as optional and unique in Prisma; verify this again before implementation.
+- The existing auth path can link missing Clerk IDs during login.
+- AUTH-006 requires trustworthy mappings before switching to strict ID lookup.
+
+### Assumptions to verify
+
+- Each active Clerk-authenticated PropertyOS user should map to exactly one Clerk user.
+- Verified email is sufficiently trustworthy as a migration aid only when exactly one Clerk result exists.
+- The operator running production audit/apply has access to the correct Clerk instance and database environment.
+
+### Unknowns that must be measured, not guessed
+
+- Count of active users missing `clerkUserId`.
+- Count of broken provider IDs.
+- Count of ambiguous/no-match cases.
+- Whether any production user intentionally shares identities or uses a non-Clerk auth path.
+
+The audit exists to convert these unknowns into measured categories before AUTH-006.
+
+## Intern Execution Sequence - No Improvisation
+
+### Phase A - Repository reconnaissance
+
+1. Read `User` schema and record the exact `clerkUserId` constraint.
+2. Read the current guard linking branch.
+3. Read `UsersService.invite()` to understand how new users get provider IDs.
+4. Read existing scripts and package command conventions.
+5. Confirm Clerk SDK version and existing client usage.
+6. Run baseline typecheck/tests.
+7. Stop if the current repository already uses a different identity provider model than this ticket describes.
+
+### Phase B - Build pure classification before database writes
+
+1. Define input shapes for local user and minimal Clerk identity evidence.
+2. Implement categories without any Prisma update call.
+3. Unit-test every category.
+4. Add explicit conflict precedence: an existing non-null provider ID must be verified first.
+5. Ensure multiple email matches cannot reach a safe-write category.
+6. Ensure unknown/provider API errors are distinguishable from confirmed no-match results when practical.
+
+### Phase C - Build dry-run orchestration
+
+1. Load relevant local users.
+2. Resolve/verify Clerk data.
+3. Feed each record to classification.
+4. Aggregate counts.
+5. Print a clear read-only summary.
+6. Spy/assert that no write method is reachable in default mode.
+7. Run this only on disposable/test data first.
+
+### Phase D - Add explicit apply mode
+
+1. Require an exact explicit flag or separate command.
+2. Re-run/reuse classification immediately before each write so stale assumptions are not blindly applied.
+3. Update only `clerkUserId`.
+4. Prefer bounded per-user writes or controlled small batches.
+5. Record safe identifiers/counts for operator verification.
+6. Never apply ambiguous/conflicting categories.
+
+### Phase E - Failure and resume behavior
+
+1. Simulate a provider timeout halfway through a multi-user run.
+2. Confirm completed safe writes remain understandable and the tool exits non-successfully or reports partial completion clearly.
+3. Rerun **audit**, not blind apply.
+4. Confirm already-applied records become `OK_MAPPED` and remaining safe records are still classified deterministically.
+5. Confirm rerun does not rewrite correct mappings.
+
+### Phase F - Production procedure
+
+1. Verify environment names/IDs so production DB is paired with production Clerk instance.
+2. Capture a DB backup/restore point.
+3. Run dry-run only.
+4. Record safe category counts.
+5. Resolve every active-user ambiguity manually.
+6. Run explicit apply for approved safe records.
+7. Rerun audit.
+8. Confirm unresolved active identities meet the go/no-go requirement for AUTH-006.
+9. Sample-check representative ADMIN/WORKER/RIDER mappings.
+10. Store raw identity details only in an authorized operational channel, never the repository.
+
+## Additional Test Cases And Explanations
+
+### TEST-AUTH005-12: Provider timeout is not classified as confirmed no-match
+
+**Purpose:** Prevent network uncertainty from being mistaken for proof that a Clerk account does not exist.
+
+**Level:** Unit/integration.
+
+**Setup:** Local unmapped user. Clerk lookup throws a timeout/transient error.
+
+**Action:** Run audit.
+
+**Expected Result:** The record is reported as an operational/provider error or unresolved state, not `NO_MATCH`, and no write occurs.
+
+**Required Assertions:** Zero mapping writes; command exposes a non-success/partial status appropriate to implementation.
+
+**External-Service Assertions:** The timeout is handled without leaking secrets/raw headers.
+
+**Why This Test Exists:** A failed API call is not evidence of absence.
+
+**False Positive To Avoid:** Mocking Clerk to return an empty list instead of throwing, which tests a different condition.
+
+**If This Test Fails:** Separate provider error handling from valid empty-result classification.
+
+### TEST-AUTH005-13: Partial apply followed by audit produces a safe resumable state
+
+**Purpose:** Prove operators can recover from interruption without blindly repeating writes.
+
+**Level:** Integration.
+
+**Setup:** Three safe mappings. Configure the second/third operation to fail after at least one successful update.
+
+**Action:** Run apply, observe partial failure, then run audit again.
+
+**Expected Result:** Applied rows are `OK_MAPPED`; unapplied rows remain safe-backfill candidates; no role/status drift occurs.
+
+**Required Assertions:** No duplicate mapping; no overwrite of completed records; summary accurately reflects current DB state.
+
+**Why This Test Exists:** Production scripts can be interrupted. Recovery must be based on current state, not assumed all-or-nothing execution.
+
+**False Positive To Avoid:** Resetting the DB between apply and audit, which does not test resume behavior.
+
+**If This Test Fails:** Make apply idempotent and classification derive from current persisted state.
+
+### TEST-AUTH005-14: Wrong Clerk environment is detectable before apply
+
+**Purpose:** Reduce the risk of pairing production local users with test/staging Clerk identities.
+
+**Level:** Manual/integration guardrail.
+
+**Setup:** Use a deliberately mismatched test environment if safely reproducible.
+
+**Action:** Run dry-run.
+
+**Expected Result:** Abnormally high missing/broken counts or an explicit environment identifier check prevents apply. Do not continue to write based on a suspicious result set.
+
+**Required Assertions:** Apply is not automatically triggered after a failed/suspicious audit.
+
+**Why This Test Exists:** Correct credentials to the wrong provider instance can produce deterministic but completely wrong mapping conclusions.
+
+**False Positive To Avoid:** Assuming a non-error API response proves the environment is correct.
+
+**If This Test Fails:** Add an operator-visible environment check or mandatory pre-apply confirmation based on known safe identifiers/counts.
+
+## Observability And Audit Expectations
+
+The migration tool should produce an operator summary that is useful without becoming a permanent PII dump. At minimum record counts by classification, apply mode vs dry-run, number of successful writes, number of skipped/conflicting records, and whether the run completed cleanly.
+
+Do not emit Clerk secret keys, auth headers, session tokens, passwords, refresh tokens, or raw full provider objects. If email is shown for manual resolution, make it clear this output is restricted operational data and must not be committed to Git or uploaded to CI artifacts.
+
+## Reviewer Walkthrough
+
+1. Verify the classification logic before reviewing orchestration.
+2. Confirm dry-run code has no path to `prisma.user.update`.
+3. Confirm apply only accepts safe one-to-one categories.
+4. Confirm existing non-null mappings are never silently overwritten.
+5. Review timeout/ambiguity/partial-failure tests.
+6. Review the exact update payload and confirm only `clerkUserId` changes.
+7. Confirm reruns are idempotent.
+8. Confirm production evidence contains counts, not raw identity dumps.
+9. Confirm unresolved active-user ambiguity is zero or has a documented architect decision before AUTH-006.
+
+## Handoff Notes
+
+After AUTH-005 completes, AUTH-006 may assume:
+
+- active users expected to use Clerk have reviewed provider-ID mappings;
+- ambiguous/no-match records are explicitly known rather than hidden by login-time linking;
+- `clerkUserId` uniqueness/conflicts have been checked;
+- operators have a repeatable audit command they can rerun before/after rollout;
+- request-time email fallback is no longer needed as a migration crutch.
+
+AUTH-005 does not itself switch runtime authentication. That is deliberately deferred to AUTH-006 so the data migration can be validated independently from the code-path change.
