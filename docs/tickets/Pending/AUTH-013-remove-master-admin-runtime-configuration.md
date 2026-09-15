@@ -3,97 +3,185 @@
 **Status:** Pending  
 **Priority:** P1  
 **Area:** Configuration / Deployment / Security  
-**Complexity:** Small  
+**Complexity:** Small-Medium  
 **Depends On:** AUTH-001, AUTH-007, AUTH-008  
 **Blocks:** AUTH-018  
-**Operator Action Required:** Yes, for live environment cleanup
+**Operator Action Required:** Yes, for live hosting cleanup
 
 ## Objective
 
-Remove `MASTER_ADMIN_EMAIL` and `MASTER_ADMIN_PASSWORD` from PropertyOS runtime/deployment configuration and active setup documentation after request-time privileged fallback and seed-time privileged bootstrap have been removed.
+Remove the obsolete `MASTER_ADMIN_EMAIL` and `MASTER_ADMIN_PASSWORD` mechanism from all active PropertyOS runtime configuration, deployment definitions, environment examples, seed/setup guidance, and operator documentation.
 
-The running PropertyOS application must not require master-admin credentials to start, seed reference data, deploy, or authenticate normal users.
+After this ticket:
 
-## Junior Engineer Orientation
+- normal backend startup does not need master-admin values;
+- normal seed does not need master-admin values;
+- normal authentication does not need master-admin values;
+- Render/deployment config does not persist master-admin values;
+- first-admin creation is documented only through the explicit AUTH-008 bootstrap flow;
+- existing production environments can safely remove the obsolete live variables after administrator access is verified.
 
-This ticket is the cleanup that proves the old privileged mechanism is actually gone from operations, not merely hidden from one TypeScript file.
+---
 
-A security feature is not fully removed if:
+## Junior Engineer Mental Model
+
+Deleting an unsafe branch from TypeScript is only half the work.
+
+If deployment files still contain:
 
 ```text
-code no longer uses MASTER_ADMIN_EMAIL
-but
-render.yaml / .env examples / deployment docs still tell operators to configure it
+MASTER_ADMIN_EMAIL
+MASTER_ADMIN_PASSWORD
 ```
 
-Those stale settings create future risk because another engineer may assume the old behavior is intentional and reconnect it later.
+then future engineers may assume the old privileged mechanism is intentional and reconnect it later.
 
-The replacement is **not** another permanent privileged runtime variable. First-admin creation is a separate explicit one-time bootstrap from AUTH-008.
+This ticket is therefore both code/config cleanup and **architecture cleanup**.
 
-## Why This Exists
+The replacement model is:
 
-The repository currently references master-admin environment variables in multiple places, including root/backend environment examples, Render configuration, seed/deployment instructions, and historical code.
+```text
+Normal application runtime
+  -> no master-admin config
 
-Leaving obsolete privileged settings behind causes:
+Normal database seed
+  -> no admin creation
 
-1. future engineers to assume the old fallback is still supported;
-2. operators to keep unnecessary privileged values in hosting configuration;
-3. accidental reintroduction of special-email/password behavior;
-4. confusion about whether `db:seed` or normal startup creates an administrator.
+First administrator in a new environment
+  -> explicit manual AUTH-008 bootstrap command
+```
 
-## Preconditions
+Do not replace the old permanent variables with differently named permanent privileged variables.
 
-Before deleting these settings:
+---
 
-- AUTH-001 complete: request auth does not use master-admin email;
-- AUTH-007 complete: normal seed does not use master-admin credentials;
-- AUTH-008 complete: first-admin bootstrap is a separate explicit procedure;
-- at least one legitimate mapped active administrator is verified in any existing production environment before live config removal.
+## Architecture Discussion and Decisions
 
-Do not remove live recovery/config values first and discover afterward that production still relied on obsolete code.
+### Decision 1: Master-admin values are obsolete runtime configuration
 
-## Expected Files To Inspect/Modify
+**Chosen:** Remove them from active application/deployment configuration.
 
-At minimum:
+**Rejected:** Keep them “just in case” even though no supported code uses them.
+
+**Why:** Stale security configuration creates confusion, secret-management burden, and a path for accidental reintroduction.
+
+### Decision 2: Bootstrap inputs are not permanent service configuration
+
+AUTH-008 may require one-time values such as:
+
+```text
+BOOTSTRAP_ADMIN_EMAIL
+BOOTSTRAP_ADMIN_CLERK_ID
+```
+
+Those belong to a manual operator invocation, not `render.yaml` as ordinary service env vars.
+
+### Decision 3: Historical references may remain if clearly historical
+
+Completed tickets/history can describe the old mechanism.
+
+Do not rewrite history merely to make a global text search return zero.
+
+Instead classify every remaining match as:
+
+- active executable/config/docs: must be removed or updated;
+- historical record: may remain;
+- unrelated string: document if necessary.
+
+### Decision 4: Removing a committed password string is not credential rotation
+
+If any real account ever used the old fallback credential, treat it as potentially compromised/public and rotate it through the supported authentication provider flow.
+
+Git cleanup does not invalidate a credential already used elsewhere.
+
+---
+
+## Facts, Assumptions, and Unknowns
+
+### Facts / Expected Current State
+
+Search previously identified master-admin references in:
 
 - `.env.example`
 - `Backend/.env.render.example`
 - `render.yaml`
 - `docs/FREE_TIER_DEPLOYMENT.md`
+- historical seed/auth code
+
+AUTH-001 removes runtime special-email auth behavior. AUTH-007 removes privileged seed behavior. AUTH-008 provides explicit bootstrap.
+
+### Assumptions To Verify
+
+- no active config validation schema still marks `MASTER_ADMIN_*` as required;
+- no CI/deploy script exports them indirectly;
+- no current deployment command invokes privileged seed/bootstrap automatically;
+- at least one legitimate mapped active production ADMIN exists before live variable removal.
+
+### Unknowns That Must Not Be Guessed
+
+- whether the old fallback password was ever used by a real environment;
+- whether another external operational script outside obvious repo paths still consumes the variables;
+- whether the hosting platform requires restart/redeploy when variables are removed.
+
+Record these as operational checks rather than assumptions.
+
+---
+
+## Scope
+
+### Files To Inspect At Minimum
+
+- `.env.example`
+- `Backend/.env.render.example`
+- `render.yaml`
+- `docs/FREE_TIER_DEPLOYMENT.md`
+- root README and backend README/setup docs
 - `Backend/prisma/seed.ts`
 - `Backend/src/shared/guards/jwt-auth.guard.ts`
-- root/backend README/setup docs returned by search
-- any CI/deploy scripts that export the variables
+- root/backend package scripts
+- CI/deployment workflow files
 
-Use repository-wide search because this list can change.
+Use repository-wide search. Do not trust this list to be exhaustive.
 
-## Target State
+### Out Of Scope
 
-Active runtime code, config, deployment examples, and operator instructions contain zero obsolete requirements for:
+Do not:
 
-- `MASTER_ADMIN_EMAIL`
-- `MASTER_ADMIN_PASSWORD`
-- the former hardcoded privileged email;
-- the former hardcoded privileged password.
+- delete unrelated secrets/config;
+- redesign all environment management;
+- add a secret manager migration;
+- rewrite Git history;
+- invent a new break-glass admin system;
+- execute production cleanup without verified admin access and rollback plan.
 
-Historical completed tickets may describe that these values used to exist. Do not rewrite historical records merely to make text search return zero. Classify matches rather than deleting context blindly.
+---
 
-## Replacement Configuration
+## Required Reading
 
-AUTH-008 may use one-time operator inputs such as:
+Before editing:
 
-- `BOOTSTRAP_ADMIN_EMAIL`
-- `BOOTSTRAP_ADMIN_CLERK_ID`
+1. completed AUTH-001
+2. completed AUTH-007
+3. completed AUTH-008
+4. `.env.example`
+5. `Backend/.env.render.example`
+6. `render.yaml`
+7. `docs/FREE_TIER_DEPLOYMENT.md`
+8. package scripts / deployment workflow
+9. `docs/tickets/TICKET_DETAIL_STANDARD.md`
 
-These are one-time bootstrap inputs, not normal long-lived service configuration.
+The intern must be able to answer:
 
-Do not add `BOOTSTRAP_ADMIN_PASSWORD` unless separately approved.
+- Why does normal runtime no longer need these values?
+- How is the first admin created now?
+- Why must live config removal happen after admin verification?
+- Why does deleting a password from Git not rotate it?
 
-## Step-by-Step Implementation
+---
 
-### Step 1 - Run a repository-wide search before editing
+## Pre-Flight Search Inventory
 
-Search for:
+Before changing any file, search for:
 
 ```text
 MASTER_ADMIN_EMAIL
@@ -102,72 +190,112 @@ MasterAdmin
 Master Admin
 ```
 
-Also search for exact former fallback credential strings if known from current history.
+Also search for the known former fallback credential strings if available to the authorized engineer.
 
-Put the list of current active matches in the PR notes before editing.
+Build a table in the PR description:
 
-**Why:** This provides a reviewable before/after inventory and prevents missing one deployment surface.
+```text
+path | match | category | action
+```
 
-### Step 2 - Classify every match
+Categories:
 
-Mark each result as:
+- runtime code
+- seed/script
+- env example
+- deployment/hosting config
+- active documentation
+- historical documentation/ticket
+- unrelated
 
-- runtime application code;
-- seed/script code;
-- environment example;
-- hosting/deployment config;
-- active operator documentation;
-- historical ticket/documentation;
-- unrelated text.
+Do not proceed until every active match has an owner/action.
 
-Do not delete historical/audit context simply because it contains the string.
+---
 
-### Step 3 - Verify dependency tickets actually removed code usage
+## Step-by-Step Execution Plan for an Intern
 
-Inspect `JwtAuthGuard` and normal seed.
+### Phase 0 - Verify Dependencies
 
-If either still reads `MASTER_ADMIN_*`, stop. Complete AUTH-001/AUTH-007 before deleting config.
+Inspect final `JwtAuthGuard` and normal seed.
 
-### Step 4 - Clean `.env.example`
+Expected:
 
-Remove obsolete master-admin keys and comments telling developers to configure them for normal startup or seed.
+- auth does not read `MASTER_ADMIN_EMAIL`;
+- auth does not read `MASTER_ADMIN_PASSWORD`;
+- seed does not read either;
+- seed does not create/reactivate/promote an admin.
 
-If one-time bootstrap inputs are documented here, label them explicitly as temporary/manual, but prefer the AUTH-008/AUTH-018 runbook rather than normal runtime env examples.
+If any are false, stop and finish AUTH-001/AUTH-007 first.
 
-### Step 5 - Clean `Backend/.env.render.example`
+### Phase 1 - Establish Baseline
 
-Remove obsolete keys and comments.
+With variables currently unset locally if safe:
 
-Check surrounding comments so there is no sentence such as "Admin seed" left implying ordinary seed creates the administrator.
+```bash
+npm run typecheck:backend
+npm run test:backend
+```
 
-### Step 6 - Clean `render.yaml`
+Record pre-existing failures.
 
-Remove persistent environment declarations for the obsolete keys.
+### Phase 2 - Clean Root `.env.example`
 
-Do not replace them with persistent bootstrap values for convenience.
+Remove obsolete keys and comments suggesting they are required.
 
-Review `preDeployCommand`, build/start scripts, and seed/migration commands to ensure none expect them indirectly.
+Do not add real values or replacement permanent privileged config.
 
-### Step 7 - Update active deployment documentation
+**Verify:** A new developer reading `.env.example` cannot conclude that routine startup/seed creates a master administrator.
 
-In `docs/FREE_TIER_DEPLOYMENT.md` and other setup docs:
+### Phase 3 - Clean `Backend/.env.render.example`
 
-- remove instructions to set master-admin email/password;
-- correct any statement that routine seed creates an admin;
-- point first-admin initialization to the explicit AUTH-008 bootstrap command/runbook;
-- state that redeploy/restart/seed does not create/reactivate privileged users.
+Remove obsolete declarations/comments.
 
-### Step 8 - Search application/scripts again
+Review nearby comments for stale statements such as:
 
-Search TypeScript/Prisma/shell/YAML/package scripts for both env names.
+```text
+set master admin before seed
+seed creates administrator
+```
 
-Expected result: no active executable/config requirement remains.
+Update them to the explicit bootstrap model.
 
-If another supported subsystem legitimately uses the same names, stop for ownership review rather than deleting it blindly.
+### Phase 4 - Clean `render.yaml`
 
-### Step 9 - Validate locally with variables absent
+Remove `MASTER_ADMIN_EMAIL` and `MASTER_ADMIN_PASSWORD` service environment declarations.
 
-Ensure both variables are unset in the shell/process.
+Inspect:
+
+- build command;
+- pre-deploy command;
+- start command;
+- migration command;
+- any seed invocation.
+
+Confirm none implicitly require old values.
+
+Do **not** add permanent `BOOTSTRAP_ADMIN_*` values.
+
+### Phase 5 - Update Deployment Documentation
+
+Update `docs/FREE_TIER_DEPLOYMENT.md` and any active setup docs so they say:
+
+- normal deploy/start does not create an administrator;
+- normal seed is reference-data-only;
+- new environment first admin uses explicit AUTH-008 bootstrap;
+- restart/redeploy does not reactivate disabled users;
+- existing production admins must be verified before obsolete config removal.
+
+### Phase 6 - Review Package/CI/Deploy Scripts
+
+Search shell/YAML/package commands for old variables.
+
+If a script exports them only for old seed behavior, remove/update it.
+
+If a currently supported subsystem still legitimately consumes them, stop for architecture review.
+
+### Phase 7 - Validate With Variables Absent
+
+Explicitly unset both variables.
 
 Run:
 
@@ -178,324 +306,391 @@ npm run test:backend
 npm run build:backend
 ```
 
-Run normal seed against disposable DB and start backend according to local setup.
+Use actual root/workspace command names if different.
 
-### Step 10 - Verify normal auth without obsolete variables
+Run normal seed against disposable DB.
 
-Use mapped active test user under Clerk auth.
+Start backend with valid normal auth config.
 
-Confirm:
+### Phase 8 - Verify Authentication Behavior
 
-- backend starts;
-- active mapped user authenticates;
-- missing user does not get privileged fallback;
-- inactive/suspended user remains denied.
+With obsolete variables absent:
 
-### Step 11 - Verify bootstrap remains separate
+- mapped active ADMIN succeeds;
+- mapped active WORKER succeeds;
+- missing mapping is denied;
+- inactive user is denied;
+- suspended user is denied;
+- no user/role/status is mutated by login.
 
-The normal backend must not require `BOOTSTRAP_ADMIN_*` either.
+### Phase 9 - Verify Bootstrap Separation
 
-Only the explicit AUTH-008 command should need bootstrap inputs when it is intentionally invoked.
+A normal start must not require `BOOTSTRAP_ADMIN_*`.
 
-### Step 12 - Clean live hosting values only after safe rollout
+Only explicitly invoking AUTH-008 bootstrap should require its one-time inputs.
 
-Authorized operator:
+### Phase 10 - Final Repository Search
 
-1. verifies legitimate production admin access;
-2. opens backend hosting environment settings;
-3. removes `MASTER_ADMIN_EMAIL`;
-4. removes `MASTER_ADMIN_PASSWORD`;
-5. saves/redeploys if platform requires;
-6. verifies backend health/startup;
-7. verifies existing admin login;
-8. verifies ordinary protected route.
+Repeat the pre-flight search.
 
-Do not paste old/new values into PR/ticket comments.
+Every remaining match must be classified as historical or unrelated.
 
-### Step 13 - Handle credential exposure separately
+No active runtime/config/current docs may retain the obsolete mechanism.
 
-If any real account ever used the old fallback password, rotate/reset through the supported auth provider and revoke sessions as appropriate.
+### Phase 11 - Live Hosting Cleanup
 
-Deleting the string from current Git content is not credential rotation.
+This is an authorized-operator step, not an intern improvisation step.
 
-### Step 14 - Run final search and record evidence
+Before touching live config:
 
-Repeat repository search. Classify any remaining historical references and record why they are safe.
+1. verify production deploy includes hardened auth;
+2. verify Admin A maps correctly and can log in;
+3. preferably verify Admin B;
+4. confirm rollback anchor from AUTH-018;
+5. remove obsolete variables;
+6. save/redeploy/restart if required;
+7. verify health;
+8. re-test Admin A/B;
+9. monitor auth error reasons.
+
+If admin login fails, stop. Follow AUTH-018 rollback decision tree. Do not recreate the old fallback code.
+
+### Phase 12 - Credential Rotation Decision
+
+Determine whether a real account ever used the old committed fallback password.
+
+Record one of:
+
+```text
+Not Required - verified never used
+Completed - credential rotated and sessions handled
+Pending/Unknown - unresolved security follow-up
+```
+
+Never record the credential itself.
+
+---
 
 ## Detailed Test / Verification Specification
 
-### TEST-AUTH013-01: Backend typecheck/build succeeds with both variables unset
+### TEST-AUTH013-01: Backend typecheck/build succeeds with obsolete vars unset
 
-**Purpose:** Prove normal application code has no compile/build dependency on obsolete config.
+**Purpose:** Prove compile/build/config code no longer depends on them.
 
-**Level:** Build/config verification.
+**Setup:** Explicitly unset both variables.
 
-**Setup:** Unset `MASTER_ADMIN_EMAIL` and `MASTER_ADMIN_PASSWORD`.
+**Action:** Run typecheck/build.
 
-**Action:** Run backend typecheck and build.
+**Expected Result:** Success.
 
-**Expected Result:** Commands succeed.
+**Required Assertions:** No config-validation error names either variable.
 
-**Required Assertions:** No config-validation/startup code reports either variable as required.
+**If Fails:** Search config schema/helpers. Do not add variables back.
 
-**Why This Test Exists:** A stale environment schema/config loader can survive after business logic is removed.
+### TEST-AUTH013-02: Backend runtime starts without them
 
-**If This Test Fails:** Search config validation and imported helpers before re-adding any variable.
+**Purpose:** Prove runtime config is clean.
 
-### TEST-AUTH013-02: Backend startup succeeds without master-admin variables
+**Setup:** Valid normal local/test env except obsolete vars absent.
 
-**Purpose:** Prove runtime does not require obsolete privilege configuration.
+**Action:** Start backend and hit health endpoint.
 
-**Level:** Manual/integration.
+**Expected Result:** Healthy startup.
 
-**Setup:** Valid normal local/test runtime configuration except both obsolete keys absent.
+**Why:** Build success does not prove runtime validation.
 
-**Action:** Start backend.
-
-**Expected Result:** Service starts and health endpoint works.
-
-**Required Assertions:** No startup fallback/secret error references master admin.
-
-**Why This Test Exists:** Build success alone does not prove runtime config validation is clean.
-
-**If This Test Fails:** Inspect runtime config loaders and startup scripts.
-
-### TEST-AUTH013-03: Normal reference seed succeeds without master-admin variables
+### TEST-AUTH013-03: Reference seed works without them
 
 **Purpose:** Protect AUTH-007 separation.
 
-**Level:** Integration with disposable DB.
-
-**Setup:** Both variables absent.
+**Setup:** Disposable DB; vars absent.
 
 **Action:** Run normal seed.
 
-**Expected Result:** Reference seed completes without prompting/reading privileged values.
+**Expected Result:** Reference data seeds; no admin is created/reactivated/promoted/reset.
 
-**Required Assertions:** No admin user is created/reactivated by seed.
+### TEST-AUTH013-04: Active mapped Clerk user authenticates without them
 
-**Why This Test Exists:** Seed instructions/config are a major historical source of these values.
+**Purpose:** Prove ordinary authentication has no hidden dependency.
 
-**If This Test Fails:** AUTH-007 is incomplete or docs/scripts still chain old behavior.
+**Setup:** Active mapped test user.
 
-### TEST-AUTH013-04: Normal Clerk authentication succeeds without obsolete variables
+**Action:** Protected request.
 
-**Purpose:** Prove legitimate users do not rely on special config.
+**Expected Result:** Success through strict Clerk-ID mapping.
 
-**Level:** Integration/manual.
+**Required Assertions:** no master-admin config read/log.
 
-**Setup:** Active mapped Clerk test user; obsolete keys absent.
+### TEST-AUTH013-05: Missing identity receives no built-in fallback
 
-**Action:** Access protected route.
+**Purpose:** Ensure removing env values cannot reveal a hardcoded fallback.
 
-**Expected Result:** Authentication succeeds via strict Clerk ID mapping.
-
-**Required Assertions:** No master-admin config read/log occurs.
-
-**Why This Test Exists:** Operators need confidence removing live variables will not break ordinary auth.
-
-**If This Test Fails:** Inspect auth code for stale config dependency. Do not restore fallback.
-
-### TEST-AUTH013-05: Missing/inactive user gets no special behavior without variables
-
-**Purpose:** Confirm config removal cannot expose a hidden default fallback.
-
-**Level:** Integration/unit.
-
-**Setup:** Missing or inactive user under valid Clerk identity.
+**Setup:** Valid Clerk token, no local mapping.
 
 **Action:** Authenticate.
 
-**Expected Result:** Denied; zero privilege/lifecycle writes.
+**Expected Result:** Denied with zero user writes.
 
-**Required Assertions:** No implicit default master email/password is used.
+**If Fails:** Search for hardcoded privileged defaults.
 
-**Why This Test Exists:** Removing env vars is unsafe if code falls back to a built-in default.
+### TEST-AUTH013-06: Inactive/suspended users remain denied
 
-**If This Test Fails:** Search for hardcoded defaults and complete AUTH-001/007.
+**Purpose:** Prove obsolete config removal does not alter lifecycle rules.
 
-### TEST-AUTH013-06: Explicit bootstrap works only when invoked separately
+**Setup:** mapped inactive/suspended fixtures.
 
-**Purpose:** Demonstrate replacement operational model.
+**Action:** Authenticate.
 
-**Level:** Manual/script verification.
+**Expected Result:** Denied; state unchanged.
 
-**Setup:** Disposable new environment, normal app starts without bootstrap inputs.
+### TEST-AUTH013-07: Normal runtime does not require bootstrap variables
 
-**Action:** Start app, then separately invoke AUTH-008 bootstrap with explicit values.
+**Purpose:** Prevent replacement of one permanent privileged config with another.
 
-**Expected Result:** App does not auto-bootstrap; explicit command can initialize first admin.
+**Setup:** no bootstrap variables.
 
-**Required Assertions:** No `BOOTSTRAP_ADMIN_*` requirement for ordinary runtime.
+**Action:** Start normal app.
 
-**Why This Test Exists:** Prevents replacing one permanent privileged runtime mechanism with another.
+**Expected Result:** Healthy startup.
 
-**If This Test Fails:** Separate bootstrap command/config from application startup.
+**Required Assertions:** only explicit bootstrap command validates bootstrap inputs.
 
-### TEST-AUTH013-07: Active config repository search has no obsolete references
+### TEST-AUTH013-08: Repository active-config search is clean
 
-**Purpose:** Verify cleanup across all repo surfaces.
+**Purpose:** Catch stale operational references.
 
-**Level:** Static/manual verification.
+**Action:** Search old variable names and former fallback strings.
 
-**Setup:** Final branch.
+**Expected Result:** no active runtime/env/deploy/current-setup use remains.
 
-**Action:** Search names/former credential strings.
+**Required Assertions:** historical matches documented, not blindly deleted.
 
-**Expected Result:** Remaining matches are only intentionally historical documentation/tickets, if any.
+### TEST-AUTH013-09: Deployment YAML remains valid
 
-**Required Assertions:** No runtime code, active env example, deploy YAML, package script, or current setup instructions use obsolete keys.
+**Purpose:** Ensure config cleanup did not break deployment.
 
-**Why This Test Exists:** Stale operational config is the main risk addressed by this ticket.
+**Action:** run available validation/build/deployment preview or careful syntax review.
 
-**If This Test Fails:** Classify and remove/update active matches.
+**Expected Result:** Render config remains valid; no replacement privileged env added.
 
-### TEST-AUTH013-08: Render/deployment config parses/builds after key removal
+### TEST-AUTH013-10: Live smoke succeeds after operator removes obsolete variables
 
-**Purpose:** Ensure YAML/config cleanup did not break deployment syntax or commands.
+**Purpose:** Prove production is truly independent.
 
-**Level:** Static/build/deployment preview where available.
+**Level:** Production operator verification.
 
-**Setup:** Updated `render.yaml`/deployment config.
+**Precondition:** Admin A already verified before removal.
 
-**Action:** Run available validation/build or inspect platform deploy preview.
+**Action:** remove variables, apply hosting change, verify health/admin route.
 
-**Expected Result:** Config remains valid and backend build/start commands unchanged except obsolete env entries.
+**Expected Result:** production remains healthy and Admin A/B still authenticate.
 
-**Required Assertions:** No new persistent bootstrap secret keys added as replacement.
+**If Fails:** stop cleanup and follow AUTH-018 rollback process.
 
-**Why This Test Exists:** Security cleanup should not cause unrelated deployment breakage.
+### TEST-AUTH013-11: Normal redeploy/seed does not create or recover an admin
 
-**If This Test Fails:** Fix syntax/config references without restoring obsolete keys.
+**Purpose:** Verify operational behavior matches new architecture.
 
-### TEST-AUTH013-09: Live environment smoke passes after operator removes variables
+**Setup:** disposable environment with zero users or disabled test user.
 
-**Purpose:** Prove production no longer depends on them.
+**Action:** run ordinary deploy/start/seed sequence.
 
-**Level:** Production smoke test, authorized operator only.
+**Expected Result:** no privileged user is created/reactivated automatically.
 
-**Setup:** New secure code deployed; legitimate admin access already verified; rollback plan available.
+**Why:** This prevents operational scripts from preserving the old behavior after code cleanup.
 
-**Action:** Remove variables, redeploy/restart if required, check health and admin auth.
+---
 
-**Expected Result:** Service healthy; mapped admin authenticates; protected route works.
+## Manual Verification Checklist
 
-**Required Assertions:** No need to restore variables; no privileged fallback behavior.
+Local/test:
 
-**Why This Test Exists:** Repository correctness does not guarantee live platform config has no hidden dependency.
-
-**If This Test Fails:** Use AUTH-018 rollback decision tree. Do not permanently re-enable privileged fallback.
-
-## Manual Verification
-
-Local:
-
-1. unset both variables;
-2. build/typecheck/test;
-3. run seed on disposable DB;
-4. start backend;
-5. authenticate mapped active user;
-6. test missing/inactive user rejection;
-7. confirm normal startup does not ask for bootstrap variables.
+- [ ] variables unset;
+- [ ] typecheck/lint/tests/build pass;
+- [ ] seed passes;
+- [ ] backend starts;
+- [ ] mapped active user authenticates;
+- [ ] unmapped user denied;
+- [ ] inactive/suspended denied;
+- [ ] normal runtime does not request bootstrap vars;
+- [ ] final search reviewed.
 
 Production/operator:
 
-1. verify at least one legitimate admin first;
-2. remove old hosting values;
-3. verify health/startup;
-4. verify admin login and protected route;
-5. record completion without exposing secrets.
+- [ ] known active mapped admin verified before cleanup;
+- [ ] rollback anchor known;
+- [ ] obsolete hosting values removed;
+- [ ] health passes;
+- [ ] admin login passes afterward;
+- [ ] credential-rotation decision recorded.
+
+---
 
 ## Failure Diagnosis Guide
 
-### Startup says `MASTER_ADMIN_EMAIL` is required
+### Startup says a master-admin variable is required
 
-Search config validation/helpers. One dependency is incomplete. Do not restore variable as permanent solution.
+There is still a config loader/schema dependency. Find and remove/update it. Do not restore the mechanism.
 
-### Seed asks for admin password
+### Seed asks for a privileged password
 
-AUTH-007 is incomplete or old script/docs are still being used.
+AUTH-007 is incomplete or an obsolete seed path/script is still in use.
 
-### Active mapped admin cannot log in after removal
+### Active admin cannot log in after variable removal
 
-Check whether strict Clerk mapping/config is correct. The fix is identity/config correctness, not reintroducing master-admin values.
+Check Clerk environment, `clerkUserId` mapping, deployed commit, and runtime config. The fix is not to reintroduce email/password fallback.
 
-### Search still finds references in completed tickets
+### Search still finds matches in completed tickets
 
-Historical documentation can remain. Confirm it is clearly descriptive, not active setup instructions.
+That can be acceptable historical context. Confirm they are not active instructions.
 
-### Hosting deploy fails because removed key is referenced in command
+### Render deploy fails because a command referenced old variables
 
-Update the command/script to the new architecture. Do not recreate the key merely to satisfy stale scripting.
+Fix the stale command/script. Do not recreate unused secrets to satisfy it.
+
+### Operator wants permanent bootstrap values in hosting config
+
+Do not do this without architecture approval. Bootstrap is one-time/manual by design.
+
+---
+
+## Observability During Cleanup
+
+Immediately after live config removal, monitor:
+
+- startup/config errors;
+- `AUTH_USER_NOT_PROVISIONED` rate;
+- token verification/config failures;
+- admin route authorization failures;
+- health checks.
+
+A sudden increase in mapped-user failures means stop and diagnose the deployed/configured auth path.
+
+---
+
+## Reviewer Walkthrough
+
+Reviewer should verify:
+
+1. all old-variable matches were inventoried/classified;
+2. auth/seed dependency tickets truly removed code usage;
+3. env examples no longer teach obsolete behavior;
+4. `render.yaml` no longer persists old values;
+5. bootstrap inputs were not made permanent replacements;
+6. active deployment docs tell one consistent story;
+7. local app/seed/auth work with values absent;
+8. historical references are clearly historical;
+9. production cleanup sequence verifies admin access first;
+10. credential exposure is handled as rotation, not string deletion.
+
+---
 
 ## PR Evidence Required
 
 Include:
 
 - before/after search inventory;
-- active references removed by file;
-- classification of intentionally retained historical references;
-- build/typecheck/test results with variables unset;
-- seed result without variables;
-- mapped-user auth verification;
-- bootstrap-separation verification;
-- live config cleanup status (`Pending operator` or completed by named authorized operator), without secret values;
-- credential rotation status: required/not required/completed.
+- files cleaned;
+- intentionally retained historical references and reason;
+- typecheck/lint/test/build results with vars unset;
+- seed result;
+- mapped/unmapped/non-active auth verification;
+- bootstrap separation verification;
+- live config cleanup status: `Pending Operator` / `Completed`;
+- credential rotation status without secret values.
+
+---
 
 ## Acceptance Criteria
 
-- [ ] Obsolete master-admin runtime variables are removed from active code/config/docs.
+- [ ] No active runtime code uses `MASTER_ADMIN_*`.
+- [ ] No normal seed uses them.
+- [ ] No active env example/deployment config requires them.
+- [ ] Current deployment docs no longer teach the old flow.
 - [ ] Backend builds/starts without them.
-- [ ] Normal seed runs without them and creates no admin.
-- [ ] Normal mapped authentication works without them.
-- [ ] First-admin provisioning is documented/executed separately.
-- [ ] Live production variables are removed by authorized operator after safe rollout.
-- [ ] No new permanent privileged fallback variables replace them.
-- [ ] Old fallback credential exposure is handled separately from string removal.
+- [ ] Normal mapped auth works without them.
+- [ ] Missing/non-active identities get no privileged fallback.
+- [ ] Bootstrap remains explicit and separate.
+- [ ] Live values are removed only after verified safe rollout.
+- [ ] Exposed credential handling is tracked separately.
+
+---
 
 ## Definition of Done
 
 - [ ] Repository cleanup complete.
-- [ ] Search results reviewed/classified.
-- [ ] Typecheck passes.
-- [ ] Lint passes.
-- [ ] Backend tests/build pass.
-- [ ] Local no-variable startup/seed/auth verification passes.
-- [ ] Production config cleanup recorded or explicitly pending operator step in AUTH-018.
-- [ ] Required PR evidence recorded.
-- [ ] Reviewer approves docs/config consistency.
+- [ ] Search inventory complete.
+- [ ] Validation passes with variables absent.
+- [ ] Documentation is consistent.
+- [ ] Production operator step is completed or explicitly handed to AUTH-018.
+- [ ] PR evidence complete.
+- [ ] Reviewer approves config/ops story.
+
+---
 
 ## Rollback
 
-If live deployment fails because obsolete code still depends on these variables, roll back to the last known-good application deployment while preserving production data, identify the stale dependency, and fix it. Do not make privileged fallback the permanent solution.
+If live removal exposes an unexpected stale dependency:
+
+1. stop additional auth changes;
+2. use the known-good deployment/config rollback documented in AUTH-018;
+3. restore service availability if required using the prior known-good configuration only as a temporary rollback state;
+4. fix the stale dependency;
+5. redeploy hardened architecture;
+6. repeat cleanup.
+
+Do not turn temporary rollback into permanent support for master-admin fallback.
+
+---
 
 ## Forbidden Shortcuts
 
 Do not:
 
-- rename `MASTER_ADMIN_*` and keep the same mechanism;
+- rename old variables and preserve behavior;
+- add hidden defaults;
+- keep obsolete secrets “for safety” without a supported consumer;
+- put bootstrap inputs permanently in `render.yaml`;
+- remove live config before verifying admin access;
 - commit actual production values;
-- store bootstrap credentials permanently for convenience;
-- remove live config before verifying legitimate admin access;
-- assume deleting a Git string rotates an exposed password;
-- add hidden defaults when env vars are absent;
-- delete historical audit/ticket context merely to force a zero-result text search.
+- claim credential rotation because a string was deleted;
+- delete historical evidence simply to achieve zero search matches.
+
+---
 
 ## STOP - NEEDS ARCHITECT DECISION
 
-Stop if another supported subsystem outside authentication/seed legitimately uses `MASTER_ADMIN_*`.
+Stop if:
 
-Also stop if the hosting platform requires a long-lived bootstrap/recovery mechanism. That must be designed explicitly rather than keeping obsolete master-admin values silently.
+- another supported subsystem legitimately still consumes `MASTER_ADMIN_*`;
+- hosting requires a long-lived privileged recovery mechanism;
+- production has no verified mapped active administrator;
+- AUTH-008 bootstrap cannot safely initialize a fresh environment;
+- credential exposure cannot be assessed and requires a broader incident/security process.
+
+---
+
+## Handoff To AUTH-018
+
+AUTH-018 may assume:
+
+- active repository config no longer depends on old master-admin variables;
+- live hosting cleanup has a documented operator sequence;
+- bootstrap is separate/manual;
+- local validation with vars absent succeeds;
+- credential rotation status is known or explicitly unresolved.
+
+---
 
 ## Completion Record
 
 **Implemented By:**  
-**Live Config Cleaned By:**  
 **Reviewed By:**  
 **PR:**  
 **Final Commit:**  
 **Completed Date:**  
-**Local No-Variable Verification:** Pass / Fail  
-**Live Smoke Test:** Pass / Fail / Pending Operator  
-**Credential Rotation Performed:** Yes / No / Not Required  
+**Local No-Variable Validation:** Pass / Fail  
+**Live Config Cleanup:** Complete / Pending AUTH-018  
+**Credential Rotation:** Completed / Not Required / Pending  
+**Historical Matches Reviewed:** Yes / No  
 **Notes:**
