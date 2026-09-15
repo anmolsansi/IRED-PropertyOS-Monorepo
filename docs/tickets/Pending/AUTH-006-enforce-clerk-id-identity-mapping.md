@@ -601,3 +601,211 @@ Also stop if one PropertyOS user is intentionally designed to map to multiple Cl
 **Mapped User Smoke Tests:** Pass / Fail  
 **Unmapped Rejection Test:** Pass / Fail  
 **Notes:**
+
+---
+
+## Expanded Architecture Discussion And Decision Record
+
+### Decision 1: Provider subject is the runtime identity key
+
+**Decision:** After token verification, PropertyOS resolves the local account by `User.clerkUserId === verifiedToken.sub`.
+
+**Reason:** The subject is issued for the Clerk account and is intended to remain the stable identity identifier. It avoids treating mutable profile attributes as account identity.
+
+**Rejected alternative:** Query by Clerk ID first, then fall back to email when no row is found.
+
+**Why rejected:** A fallback preserves the exact ambiguity this migration is designed to remove. It also hides incomplete AUTH-005 backfill because users continue succeeding through the old path.
+
+### Decision 2: Email changes must not break a correctly mapped login
+
+**Decision:** A user with a correct `clerkUserId` can authenticate even if their Clerk/local email profile changes, subject to normal product rules outside identity mapping.
+
+**Reason:** Email is profile/contact data, not the provider account's stable identity join.
+
+**Rejected alternative:** Require both provider ID and email to match on every request.
+
+**Why rejected:** That creates a second mutable identity gate and can lock out legitimate mapped users after an approved email change.
+
+### Decision 3: Request-time identity repair is removed
+
+**Decision:** Missing `clerkUserId` is treated as unprovisioned/migration-incomplete, never repaired by login.
+
+**Reason:** Identity binding must be deliberate and auditable. AUTH-005 and provisioning/bootstrap paths exist to create mappings safely.
+
+### Decision 4: Removing per-request Clerk profile lookup is desirable when it has no remaining purpose
+
+**Decision:** If `clerk.users.getUser()` is only used to obtain email for local lookup, remove it from the normal request path.
+
+**Reason:** Verified token subject is already available. Removing the extra network call reduces latency, failure modes, and external dependency on every protected request.
+
+**Rejected alternative:** Keep the profile fetch "for safety" even if its result is unused.
+
+**Why rejected:** Unused network dependencies make auth less reliable without improving identity assurance.
+
+## Facts, Assumptions, And Unknowns
+
+### Facts
+
+- Current auth verifies a Clerk token, fetches provider profile/email, queries local user by email, and may link `clerkUserId` during the request.
+- Prisma currently declares `clerkUserId` unique and optional; verify before implementation.
+- AUTH-005 is designed to make existing active-user mappings safe before strict lookup.
+
+### Assumptions to verify
+
+- `verifiedToken.sub` is the correct Clerk user identifier for the installed SDK/token format.
+- All active Clerk-authenticated production users have correct mappings before rollout.
+- Downstream guards/controllers need only the selected local user fields, not a fresh Clerk profile on every request.
+
+### Unknowns requiring escalation
+
+- Any intentionally supported second authentication provider sharing this route.
+- Any legitimate user model where one local account intentionally maps to multiple Clerk subjects.
+- Any approved runtime behavior that truly requires a fresh Clerk user profile on every request.
+
+## Intern Execution Sequence - No Improvisation
+
+### Phase A - Gate on migration readiness
+
+1. Read AUTH-005 completion evidence.
+2. Confirm unresolved active-user ambiguities are zero or explicitly approved.
+3. Confirm `clerkUserId` uniqueness in schema.
+4. Run baseline tests/typecheck.
+5. Do not touch the guard if the migration readiness gate fails.
+
+### Phase B - Capture current identity-flow dependencies
+
+1. Mark the exact line where `verifyToken()` returns the subject.
+2. Mark the Clerk profile fetch.
+3. Mark email extraction/normalization.
+4. Mark local email query.
+5. Mark request-time ID-link update.
+6. Mark fields selected into `request.user`.
+7. Write this before-flow in the PR notes.
+
+### Phase C - Change only the identity join
+
+1. Preserve bearer extraction and token verification.
+2. Replace local email lookup with exact `clerkUserId` lookup.
+3. Preserve the selected local authorization fields.
+4. Make missing mapping reject immediately.
+5. Remove request-time linking.
+6. Remove email/profile lookup pieces that no longer serve a purpose.
+7. Do not touch role/status ownership.
+8. Run focused mapped-user and unmapped-user tests immediately.
+
+### Phase D - Prove there is no fallback
+
+1. Create a fake local user whose email equals the provider profile email but whose `clerkUserId` differs or is null.
+2. Authenticate using the provider subject.
+3. Confirm rejection.
+4. Spy on Prisma and verify no email query occurs.
+5. Spy on user writes and verify zero mapping repair occurs.
+6. Search request auth for email join code after the test passes.
+
+### Phase E - Reliability verification
+
+1. If provider profile fetch was removed, configure/mock it to fail and confirm mapped authentication still succeeds because it is not called.
+2. Repeat mapped auth several times and prove zero DB writes.
+3. Change only provider email/profile data in the fixture and confirm mapped identity still resolves by subject.
+4. Re-run active/inactive/suspended status cases.
+
+### Phase F - Deployment handoff
+
+1. Record AUTH-005 audit reference.
+2. Record mapped test accounts used for smoke testing.
+3. Ensure AUTH-018 includes rollout/rollback sequencing.
+4. Do not ship strict mapping before production data readiness is confirmed.
+
+## Additional Test Cases And Explanations
+
+### TEST-AUTH006-11: Provider email change does not break a correctly mapped user
+
+**Purpose:** Prove email is no longer a runtime identity key.
+
+**Level:** Unit/regression.
+
+**Setup:** Local user has `clerkUserId=user_123`. Token subject is `user_123`. Simulate a provider profile/email different from the historical local email if a profile seam remains, or simply ensure no profile fetch is needed.
+
+**Action:** Authenticate.
+
+**Expected Result:** Success based on exact provider ID and local active status.
+
+**Required Assertions:** Lookup uses `clerkUserId`; no email equality gate; role/status/org unchanged.
+
+**Why This Test Exists:** It demonstrates the primary benefit of separating stable identity from mutable profile data.
+
+**False Positive To Avoid:** Updating the local email first so both emails happen to match, which does not prove email independence.
+
+**If This Test Fails:** Search for residual email validation/join logic in request auth.
+
+### TEST-AUTH006-12: Correct email with a different Clerk subject cannot impersonate the local user
+
+**Purpose:** Protect against account misbinding when profile attributes match but stable identity does not.
+
+**Level:** Unit/E2E regression.
+
+**Setup:** Local user has `email=worker@example.test`, `clerkUserId=user_real`. Verify token returns `sub=user_other`. The provider profile for `user_other` may use the same fake email in the test seam.
+
+**Action:** Authenticate as `user_other`.
+
+**Expected Result:** Rejected as unmapped.
+
+**Required Assertions:** No lookup success by email; no ID overwrite; no request user populated.
+
+**Why This Test Exists:** This is the strongest regression against reintroducing email identity fallback.
+
+**False Positive To Avoid:** Letting the test fail during token verification rather than reaching local mapping.
+
+**If This Test Fails:** Remove fallback/repair logic immediately.
+
+### TEST-AUTH006-13: Clerk profile API outage does not affect mapped auth when profile fetch has been removed
+
+**Purpose:** Prove strict subject mapping reduces an unnecessary external dependency.
+
+**Level:** Unit/integration.
+
+**Setup:** Valid token verification and mapped active local user. Configure `users.getUser` to throw if invoked.
+
+**Action:** Authenticate.
+
+**Expected Result:** Success and `users.getUser` is never called, assuming no new approved purpose exists for it.
+
+**External-Service Assertions:** Token verification occurs; profile API call does not.
+
+**Why This Test Exists:** It verifies both reliability and the architectural simplification.
+
+**False Positive To Avoid:** Not wiring the throwing mock, so an accidental call would go unnoticed.
+
+**If This Test Fails:** Identify why profile lookup remains. Remove it if it only supports the obsolete email join.
+
+## Observability And Audit Expectations
+
+Authentication logs should distinguish invalid identity credentials from a valid Clerk identity that has no approved PropertyOS mapping, without exposing the token or full provider profile. A safe conceptual reason is `AUTH_USER_NOT_PROVISIONED`.
+
+Do not log the raw `sub` together with unnecessary PII unless there is an approved operational need. Never log Clerk secret keys, bearer tokens, session cookies, or authorization headers. AUTH-014 owns the broader logging policy.
+
+Strict mapping itself should not create a lifecycle audit event because successful authentication is not a user-state mutation.
+
+## Reviewer Walkthrough
+
+1. Verify AUTH-005 completion evidence first.
+2. Open `JwtAuthGuard` and follow from `verifyToken()` to Prisma lookup.
+3. Confirm the lookup key is only `clerkUserId: verifiedToken.sub`.
+4. Search the final guard for email lookup/fallback and request-time ID linking.
+5. Confirm local role/status/org are still selected and enforced.
+6. Review same-email/different-sub rejection test.
+7. Review provider-email-change success test.
+8. Review profile-API-not-called test if the call was removed.
+9. Confirm no identity write remains in the normal request path.
+10. Reject any "temporary" email fallback.
+
+## Handoff Notes
+
+After AUTH-006 completes:
+
+- AUTH-015 can treat exact Clerk-ID lookup and zero request-time identity writes as permanent guard invariants.
+- AUTH-017 can build deterministic Clerk-mode E2E fixtures around provider subjects rather than emails.
+- AUTH-011 can use stored `clerkUserId` for provider session operations on explicit lifecycle changes.
+- future email/profile updates must not be required to repair authentication mappings.
+
+AUTH-006 does not change application role/status/organization ownership. Those remain local PropertyOS authorization state.
