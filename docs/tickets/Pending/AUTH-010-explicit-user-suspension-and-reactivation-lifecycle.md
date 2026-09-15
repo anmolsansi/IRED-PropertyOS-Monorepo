@@ -753,3 +753,189 @@ Do not invent those semantics in this ticket.
 **Manual Lifecycle Verification:** Pass / Fail  
 **Frontend Verification:** Pass / Fail / N/A  
 **Notes:**
+
+---
+
+## Expanded Architecture Discussion And Decision Record
+
+### Decision 1: Status transitions are domain operations, not generic field edits
+
+**Decision:** Suspend, deactivate, and reactivate all flow through one lifecycle rule path in the backend service.
+
+**Reason:** These operations change a person's ability to access PropertyOS and have security side effects. Treating `status` like `fullName` makes it too easy for one endpoint to skip timestamps, last-admin protection, audit, or session cleanup.
+
+**Rejected alternative:** Keep generic `update()` and rely on callers to set `status`/`deactivatedAt` correctly.
+
+**Why rejected:** Correctness would depend on every current and future caller remembering the same lifecycle rules.
+
+### Decision 2: Local status remains the immediate access-control authority
+
+**Decision:** The database transition is the action that removes/restores PropertyOS access. Authentication only reads the result.
+
+**Reason:** Local suspension must work even when Clerk session cleanup later fails or is delayed. AUTH-011 is defense-in-depth, not the primary denial mechanism.
+
+### Decision 3: No-op transitions are idempotent and must not rewrite security metadata by default
+
+**Decision:** Reasserting the current status should not refresh `deactivatedAt` or produce misleading lifecycle changes unless product explicitly chooses different semantics.
+
+**Reason:** Retries are normal. Timestamp churn from retries makes audit/history harder to interpret.
+
+### Decision 4: `inactive` and `suspended` deny access equally but keep different business meaning
+
+**Decision:** Both fail authentication, but UI/audit wording preserves whether the removal is temporary or retired/deactivated.
+
+**Reason:** Operators need to understand why a user is non-active even if the current schema uses the same `deactivatedAt` field.
+
+## Facts, Assumptions, And Unknowns
+
+### Facts
+
+- Current model exposes active/inactive/suspended.
+- `updateStatus()` and generic `update()` can currently affect status.
+- `deactivatedAt` is already used for non-active state metadata.
+- AUTH-009 defines the final-active-admin safety invariant.
+
+### Assumptions to verify
+
+- `deactivatedAt` is acceptable for both suspended and inactive under the current schema.
+- Existing clients rely on the current status endpoint contract and should not be broken unnecessarily.
+- Only authorized ADMIN users can reach lifecycle mutation endpoints after global role guards.
+
+### Unknowns requiring architect/product decision
+
+- Whether suspended and inactive eventually need separate timestamps/reasons.
+- Whether reactivation requires a mandatory reason/approval.
+- Whether an HR system will later own lifecycle state.
+
+## Intern Execution Sequence - No Improvisation
+
+### Phase A - Build a lifecycle mutation map
+
+1. Search every `status` and `deactivatedAt` write.
+2. Write route -> service -> Prisma mutation for each.
+3. Mark which paths can change role at the same time.
+4. Mark which paths currently bypass AUTH-009.
+5. Stop if another module outside Users owns a legitimate lifecycle transition not described here.
+
+### Phase B - Define and test the state machine before refactoring callers
+
+1. Create a table of all 3x3 source/target combinations.
+2. Mark six real transitions plus three no-ops.
+3. Define timestamp result for every combination.
+4. Unit-test the transition calculation if practical as a pure helper.
+5. Confirm `active` always produces `deactivatedAt=null`.
+6. Confirm any non-active result has a defined timestamp rule.
+
+### Phase C - Centralize backend mutation
+
+1. Load target state once.
+2. Resolve no-op vs real transition.
+3. Run last-admin protection before removal of active ADMIN.
+4. Calculate one operation timestamp.
+5. Perform one coherent status/timestamp write.
+6. Return the resulting user.
+7. Make old callers delegate to this path or remove their direct status write.
+
+### Phase D - Wire dependent side effects without weakening local correctness
+
+1. AUTH-011 may revoke sessions after a successful local access-removal transition.
+2. AUTH-012 may create semantic audit records around successful transitions.
+3. If those tickets are not yet implemented, leave clear integration points rather than adding ad hoc partial behavior.
+4. A provider/audit failure must never cause authentication to auto-reactivate the user.
+
+### Phase E - Frontend/operator validation
+
+1. Display only actions valid for current state.
+2. Put destructive transitions behind existing confirmation patterns.
+3. Keep status unchanged on UI until backend succeeds unless robust rollback exists.
+4. Surface last-admin error clearly without exposing other admin PII.
+5. Refresh/invalidate server state after success.
+
+## Additional Test Cases And Explanations
+
+### TEST-AUTH010-16: Lifecycle write failure leaves previous state fully intact
+
+**Purpose:** Prove status and timestamp are not partially persisted.
+
+**Level:** Integration/service with failure injection where practical.
+
+**Setup:** Active worker. Force the database update/transaction to fail.
+
+**Action:** Request suspension.
+
+**Expected Result:** Operation fails and stored status remains active with `deactivatedAt=null`.
+
+**Required Assertions:** No half-transition; no success audit/session-revoke side effect if orchestration is already wired.
+
+**Why This Test Exists:** Security state must be atomic. A partial timestamp/status combination creates contradictory behavior.
+
+**False Positive To Avoid:** Throwing before the mutation logic begins, which does not exercise rollback behavior.
+
+**If This Test Fails:** Consolidate the write/transaction boundary.
+
+### TEST-AUTH010-17: Repeated client retry of the same transition is safe
+
+**Purpose:** Validate practical idempotency after network retries.
+
+**Level:** Integration/service.
+
+**Setup:** Active worker. First suspension succeeds; client does not receive/recognize response and retries the same request.
+
+**Action:** Issue suspension twice.
+
+**Expected Result:** Final state is suspended, no unexpected role/org changes, and lifecycle timestamp follows the documented no-op policy.
+
+**Why This Test Exists:** Real clients retry requests after timeouts. Repetition must not corrupt lifecycle metadata.
+
+**False Positive To Avoid:** Resetting the fixture between requests.
+
+**If This Test Fails:** Make no-op handling explicit and side effects idempotent where later tickets require them.
+
+### TEST-AUTH010-18: Unauthorized non-admin cannot invoke lifecycle transitions
+
+**Purpose:** Confirm centralization does not accidentally make the service reachable without route authorization.
+
+**Level:** Controller/E2E.
+
+**Setup:** Authenticated WORKER/RIDER actor and another target user.
+
+**Action:** Call status mutation endpoint.
+
+**Expected Result:** Forbidden before lifecycle mutation.
+
+**Required Assertions:** Target status/timestamp unchanged; lifecycle service/write not reached when test seam can assert it.
+
+**Why This Test Exists:** A perfectly designed lifecycle state machine is still unsafe if ordinary users can invoke it.
+
+**False Positive To Avoid:** Using an unauthenticated request, which tests authentication rather than role boundary.
+
+**If This Test Fails:** Restore/admin-role authorization at the controller/global guard layer.
+
+## Observability And Audit Expectations
+
+Lifecycle operations should eventually produce semantic events with actor, target, previous status, new status, timestamp, and approved reason/context when available. AUTH-012 owns the final implementation. Avoid generic logs that simply say `PATCH /users/...` without the business meaning.
+
+On failures, do not log passwords, tokens, Clerk secrets, or unnecessary user PII. Client errors should distinguish authorization/last-admin/validation failures using stable codes where current API conventions permit.
+
+## Reviewer Walkthrough
+
+1. Review the full status-write inventory.
+2. Review the documented 3-state transition matrix/no-op policy.
+3. Verify one central lifecycle service path owns status + `deactivatedAt`.
+4. Verify AUTH-009 is called before removing active-admin state.
+5. Inspect generic update for bypasses.
+6. Review failure/rollback and retry tests.
+7. Review non-admin authorization test.
+8. If frontend changed, simulate backend rejection and ensure UI does not lie.
+9. Confirm auth guard contains no lifecycle mutation.
+
+## Handoff Notes
+
+After AUTH-010 completes:
+
+- AUTH-011 can attach Clerk-session revocation to the centralized successful access-removal path.
+- AUTH-012 can attach semantic audit events to one lifecycle boundary instead of multiple endpoints.
+- AUTH-016 can test lifecycle behavior with stable fixtures and error semantics.
+- AUTH-017 can prove the assembled behavior end-to-end, including denial persistence across restart and explicit reactivation.
+
+Future status states must extend this documented state machine rather than being added as arbitrary DTO strings.
