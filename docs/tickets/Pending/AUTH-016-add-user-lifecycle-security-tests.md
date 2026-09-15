@@ -3,184 +3,384 @@
 **Status:** Pending  
 **Priority:** P0  
 **Area:** Testing / User Administration / Security  
-**Complexity:** Medium  
+**Complexity:** Medium-High  
 **Depends On:** AUTH-009, AUTH-010, AUTH-011, AUTH-012  
 **Blocks:** AUTH-017  
-**Primary New File:** `Backend/src/modules/users/users.service.spec.ts`
+**Primary New/Expanded File:** `Backend/src/modules/users/users.service.spec.ts`
 
 ## Objective
 
-Create a comprehensive service-level test suite for the user lifecycle and administrator safety rules introduced by AUTH-009 through AUTH-012.
+Create a comprehensive service-level security regression suite for `UsersService` covering administrator safety, explicit lifecycle transitions, semantic auditing, and Clerk session-cleanup behavior.
 
-The suite must prove that user administration cannot:
+This suite must prove that an authorized administrator cannot accidentally or intentionally use ordinary user-management operations to violate the hardened invariants introduced by AUTH-009 through AUTH-012.
 
-- remove the final active administrator;
-- bypass lifecycle transition rules through another service method;
-- reactivate users implicitly;
-- lose the semantic audit trail for sensitive changes;
-- roll a local suspension/deactivation back when Clerk session cleanup fails;
-- silently skip external cleanup without reporting it;
-- produce partial role/status state on rejected combined updates.
+The suite must protect at least these properties:
 
-## Junior Engineer Orientation
+- the final active administrator cannot be demoted, suspended, or deactivated;
+- inactive/suspended administrators do not count as administrative redundancy;
+- profile edits cannot implicitly reactivate users;
+- generic update paths cannot bypass lifecycle rules;
+- combined role/status changes cannot partially apply;
+- lifecycle transitions keep `status` and `deactivatedAt` consistent;
+- semantic security audits contain correct actor/target/before/after/reason data;
+- failed/rejected/no-op changes do not create false success audit events;
+- mandatory audit failures prevent local security-state mutation from committing;
+- Clerk cleanup happens only after successful local access removal;
+- Clerk failure never restores local access;
+- missing `clerkUserId` never causes email-based provider fallback;
+- repeated lifecycle/cleanup operations remain predictable and idempotent.
 
-This suite tests the **business-security rules inside `UsersService`** directly.
+---
 
-AUTH-015 tests request authentication. AUTH-016 tests what happens when an authorized administrator intentionally changes another user's access.
+## Junior Engineer Mental Model
 
-The key difference is:
+AUTH-015 answers:
 
 ```text
-AUTH-015:
-"Can this existing user authenticate?"
-
-AUTH-016:
-"Can an administrator safely change this user's role/status/access?"
+Can this existing user authenticate?
 ```
 
-A service test should verify actual state decisions and side effects, not merely that `prisma.user.update` was called.
+AUTH-016 answers:
 
-For every sensitive operation, think in four layers:
+```text
+Can an administrator safely change another user's access?
+```
 
-1. **Precondition:** Is the action allowed?
-2. **Local mutation:** What exact user state changes?
-3. **Security side effects:** Audit event, Clerk session cleanup.
-4. **Failure behavior:** What must remain unchanged if one step fails?
+Every sensitive user-management operation should be tested in four layers:
 
-## Why This Exists
+```text
+1. Preconditions
+   Is the action allowed?
 
-`UsersService` owns high-risk operations such as inviting users, changing roles/status, assigning geography, resetting passwords, deactivation, and reassignment. After hardening, it also owns last-admin safety, explicit lifecycle transitions, session cleanup, and semantic auditing.
+2. Local state mutation
+   What exact role/status/timestamp state commits?
 
-These rules need direct tests independent of HTTP/controller behavior so failures are easy to diagnose.
+3. Security side effects
+   What audit event and provider cleanup should occur?
 
-## Expected Files
+4. Failure behavior
+   What must remain unchanged when any step fails?
+```
 
-Create/update:
+A service test that only asserts `prisma.user.update()` was called is not enough. The service is the security/business-rule boundary, so test the rule and the resulting side effects.
 
-- `Backend/src/modules/users/users.service.spec.ts`
+---
 
-Potentially add small local test helpers/fixtures if repeated setup becomes excessive. Do not build a new testing framework.
+## Architecture Discussion and Decisions
 
-## Required Reading
+### Decision 1: Test real `UsersService` decision logic
 
-1. final `Backend/src/modules/users/users.service.ts`
-2. `Backend/src/modules/users/users.controller.ts`
-3. `Backend/src/modules/users/dto/users.schema.ts`
-4. completed AUTH-009, AUTH-010, AUTH-011, AUTH-012 implementations
-5. existing service specs for repository mocking style
-6. Prisma `User` and `AuditEvent` models
-7. `docs/tickets/TICKET_DETAIL_STANDARD.md`
+Mock infrastructure, not the service methods under test.
 
-Before writing tests, list the service methods that can change role/status and identify which one is the centralized lifecycle path.
+Mock:
+
+- Prisma service/transaction client;
+- Mail service;
+- Clerk user/session APIs;
+- current time only where deterministic timestamp assertions matter.
+
+Do not mock `transitionStatus`, last-admin helper, semantic-audit helper, or role-change logic if those are the behaviors being tested.
+
+### Decision 2: Transaction mocks must execute real callback logic
+
+If production code uses:
+
+```text
+prisma.$transaction(async tx => ...)
+```
+
+then the test mock must actually invoke the callback with a realistic transaction-client mock.
+
+Rejected pattern:
+
+```text
+$transaction.mockResolvedValue(success)
+```
+
+when that bypasses user/audit decision logic.
+
+### Decision 3: Freeze time only when needed
+
+For lifecycle timestamp tests, use repository-compatible fake timers/fixed clock so assertions can compare exact `deactivatedAt` values.
+
+Do not make broad “sometime within N seconds” assertions when deterministic time is possible.
+
+### Decision 4: Test no-side-effect behavior on rejection
+
+For last-admin/reason/validation failures, assert all of these where relevant:
+
+- no user mutation;
+- no semantic success audit;
+- no Clerk session listing;
+- no Clerk revocation;
+- no partial role/profile/status write.
+
+### Decision 5: Provider cleanup is secondary to local authorization state
+
+Tests must encode:
+
+```text
+local non-active state can succeed even when Clerk cleanup fails
+```
+
+and must never encode:
+
+```text
+Clerk failure => reactivate local user
+```
+
+### Decision 6: Audit truthfulness is part of lifecycle correctness
+
+A successful sensitive state change should have the expected semantic audit. A rejected/no-op/profile-only operation should not create a misleading security event.
+
+### Decision 7: Concurrency risk deserves an integration-style service test
+
+Final-admin safety has a count-then-mutate race risk. If production implementation uses transaction isolation/locking, add at least one disposable-DB concurrency test if practical. If the unit suite cannot prove concurrency guarantees, document the gap and ensure AUTH-017 or a focused integration spec covers it.
+
+---
+
+## Facts, Assumptions, and Unknowns
+
+### Facts / Expected State
+
+- `UsersService` owns role/status user-administration behavior;
+- AUTH-009 centralizes last-active-admin safety;
+- AUTH-010 centralizes lifecycle state transitions;
+- AUTH-011 performs provider session cleanup after local access removal;
+- AUTH-012 adds semantic security auditing and reason rules.
+
+### Assumptions To Verify
+
+- final `UsersService` has a single lifecycle rule path or a clearly delegated path;
+- generic `update()` either no longer owns status directly or delegates correctly;
+- user mutation + mandatory audit share a transaction;
+- provider cleanup is invoked after local commit;
+- audit actor context is passed from trusted controller/auth context.
+
+### Unknowns That Must Not Be Guessed
+
+- exact service method names after refactor;
+- whether reactivation reason is optional/required;
+- exact provider cleanup result shape;
+- exact transaction isolation mechanism used for last-admin concurrency.
+
+Read final production code before naming methods/assertions.
+
+---
 
 ## Test Boundary
 
-These are primarily **service unit tests**.
+These tests are primarily service unit/regression tests.
 
-Mock infrastructure/external dependencies:
+They must not use:
 
-- `PrismaService`;
-- `MailService`;
-- Clerk user/session methods;
-- time where stable timestamp assertions are needed;
-- transaction wrapper according to actual implementation.
-
-Do not call:
-
-- production database;
+- production DB;
 - real Clerk;
 - real SMTP;
-- real hosting services.
+- real Render/network services.
 
-AUTH-017 handles assembled HTTP-level E2E regression.
+AUTH-017 owns assembled HTTP + disposable PostgreSQL E2E behavior.
 
-## Fixture Rules
+If a specific concurrency/transaction guarantee cannot be represented honestly with mocks, create a narrowly scoped integration test using the existing disposable DB infrastructure instead of writing a false unit test.
 
-Use clear fake users:
+---
 
-- `adminA`: active ADMIN;
-- `adminB`: active ADMIN;
-- `adminInactive`: inactive ADMIN;
-- `adminSuspended`: suspended ADMIN;
-- `workerA`: active WORKER;
-- `workerSuspended`: suspended WORKER;
-- `workerInactive`: inactive WORKER;
-- `riderA`: active RIDER.
+## Required Reading
 
-Use fake UUIDs, provider IDs, and `example.test` emails.
+Before implementation:
 
-Keep fixtures small. Include only fields the tested service path actually reads.
+1. final `Backend/src/modules/users/users.service.ts`
+2. user controller
+3. user DTO schemas
+4. Prisma `User` and `AuditEvent` models
+5. completed AUTH-009
+6. completed AUTH-010
+7. completed AUTH-011
+8. completed AUTH-012
+9. at least two existing service specs
+10. `docs/tickets/TICKET_DETAIL_STANDARD.md`
+
+Intern must identify every production service method that can change:
+
+```text
+role
+status
+deactivatedAt
+clerkUserId (for provisioning only)
+```
+
+and mark whether each should be covered here.
+
+---
+
+## Fixture Design
+
+Use small fake fixtures with deterministic IDs.
+
+Recommended:
+
+```text
+adminA          = ADMIN / active
+adminB          = ADMIN / active
+adminInactive   = ADMIN / inactive
+adminSuspended  = ADMIN / suspended
+workerA         = WORKER / active
+workerB         = WORKER / active
+workerInactive  = WORKER / inactive
+workerSuspended = WORKER / suspended
+riderA          = RIDER / active
+```
+
+Use:
+
+- fake UUIDs;
+- fake Clerk IDs such as `user_test_worker_a`;
+- `example.test` emails only;
+- fake request IDs;
+- fake reason strings.
+
+Clone fixtures per test so no test mutates shared objects.
+
+---
 
 ## Shared Test Harness Requirements
 
 Provide helpers for:
 
-- cloning fixtures so tests cannot mutate shared objects;
-- mocking active-admin counts;
-- capturing Prisma update payloads;
-- capturing audit-event payloads;
-- mocking Clerk session pages/revocations;
-- fixed/fake clock for `deactivatedAt` where practical;
-- actor context with fake authenticated admin ID/reason/request ID.
+- cloning fixtures;
+- configuring current target user lookup;
+- configuring count of *other active admins*;
+- capturing exact `user.update` payload;
+- executing transaction callbacks honestly;
+- capturing semantic `auditEvent.create` payloads;
+- mocking session-list/revoke pages and failures;
+- fixed clock;
+- constructing trusted action context `{ actorUserId, requestId, reason }`;
+- serializing audit/log metadata for secret-marker checks.
 
-Reset all mocks between tests.
+Reset all mocks/timers/env after each test.
 
-## Step-by-Step Implementation
+---
 
-### Step 1 - Create the service spec skeleton
+## Step-by-Step Execution Plan for an Intern
 
-Set up a fresh `UsersService` per test with mocked dependencies.
+### Phase 0 - Baseline
 
-Do not mock `UsersService` methods themselves. The purpose is to execute real service decision logic.
+Run:
 
-### Step 2 - Model transaction behavior honestly
+```bash
+npm run typecheck:backend
+npm run test:backend
+```
 
-If service uses `prisma.$transaction`, your mock must still execute the callback or transactional methods in a way that exercises the real service logic.
+Record pre-existing failures.
 
-Do not stub `$transaction` to simply return success regardless of mutation/audit code.
+### Phase 1 - Inspect Final Service Shape
 
-### Step 3 - Add write spies for sensitive tables
+Create a small table before coding tests:
 
-At minimum capture calls to:
+```text
+operation | service method | DB writes | audit | Clerk cleanup | last-admin check
+```
 
-- `user.findUnique`;
-- `user.count`;
-- `user.update`;
-- `user.create` where invite coverage is included;
-- `auditEvent.create`;
-- session-list/revoke methods.
+Include:
 
-### Step 4 - Freeze time where lifecycle timestamp equality matters
+- role update;
+- status update;
+- generic update;
+- delete/deactivate alias;
+- explicit reactivation;
+- invite only if needed for role-provisioning behavior;
+- reset password only if auth-hardening changes affect it.
 
-If testing `deactivatedAt`, use Jest fake timers or inject a fixed time only if repository/test style supports it.
+### Phase 2 - Build Honest Prisma/Transaction Mock
 
-Avoid broad timing assertions such as "timestamp is sometime today" when exact call payload can be tested more reliably.
+If production uses a transaction callback, ensure test transaction mock invokes it using a transaction object exposing the same user/audit methods.
 
-### Step 5 - Implement last-admin tests first
+Add separate spies for non-transaction provider work.
 
-These are highest severity and should assert **zero downstream side effects** on rejection.
+**Verify:** force audit write failure and prove the service sees the failure rather than receiving a fake transaction success.
 
-### Step 6 - Implement normal lifecycle transitions
+### Phase 3 - Build Fixed Time Fixture
 
-Test active -> suspended/inactive and explicit reactivation.
+For lifecycle tests, set one known timestamp, for example:
 
-Assert status + metadata + audit + external cleanup trigger behavior.
+```text
+2030-01-02T03:04:05.000Z
+```
 
-### Step 7 - Implement provider failure behavior
+Use repository-approved fake timer pattern.
 
-Simulate listing/revoke failures after local state success.
+### Phase 4 - Implement Last-Admin Tests First
 
-Verify local state never rolls back.
+These are highest severity.
 
-### Step 8 - Implement semantic audit tests
+For every rejection case, assert zero downstream side effects.
 
-Assert actor, target, old/new values, reason policy, and false-event prevention.
+### Phase 5 - Implement Normal Lifecycle Matrix
 
-### Step 9 - Implement bypass tests
+Cover:
 
-Call generic update/delete/invite paths that could accidentally bypass central rules.
+```text
+active -> suspended
+active -> inactive
+suspended -> active
+inactive -> active
+suspended -> inactive
+inactive -> suspended (if final state machine supports it)
+no-op transitions
+```
 
-### Step 10 - Run targeted suite, then entire backend validation
+Ensure tests match AUTH-010 final policy rather than ticket assumptions if changed.
+
+### Phase 6 - Implement Generic/Alternate-Path Bypass Tests
+
+Exercise any method that can still accept status/role indirectly.
+
+The same invariants must hold regardless of entry point.
+
+### Phase 7 - Implement Semantic Audit Tests
+
+For successful actions assert actor, target, before/after, reason, request ID, event type.
+
+For rejected/no-op/profile-only actions assert absence of success semantic events.
+
+### Phase 8 - Implement Audit Failure Atomicity Tests
+
+Force semantic audit persistence failure.
+
+Expected under mandatory-audit design:
+
+```text
+user security state does not commit
+Clerk cleanup does not run
+```
+
+### Phase 9 - Implement Clerk Cleanup Tests
+
+Cover:
+
+- success;
+- listing failure;
+- partial revoke failure;
+- pagination/multiple sessions if helper is inside UsersService coverage;
+- missing `clerkUserId`;
+- non-Clerk provider mode;
+- repeated cleanup/idempotency.
+
+### Phase 10 - Implement Combined Role + Status Tests
+
+Ensure final-state validation occurs before write and no partial update/event happens on rejection.
+
+### Phase 11 - Implement Sensitive-Metadata Tests
+
+Use fake secret/token/email values in fixtures and assert semantic audit payload contains only approved fields.
+
+### Phase 12 - Run Targeted Suite Repeatedly
+
+Run only `users.service.spec.ts` until stable.
+
+### Phase 13 - Run Full Backend Validation
 
 ```bash
 npm run typecheck:backend
@@ -188,515 +388,478 @@ npm run lint:backend
 npm run test:backend
 ```
 
+### Phase 14 - Document Any Concurrency Gap
+
+If last-admin concurrency cannot be faithfully proven with unit mocks, document exactly what remains for integration/E2E coverage rather than pretending the unit test solved it.
+
+---
+
 ## Detailed Test Catalog
 
 ### TEST-AUTH016-01: Sole active admin cannot be deactivated
 
-**Purpose:** Protect the final-admin invariant at service level.
+**Purpose:** Prevent permanent administrative lockout.
 
-**Level:** Service unit.
+**Setup:** target Admin A active; count of other active admins = 0.
 
-**Setup:** `adminA` is active ADMIN; `user.count` for other active admins returns 0.
+**Action:** deactivate.
 
-**Action:** Transition Admin A to inactive.
+**Expected Result:** approved last-admin error.
 
-**Expected Result:** Service rejects with approved last-admin error.
-
-**Required Assertions:**
-
-- no user update;
-- no session listing/revocation;
-- no success semantic audit;
-- Admin A state remains active.
-
-**Why This Test Exists:** This is the main permanent-lockout scenario.
-
-**If This Test Fails:** Check AUTH-009 helper invocation before writes.
+**Required Assertions:** no user update; no success audit; no Clerk list/revoke; Admin A remains active.
 
 ### TEST-AUTH016-02: Sole active admin cannot be suspended
 
-**Purpose:** Ensure temporary lock state is treated as access removal.
+**Purpose:** Suspension also removes administrative access.
 
-**Level:** Service.
+**Expected Result:** rejected with zero side effects.
 
-**Setup:** Same as above.
+### TEST-AUTH016-03: Sole active admin cannot be demoted to WORKER
 
-**Action:** Suspend Admin A.
+**Purpose:** Protect role-based removal.
 
-**Expected Result:** Rejected with zero side effects.
+**Required Assertions:** no role/status/profile partial write; no revocation audit.
 
-**Required Assertions:** No lifecycle/provider/audit success writes.
+### TEST-AUTH016-04: Sole active admin cannot be demoted to RIDER
 
-**Why This Test Exists:** A protection that checks only `inactive` is incomplete.
+**Purpose:** Cover every current non-admin role.
 
-**If This Test Fails:** Apply final-admin invariant to every resulting non-active state.
+**Expected Result:** rejected; state unchanged.
 
-### TEST-AUTH016-03: Sole active admin cannot be demoted to WORKER or RIDER
+### TEST-AUTH016-05: Inactive/suspended admins do not count as redundancy
 
-**Purpose:** Protect role-based removal of the last administrator.
+**Purpose:** Count only usable active admins.
 
-**Level:** Service.
+**Setup:** A active; B inactive or suspended.
 
-**Setup:** Sole active Admin A.
+**Action:** attempt to remove A's active-admin state.
 
-**Action:** Run separate cases for ADMIN -> WORKER and ADMIN -> RIDER.
+**Expected Result:** rejected.
 
-**Expected Result:** Both rejected.
+**Required Assertions:** count semantics require `role=ADMIN`, `status=active`, `id != target`.
 
-**Required Assertions:** No partial profile/role/status write; no privilege-revocation success audit.
+### TEST-AUTH016-06: Two active admins allow one deactivation
 
-**Why This Test Exists:** Lockout protection must evaluate resulting active-admin state, not only status.
+**Purpose:** Avoid overblocking legitimate admin lifecycle.
 
-**If This Test Fails:** Ensure generic role update uses AUTH-009.
+**Setup:** A and B active.
 
-### TEST-AUTH016-04: Inactive/suspended admins do not count as redundancy
+**Action:** deactivate B.
 
-**Purpose:** Prevent false safety from unusable admin rows.
+**Expected Result:** success; A remains active; correct audit + cleanup behavior.
 
-**Level:** Service.
+### TEST-AUTH016-07: Two active admins allow one demotion
 
-**Setup:** Admin A active; Admin B inactive or suspended; count logic should report zero *other active* admins.
+**Purpose:** Ensure same rule for role change.
 
-**Action:** Attempt to remove Admin A's active-admin state.
+**Expected Result:** B can become WORKER/RIDER; A remains active; `user_role_changed` audit correct.
 
-**Expected Result:** Rejected.
+### TEST-AUTH016-08: Profile-only update on sole active admin is allowed
 
-**Required Assertions:** Count filter includes both `role=ADMIN` and `status=active` and excludes target.
+**Purpose:** Last-admin protection applies only when resulting active-admin state is removed.
 
-**Why This Test Exists:** Counting every ADMIN row could lock the system out.
+**Action:** change name/mobile.
 
-**If This Test Fails:** Tighten count semantics.
+**Expected Result:** success; role/status unchanged; no security semantic role/status event.
 
-### TEST-AUTH016-05: With two active admins, one can be deactivated/demoted
+### TEST-AUTH016-09: Active worker can be suspended
 
-**Purpose:** Ensure safety logic does not make admin management impossible.
+**Purpose:** Validate explicit temporary access removal.
 
-**Level:** Service.
+**Setup:** worker active, fixed clock, mapped Clerk ID, valid reason.
 
-**Setup:** Admin A + Admin B active; target B; one other active admin exists.
+**Expected Result:** status=suspended, deactivatedAt=fixed time, audit created, cleanup triggered after commit.
 
-**Action:** Deactivate or demote B in separate cases.
+### TEST-AUTH016-10: Active worker can be deactivated
 
-**Expected Result:** Allowed.
+**Purpose:** Validate account retirement.
 
-**Required Assertions:** A remains active; resulting active-admin count >=1; semantic audit correct.
+**Expected Result:** inactive + timestamp + `user_deactivated` + cleanup.
 
-**Why This Test Exists:** Last-admin protection should block only the dangerous boundary.
+### TEST-AUTH016-11: Suspended worker explicitly reactivates
 
-**If This Test Fails:** Check target exclusion/count logic.
+**Purpose:** Protect intended restoration path.
 
-### TEST-AUTH016-06: Active worker suspension applies all local lifecycle state
+**Expected Result:** active, deactivatedAt=null, `user_activated`, no session revocation.
 
-**Purpose:** Validate explicit suspension behavior.
+### TEST-AUTH016-12: Inactive worker explicitly reactivates
 
-**Level:** Service.
+**Purpose:** Same for inactive state.
 
-**Setup:** Active mapped `workerA`, fixed current time, actor Admin A.
+**Required Assertions:** no role/clerkUserId changes.
 
-**Action:** Suspend with valid reason.
+### TEST-AUTH016-13: Suspended -> inactive follows documented timestamp policy
 
-**Expected Result:** Worker becomes suspended.
+**Purpose:** Test cross-non-active transition.
 
-**Required Assertions:** `deactivatedAt` set to fixed time; role/org unchanged; semantic `user_suspended` audit created; Clerk cleanup triggered after local transition.
+**Expected Result:** final state and `deactivatedAt` exactly match AUTH-010 approved policy.
 
-**Why This Test Exists:** Tests complete lifecycle behavior, not just `status` field.
+### TEST-AUTH016-14: Inactive -> suspended follows state-machine policy if supported
 
-**If This Test Fails:** Determine whether lifecycle, audit, or provider trigger is missing.
+**Purpose:** Ensure documentation and implementation agree.
 
-### TEST-AUTH016-07: Active worker deactivation applies all local lifecycle state
+**Expected Result:** supported transition works consistently or, if final architecture disallows it, test explicit rejection instead.
 
-**Purpose:** Validate permanent access removal.
+### TEST-AUTH016-15: No-op status transition does not rewrite timestamp or create fake audit
 
-**Level:** Service.
+**Purpose:** Keep retries idempotent and audit truthful.
 
-**Setup:** Active mapped worker.
+**Setup:** already suspended with known timestamp.
 
-**Action:** Deactivate with reason.
+**Action:** suspend again.
 
-**Expected Result:** Inactive + timestamp + audit + provider cleanup.
+**Expected Result:** safe no-op/rejection according to final policy; no misleading success event; timestamp unchanged unless architect-approved otherwise.
 
-**Required Assertions:** No role/provider mapping changes.
+### TEST-AUTH016-16: Profile edit cannot implicitly reactivate inactive/suspended user
 
-**Why This Test Exists:** Deactivation and suspension share mechanics but different semantic events.
+**Purpose:** Prevent generic-update recovery bug.
 
-**If This Test Fails:** Check target-status event mapping.
+**Action:** change profile fields only.
 
-### TEST-AUTH016-08: Suspended/inactive worker explicitly reactivates
+**Expected Result:** profile may change; status/deactivatedAt remain non-active; no activation audit/Clerk behavior.
 
-**Purpose:** Protect the only intended normal restoration path.
+### TEST-AUTH016-17: Generic update cannot bypass lifecycle rules
 
-**Level:** Service.
+**Purpose:** Close legacy status-update entry point.
 
-**Setup:** Run parameterized cases for suspended and inactive worker.
+**Setup:** last admin or sensitive worker transition.
 
-**Action:** Transition to active.
+**Action:** supply status through generic update if API still supports it.
 
-**Expected Result:** Active, `deactivatedAt=null`, activation audit.
+**Expected Result:** identical rules to centralized lifecycle method.
 
-**Required Assertions:** No session revocation call; role/clerkUserId unchanged.
+### TEST-AUTH016-18: Delete/deactivate alias cannot bypass last-admin rule
 
-**Why This Test Exists:** Reactivation should be explicit and must not recreate sessions automatically.
+**Purpose:** Protect convenience endpoint/service alias.
 
-**If This Test Fails:** Fix AUTH-010 lifecycle path, not auth guard.
+**Setup:** sole active admin.
 
-### TEST-AUTH016-09: Ordinary profile update cannot implicitly reactivate
+**Action:** call the service path used by DELETE/deactivate.
 
-**Purpose:** Ensure non-lifecycle operations do not repair account access.
+**Expected Result:** rejected; zero side effects.
 
-**Level:** Service.
+### TEST-AUTH016-19: Combined role + status update succeeds atomically when valid
 
-**Setup:** Suspended/inactive worker.
+**Purpose:** Ensure multi-field security changes do not apply in stages.
 
-**Action:** Update name/mobile only.
+**Setup:** non-last-admin target, valid requested role/status/reason.
 
-**Expected Result:** Profile field may change; status/deactivatedAt remain non-active.
+**Action:** combined update.
 
-**Required Assertions:** No activation audit; no session behavior.
+**Expected Result:** full final state commits; appropriate role and lifecycle semantic events commit together.
 
-**Why This Test Exists:** Generic update paths are common lifecycle bypasses.
+### TEST-AUTH016-20: Combined role + status update rejects atomically for last admin
 
-**If This Test Fails:** Separate profile and lifecycle state handling.
+**Purpose:** Prevent partial demotion/deactivation.
 
-### TEST-AUTH016-10: Generic status update cannot bypass central lifecycle rules
+**Setup:** sole active admin.
 
-**Purpose:** Test compatibility path if `update()` still accepts status.
+**Expected Result:** rejected.
 
-**Level:** Service.
+**Required Assertions:** no requested field partially written; no semantic events; no cleanup.
 
-**Setup:** Last active admin or active worker fixture.
+### TEST-AUTH016-21: Required reason missing/blank blocks sensitive action before side effects
 
-**Action:** Submit status through generic update method.
+**Purpose:** Enforce AUTH-012 reason policy.
 
-**Expected Result:** Same behavior as `transitionStatus`, including final-admin rule and metadata.
+**Cases:** grant ADMIN, revoke ADMIN, suspend, deactivate.
 
-**Required Assertions:** No independent direct status write.
+**Expected Result:** reject; no user/audit/provider work.
 
-**Why This Test Exists:** Centralization is incomplete if a legacy method bypasses it.
+### TEST-AUTH016-22: WORKER -> ADMIN audit is semantically correct
 
-**If This Test Fails:** Delegate to lifecycle method/remove status from generic path per approved contract.
+**Purpose:** Protect privilege elevation traceability.
 
-### TEST-AUTH016-11: Clerk listing failure leaves local user suspended/inactive
+**Required Assertions:** actor/target IDs, old/new roles, `granted_admin`, reason, request ID.
 
-**Purpose:** Protect fail-closed external cleanup semantics.
+### TEST-AUTH016-23: ADMIN -> WORKER audit occurs only on successful demotion
 
-**Level:** Service.
+**Purpose:** Combine last-admin rule with truthful auditing.
 
-**Setup:** Local lifecycle mutation succeeds; mocked Clerk list throws.
+**Cases:** two-admin success + sole-admin rejection.
 
-**Action:** Suspend/deactivate.
+**Expected Result:** success case event exists; rejection case event absent.
 
-**Expected Result:** Local user remains non-active; cleanup result signals failure.
+### TEST-AUTH016-24: Lifecycle event types match actual transitions
 
-**Required Assertions:** No update back to active; safe log/result produced.
+**Purpose:** Ensure taxonomy follows real before/after state.
 
-**Why This Test Exists:** External identity-provider outage must never reopen local access.
+**Cases:** active->suspended, active->inactive, suspended->active, inactive->active.
 
-**If This Test Fails:** Remove rollback-on-provider-error logic.
+### TEST-AUTH016-25: Client-supplied actor cannot become audit actor
 
-### TEST-AUTH016-12: One Clerk session revoke failure does not prevent remaining attempts
+**Purpose:** Protect audit integrity.
 
-**Purpose:** Validate partial cleanup behavior.
+**Setup:** trusted context Admin A plus malicious/extra actor value if service signature/DTO seam permits.
 
-**Level:** Service.
+**Expected Result:** audit actor remains trusted Admin A or bad field is rejected earlier.
 
-**Setup:** Three sessions; middle revoke throws.
+### TEST-AUTH016-26: Audit write failure prevents privilege mutation from committing
 
-**Action:** Suspend/deactivate.
+**Purpose:** Prove mandatory audit atomicity.
 
-**Expected Result:** First/third attempts happen; local user non-active; partial summary recorded.
+**Setup:** valid WORKER->ADMIN; audit create throws inside transaction.
 
-**Required Assertions:** Later revoke called; no local rollback.
+**Expected Result:** service fails; worker remains WORKER; no provider side effect.
 
-**Why This Test Exists:** Maximizes sign-out coverage during partial provider failure.
+### TEST-AUTH016-27: Audit write failure prevents suspension from committing
 
-**If This Test Fails:** Catch failures per session according to AUTH-011 design.
+**Purpose:** Same for lifecycle state.
 
-### TEST-AUTH016-13: Missing `clerkUserId` still allows local access removal without email fallback
+**Expected Result:** worker remains active; no Clerk cleanup.
 
-**Purpose:** Keep local security independent of provider mapping health.
+### TEST-AUTH016-28: Successful suspension revokes all mocked active sessions
 
-**Level:** Service.
+**Purpose:** Validate AUTH-011 happy path from lifecycle entry point.
 
-**Setup:** Active worker, `clerkUserId=null`.
+**Setup:** mapped worker, multiple sessions, all revoke successfully.
 
-**Action:** Suspend/deactivate.
+**Expected Result:** local suspended, cleanup success counts correct.
 
-**Expected Result:** Local state changes; provider cleanup skipped.
+### TEST-AUTH016-29: Clerk session-list failure leaves local user non-active
 
-**Required Assertions:** No provider lookup by email; no failure that keeps user active.
+**Purpose:** Protect fail-closed cross-system behavior.
 
-**Why This Test Exists:** Broken provider mapping must not prevent access removal.
+**Setup:** local transaction succeeds; session listing throws.
 
-**If This Test Fails:** Separate local lifecycle success from provider cleanup eligibility.
+**Expected Result:** local status remains suspended/inactive; semantic audit remains committed; cleanup reports failure.
 
-### TEST-AUTH016-14: WORKER -> ADMIN audit includes actor/target/before/after/reason
+**Required Assertions:** no update back to active.
 
-**Purpose:** Protect semantic privilege-elevation auditing.
+### TEST-AUTH016-30: One session revoke failure does not stop remaining attempts
 
-**Level:** Service.
+**Purpose:** Maximize cleanup during partial provider failure.
 
-**Setup:** Admin A changes Worker A to ADMIN with valid reason.
+**Setup:** three sessions; middle revoke fails.
 
-**Action:** Change role.
+**Expected Result:** first/third attempted; partial result; local state remains non-active.
 
-**Expected Result:** Role changes; semantic audit created.
+### TEST-AUTH016-31: Missing `clerkUserId` does not prevent local access removal
 
-**Required Assertions:** Correct actor/target IDs, previous/new roles, `granted_admin`, reason, no secrets.
+**Purpose:** Provider mapping health must not block local security.
 
-**Why This Test Exists:** Elevation must be reconstructable later.
+**Setup:** active worker, no Clerk ID.
 
-**If This Test Fails:** Review AUTH-012 context/event logic.
+**Action:** suspend/deactivate.
 
-### TEST-AUTH016-15: ADMIN -> WORKER audit is written only when demotion succeeds
+**Expected Result:** local state + audit commit; cleanup skipped/failed-safe; no email provider lookup.
 
-**Purpose:** Combine last-admin rule and semantic audit truthfulness.
+### TEST-AUTH016-32: Non-Clerk auth mode skips Clerk cleanup
 
-**Level:** Service.
+**Purpose:** Respect configured auth provider.
 
-**Setup:** Two admins for success case, sole admin for failure case.
+**Expected Result:** local lifecycle works; no Clerk secret/session calls.
 
-**Action:** Demote target.
+### TEST-AUTH016-33: Repeated cleanup/lifecycle request is idempotent according to policy
 
-**Expected Result:** Success case creates revocation audit; failure case creates no success audit.
+**Purpose:** Protect retry behavior.
 
-**Required Assertions:** Audit taxonomy/old-new roles correct.
+**Setup:** already non-active user / already revoked sessions.
 
-**Why This Test Exists:** Audit history must not claim rejected changes happened.
+**Action:** repeat supported operation.
 
-**If This Test Fails:** Move event creation into successful mutation transaction/result path.
+**Expected Result:** no unintended reactivation, duplicate privilege drift, or misleading duplicate semantic state-change events.
 
-### TEST-AUTH016-16: Status audit events match actual transitions
+### TEST-AUTH016-34: Semantic audit metadata excludes sensitive markers
 
-**Purpose:** Cover lifecycle semantic auditing systematically.
+**Purpose:** Prevent security audit from becoming PII/credential dump.
 
-**Level:** Service parameterized test.
+**Setup:** fixtures contain fake email/token/provider-secret strings.
 
-**Setup:** Cases active->suspended, active->inactive, suspended->active, inactive->active.
+**Action:** successful sensitive change.
 
-**Action:** Execute each transition.
+**Expected Result:** serialized semantic audit metadata excludes those markers.
 
-**Expected Result:** Event type matches actual resulting state.
+### TEST-AUTH016-35: Concurrent final-admin-removal risk is tested or explicitly escalated
 
-**Required Assertions:** Previous/new status correct; actor/target/reason policy correct.
+**Purpose:** Prevent false confidence from unit-only count checks.
 
-**Why This Test Exists:** Prevents generic/misclassified security events.
+**Level:** integration if practical.
 
-**If This Test Fails:** Derive event from actual before/after state.
+**Setup:** two active admins, concurrent operations that would each remove one.
 
-### TEST-AUTH016-17: Missing/blank required reason prevents sensitive mutation
+**Expected Result:** final DB count remains >=1 under chosen transaction/isolation design.
 
-**Purpose:** Enforce explanation policy for high-risk actions.
+**If unit environment cannot prove this:** mark as explicit integration requirement for AUTH-017 and do not claim concurrency safety here.
 
-**Level:** Service/DTO depending on ownership.
+---
 
-**Setup:** ADMIN grant/revoke, suspension, deactivation with missing/whitespace reason.
+## Test Matrix Summary
 
-**Action:** Execute sensitive action.
+The final suite should visibly cover these dimensions:
 
-**Expected Result:** Rejected before mutation.
+| Dimension | Cases |
+|---|---|
+| Role safety | ADMIN, WORKER, RIDER, demotion, elevation |
+| Status | active, suspended, inactive |
+| Admin redundancy | 0 other active admin, 1+ other active admin |
+| Entry points | lifecycle method, generic update, delete/deactivate alias |
+| Audit | success, rejection, no-op, failure/rollback |
+| Provider cleanup | success, missing mapping, provider off, list failure, partial revoke |
+| Atomicity | combined role+status, audit failure |
+| Idempotency | repeated lifecycle/cleanup |
+| Privacy | no secrets/PII in semantic metadata |
+| Concurrency | simultaneous final-admin removal risk |
 
-**Required Assertions:** No user write; no success audit; no provider cleanup.
-
-**Why This Test Exists:** Required reason must be enforced before side effects.
-
-**If This Test Fails:** Move reason validation before mutation in owning layer.
-
-### TEST-AUTH016-18: Client/DTO cannot spoof audit actor
-
-**Purpose:** Protect audit integrity at service contract.
-
-**Level:** Service/controller boundary test.
-
-**Setup:** Authenticated actor context Admin A; malicious/extra DTO actor ID points to Admin B if such field could be passed.
-
-**Action:** Perform allowed change.
-
-**Expected Result:** Audit actor remains Admin A or invalid extra field is rejected before service call.
-
-**Required Assertions:** Client actor never becomes authoritative.
-
-**Why This Test Exists:** Administrators must not be able to falsify who performed an action.
-
-**If This Test Fails:** Remove actor from DTO and derive from auth context.
-
-### TEST-AUTH016-19: Profile-only update produces no semantic role/status event
-
-**Purpose:** Keep security audit high-signal.
-
-**Level:** Service.
-
-**Setup:** Active worker.
-
-**Action:** Update only name/mobile.
-
-**Expected Result:** Profile update succeeds; no role/status semantic audit.
-
-**Required Assertions:** Generic request audit is outside unit scope; semantic audit create not called for security event.
-
-**Why This Test Exists:** Avoid misleading/noisy privilege history.
-
-**If This Test Fails:** Trigger semantic events only on actual state change.
-
-### TEST-AUTH016-20: Explicit invite remains a provisioning path independent of auth guard
-
-**Purpose:** Ensure removing auth auto-provisioning did not remove legitimate onboarding.
-
-**Level:** Service.
-
-**Setup:** Authorized admin; valid fake invite; mocked Clerk user creation/reuse if Clerk mode.
-
-**Action:** `invite()`.
-
-**Expected Result:** User is created explicitly with requested supported role/status according to current contract.
-
-**Required Assertions:** No dependency on `JwtAuthGuard`; failure rollback behavior for Clerk/local create preserved.
-
-**Why This Test Exists:** It documents the correct creation boundary for future engineers.
-
-**If This Test Fails:** Fix explicit provisioning, not request-time auth.
-
-### TEST-AUTH016-21: Combined role/status rejection produces no partial state
-
-**Purpose:** Protect atomic authorization changes.
-
-**Level:** Service/integration-style unit.
-
-**Setup:** Last active admin, request attempts demotion + inactive plus profile edits.
-
-**Action:** Execute combined supported update.
-
-**Expected Result:** Rejected entirely.
-
-**Required Assertions:** No role, status, timestamp, or profile field partially written; no success audit/provider cleanup.
-
-**Why This Test Exists:** Sequential updates can leave dangerous half-state.
-
-**If This Test Fails:** Compute resulting state and apply mutation transactionally.
-
-### TEST-AUTH016-22: Mandatory audit failure rolls back local privilege/status change
-
-**Purpose:** Protect AUTH-012 reliability contract if security audit is transactional.
-
-**Level:** Service.
-
-**Setup:** Valid sensitive operation; audit insert throws inside mocked transaction.
-
-**Action:** Execute change.
-
-**Expected Result:** Whole local mutation fails/rolls back under approved contract.
-
-**Required Assertions:** No committed authorization state without audit.
-
-**Why This Test Exists:** Security audit cannot be optional accidentally if architecture says mandatory.
-
-**If This Test Fails:** Fix transaction mock/implementation or reconcile approved audit reliability before altering test.
-
-## Test Organization Recommendation
-
-Group specs by concern so a junior engineer can find failures quickly:
-
-```text
-describe('last-admin safety')
-describe('status lifecycle')
-describe('Clerk session cleanup')
-describe('semantic security audit')
-describe('explicit provisioning regressions')
-```
-
-Do not create one 500-line `describe` with unrelated setup hidden between tests.
-
-## Checkpoint
-
-- [ ] Last-admin rules have direct tests.
-- [ ] Every supported lifecycle transition has direct tests.
-- [ ] Generic-update bypass is tested.
-- [ ] Provider cleanup full/partial/skipped/failure paths are tested.
-- [ ] Audit actor/before/after/reason behavior is tested.
-- [ ] No implicit reactivation is tested.
-- [ ] Explicit invite boundary is tested.
-- [ ] No test calls real Clerk/SMTP/database.
-- [ ] Fake identities only.
+---
 
 ## Failure Diagnosis Guide
 
-### Service tests pass individually but fail together
+### Last-admin test passes only because mocked count always returns zero
 
-Shared fixture or mock state is leaking. Clone fixtures, reset mocks, and restore environment/time per test.
+Add both rejection and allowed-two-admin cases. The test must prove count semantics, not just one branch.
 
-### `$transaction` mock makes every test pass without executing callback
+### Transaction tests pass even when audit callback is never executed
 
-The mock is invalid. Configure it to execute callback with mocked transactional client or model actual implementation closely enough to test decisions.
+Your `$transaction` mock is fake. Invoke the real callback with a transaction client mock.
 
-### Provider failure test expects service to throw, but implementation returns partial result
+### Suspension test asserts status but not audit/cleanup
 
-Use AUTH-011 approved contract. The important invariant is local access stays removed and cleanup failure is observable. Reconcile expectation to approved behavior, not personal preference.
+Incomplete test. Sensitive lifecycle behavior includes all designed side effects.
 
-### Audit tests are brittle around generated timestamps
+### Provider failure makes service return user as active
 
-Freeze time or assert expected fixed time/range. Do not weaken before/after/security assertions.
+Critical regression. Local authorization state must remain non-active.
 
-### Last-admin tests require many mock calls
+### Missing Clerk ID causes lookup by email
 
-Create focused helper fixtures/count mocks. Do not skip the cases.
+AUTH-006 architecture has been reintroduced indirectly. Remove fallback.
+
+### Failed last-admin action still writes audit success event
+
+Event creation occurs too early or outside transaction/validation.
+
+### No-op request creates another lifecycle event
+
+Audit is based on endpoint invocation instead of actual state difference.
+
+### Tests depend on order/shared fixture mutation
+
+Clone fixtures and reset mocks/timers.
+
+---
+
+## Reviewer Walkthrough
+
+Reviewer should verify:
+
+1. real UsersService logic is executed;
+2. transaction mock is honest;
+3. last-admin rejection has zero downstream side effects;
+4. allowed two-admin cases exist;
+5. full lifecycle matrix matches final state-machine policy;
+6. generic/delete paths cannot bypass central rules;
+7. combined changes are atomic;
+8. audit success/rejection/failure semantics are tested;
+9. Clerk failure never restores local access;
+10. no email fallback appears in provider cleanup;
+11. sensitive audit metadata is tested;
+12. idempotency/retry behavior is covered;
+13. concurrency guarantee is either proven or explicitly handed off.
+
+---
 
 ## PR Evidence Required
 
 Include:
 
-- test file path and total case count;
-- test group names;
-- targeted service suite result;
-- full backend suite result;
+- service-method mutation inventory;
+- fixture matrix;
+- test count/list;
+- transaction-mock design explanation;
+- targeted service-spec result;
+- full backend test result;
 - typecheck/lint result;
-- explicit list of last-admin cases covered;
-- session cleanup failure/partial tests covered;
-- audit actor/reason/transaction tests covered;
-- statement that no real external service is called;
-- service coverage summary if available.
+- concurrency test result or explicit gap/handoff;
+- proof of audit rollback tests;
+- proof of provider-failure fail-closed tests;
+- sensitive-metadata marker test result.
+
+---
 
 ## Acceptance Criteria
 
-- [ ] `users.service.spec.ts` exists.
-- [ ] Detailed catalog above is implemented or equivalent coverage is documented.
-- [ ] Tests fail if last-admin protection is removed.
-- [ ] Tests fail if implicit reactivation is introduced.
-- [ ] Tests fail if local suspension is rolled back on Clerk failure.
-- [ ] Tests fail if semantic security auditing disappears or can be spoofed.
-- [ ] Tests cover explicit provisioning boundary.
-- [ ] Full backend test suite passes.
+- [ ] Last active admin safety is comprehensively tested.
+- [ ] Normal admin lifecycle remains usable with redundancy.
+- [ ] All supported lifecycle transitions are tested.
+- [ ] Generic/alternate paths cannot bypass rules.
+- [ ] Combined role/status operations are atomic.
+- [ ] Required reasons are enforced before side effects.
+- [ ] Semantic audit truthfulness and atomicity are tested.
+- [ ] Provider cleanup success/failure/partial/skip behavior is tested.
+- [ ] Provider failure never restores local access.
+- [ ] Missing mapping never triggers email fallback.
+- [ ] Sensitive audit metadata excludes secrets/PII.
+- [ ] Idempotency/retry behavior is protected.
+- [ ] Concurrency risk is tested or explicitly escalated.
+
+---
 
 ## Definition of Done
 
-- [ ] Targeted service suite passes.
+- [ ] Service spec implemented/expanded.
+- [ ] Targeted suite passes repeatedly.
 - [ ] Full backend tests pass.
-- [ ] Typecheck passes.
-- [ ] Lint passes.
-- [ ] Security assertions reviewed.
-- [ ] No real external services are required by suite.
-- [ ] Required PR evidence recorded.
+- [ ] Typecheck/lint pass.
+- [ ] No real external services used.
+- [ ] PR evidence complete.
+- [ ] Reviewer confirms the suite protects AUTH-009 through AUTH-012, not merely method call counts.
+
+---
 
 ## Rollback
 
-Do not delete these tests because implementation changes. Update them only when an approved lifecycle/security contract changes, preserving equivalent protection.
+Do not remove or weaken these tests merely because later implementation changes fail them.
+
+If architecture intentionally changes, update the approved behavior/ticket first, then update tests with reviewer sign-off.
+
+---
 
 ## Forbidden Shortcuts
 
 Do not:
 
-- mock `UsersService` itself;
-- assert only calls without checking resulting security state;
-- remove last-admin cases to simplify mocks;
-- make provider failure tests expect reactivation;
-- use real Clerk credentials;
-- skip committed tests without explicit approval;
-- build a transaction mock that bypasses service logic;
-- use production-like identity values.
+- mock the service method under test;
+- fake `$transaction` success without executing callback logic;
+- assert only `user.update` call count;
+- omit negative provider/audit assertions on rejection;
+- call real Clerk/SMTP/production DB;
+- use real identity data;
+- make test fixtures mutable/shared across tests;
+- allow email fallback in provider cleanup;
+- weaken atomicity tests because mocking is inconvenient;
+- claim concurrency safety from a non-concurrent unit test.
+
+---
 
 ## STOP - NEEDS ARCHITECT DECISION
 
-Stop if AUTH-009 through AUTH-012 were implemented with materially different lifecycle/audit semantics.
+Stop if:
 
-Also stop if security audit reliability or provider cleanup failure contract is unresolved. Tests must encode approved architecture, not decide it silently.
+- final lifecycle state machine differs materially from AUTH-010 assumptions;
+- audit persistence is intentionally best-effort instead of mandatory;
+- provider cleanup is moved to an async worker/job;
+- user roles become organization-scoped so “last admin” becomes per-organization;
+- transaction/isolation design for concurrency is not defined.
+
+Update the expected test contract before encoding guesses.
+
+---
+
+## Handoff To AUTH-017
+
+AUTH-017 may assume service tests prove the domain rules independently.
+
+The E2E suite should then prove:
+
+- real routes reach these service rules;
+- real global guards cannot be bypassed;
+- real DTO validation enforces required inputs;
+- real Prisma/PostgreSQL state persists correctly;
+- restart does not reactivate users;
+- actor context flows from authenticated HTTP request to semantic audit.
+
+---
 
 ## Completion Record
 
@@ -705,8 +868,8 @@ Also stop if security audit reliability or provider cleanup failure contract is 
 **PR:**  
 **Final Commit:**  
 **Completed Date:**  
-**UsersService Test Count:**  
-**UsersService Coverage:**  
-**Targeted Suite:** Pass / Fail  
+**Targeted Service Suite:** Pass / Fail  
 **Full Backend Suite:** Pass / Fail  
+**Concurrency Coverage:** Pass / Handed to AUTH-017 / Needs Decision  
+**Tests Added/Updated:**  
 **Notes:**
