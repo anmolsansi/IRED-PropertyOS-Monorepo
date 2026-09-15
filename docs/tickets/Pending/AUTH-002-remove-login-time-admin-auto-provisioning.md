@@ -515,3 +515,197 @@ Also stop if another authentication provider intentionally provisions users duri
 **Tests Added/Updated:**  
 **Manual User-Count Verification:** Pass / Fail  
 **Notes:**
+
+---
+
+## Expanded Architecture Discussion And Decision Record
+
+### Decision 1: Authentication must be read-only with respect to user lifecycle
+
+**Decision:** A request that authenticates a caller may read the user record and reject/allow the request, but it may not create the caller's PropertyOS account.
+
+**Reason:** Provisioning is a business/security decision. It determines whether the person belongs in PropertyOS, what role they receive, what organization/geography they can access, and who authorized that access. A login request does not carry enough context to make those decisions safely.
+
+**Rejected alternative:** Automatically create any valid Clerk user as `WORKER` instead of `ADMIN`.
+
+**Why rejected:** That removes one privilege-escalation vector but preserves unauthorized application enrollment. A valid external identity is not the same thing as approved PropertyOS membership.
+
+### Decision 2: Existing explicit provisioning is the correct ownership boundary
+
+**Decision:** Normal users continue to be created through the explicit user-management/invite flow, and the initial admin is handled by AUTH-008.
+
+**Reason:** Explicit flows have an actor, an intention, validated input, role selection, and a place to add audit/security rules. The auth guard should not duplicate that business logic.
+
+**Rejected alternative:** Call `UsersService.invite()` from `JwtAuthGuard` when the user is missing.
+
+**Why rejected:** That changes code location but not behavior. Authentication would still implicitly provision the caller.
+
+### Decision 3: Missing local user is a fail-closed condition
+
+**Decision:** If Clerk verifies the person but PropertyOS cannot find an approved local account, reject.
+
+**Reason:** The local database is the application's authority for membership, role, status, organization, and geography. Missing membership must not default to access.
+
+**Rejected alternative:** Continue with a synthetic in-memory user until a DB row can be created later.
+
+**Why rejected:** That creates access with no durable local authorization record and makes audit/role enforcement unreliable.
+
+## Facts, Assumptions, And Unknowns
+
+### Facts
+
+- Current request auth contains a missing-user branch that can create a privileged local user.
+- `UsersService.invite()` already provides an explicit application-owned user-creation path.
+- PropertyOS role/status data lives in the local user model.
+
+### Assumptions to verify
+
+- Legitimate existing users who should access PropertyOS already have local rows or will be covered by AUTH-005 backfill/provisioning.
+- No supported business workflow intentionally depends on arbitrary Clerk users creating themselves by logging in.
+
+### Unknowns that require escalation
+
+- How many production identities currently have Clerk accounts but no PropertyOS row.
+- Whether any operator has been using the fallback as an informal onboarding mechanism.
+
+Do not answer those from guesswork. AUTH-005 should measure the data safely.
+
+## Intern Execution Sequence - No Improvisation
+
+### Phase A - Reconnaissance
+
+1. Run baseline tests/typecheck.
+2. Read the guard completely.
+3. Read `UsersService.invite()` completely.
+4. Search for every `prisma.user.create`, `user.create`, and `upsert` reachable from request auth.
+5. Write down the current missing-user branch behavior.
+6. Confirm the current explicit invite flow remains separate.
+7. Stop if more than one request-auth provisioning path exists that is not described here.
+
+### Phase B - Write/prepare the regression test
+
+1. Build a valid Clerk-verification fixture.
+2. Make local user lookup return `null`.
+3. Spy on `create`, `upsert`, and relevant `update` methods.
+4. Assert rejection.
+5. Assert zero writes.
+6. Repeat the test to prove idempotent read-only behavior.
+7. Add an existing-active-user positive case so the fix cannot accidentally delete normal authentication.
+
+### Phase C - Remove provisioning from the guard
+
+1. Delete only the missing-user creation branch.
+2. Preserve the ordinary missing-user rejection.
+3. Do not invoke a service to create the user.
+4. Do not create a lower-privilege replacement account.
+5. Do not catch the rejection and continue.
+6. Run the focused test immediately.
+7. Run typecheck immediately.
+
+### Phase D - Verify the boundary outside the guard
+
+1. Open `UsersService.invite()`.
+2. Confirm it still creates approved users.
+3. Confirm the guard does not call it.
+4. If a test exists for invitation, run it.
+5. If invite breaks because of unrelated existing issues, record that separately. Do not restore auth provisioning.
+
+### Phase E - Static and DB-state verification
+
+1. Search request auth for `create`, `upsert`, `invite`, and role assignment.
+2. Authenticate a missing test identity.
+3. Compare user count before/after.
+4. Compare admin count before/after.
+5. Repeat the request.
+6. Confirm both counts remain unchanged.
+
+## Additional Test Cases And Explanations
+
+### TEST-AUTH002-07: Missing local user cannot be provisioned through a helper abstraction
+
+**Purpose:** Prevent future refactors from hiding the same behavior behind a helper/service name.
+
+**Level:** Unit/regression.
+
+**Setup:** Valid provider identity, no local user. Mock any provisioning helper/service reachable from the guard if such an abstraction exists after refactor.
+
+**Action:** Execute authentication.
+
+**Expected Result:** Reject.
+
+**Required Assertions:** No provisioning helper, invite method, create/upsert, or lifecycle mutation is called.
+
+**Database Assertions:** User count unchanged.
+
+**Why This Test Exists:** A code search for `prisma.user.create()` alone can miss provisioning that moved behind a service.
+
+**False Positive To Avoid:** Testing only Prisma direct calls while allowing `UsersService.invite()` to be invoked.
+
+**If This Test Fails:** Treat it as the same architecture violation, regardless of abstraction layer.
+
+### TEST-AUTH002-08: Provider profile lookup failure cannot fall back to local auto-create
+
+**Purpose:** Ensure external-provider errors do not activate an emergency provisioning path.
+
+**Level:** Unit/regression.
+
+**Setup:** Token verification reaches the provider/profile stage, then the required provider lookup fails according to the current implementation's error path.
+
+**Action:** Authenticate.
+
+**Expected Result:** Request fails safely. No PropertyOS user is created or mutated.
+
+**External-Service Assertions:** Provider failure is surfaced/handled according to existing auth semantics; there is no retry path that provisions locally.
+
+**Database Assertions:** Zero user writes.
+
+**Why This Test Exists:** Emergency fallbacks are often added in catch blocks. This guards against "provider unavailable, create local user anyway" behavior.
+
+**False Positive To Avoid:** A test that fails before the guard reaches the relevant catch/error branch.
+
+**If This Test Fails:** Inspect error handlers and retry helpers before touching the assertion.
+
+## Observability And Audit Expectations
+
+Authentication should emit/record an understandable denial reason for an unprovisioned caller without leaking the caller's personal data or implying that an account was created.
+
+Preferred conceptual reason:
+
+```text
+AUTH_USER_NOT_PROVISIONED
+```
+
+Do not log:
+
+- passwords;
+- bearer tokens;
+- provider secrets;
+- full auth headers;
+- a message claiming a user/admin was auto-created;
+- raw production identity exports.
+
+AUTH-014 owns the broader auth-log cleanup and AUTH-012 owns lifecycle audit events.
+
+## Reviewer Walkthrough
+
+1. Start in `jwt-auth.guard.ts` at local-user lookup.
+2. Follow the `!user` path line by line.
+3. Confirm every route ends in rejection and no provisioning call.
+4. Search the guard and helpers for direct/indirect user creation.
+5. Review the zero-write regression test.
+6. Review the repeated-attempt test.
+7. Review the existing-user positive test.
+8. Verify explicit `UsersService.invite()` still exists outside authentication.
+9. Reject the PR if provisioning was merely moved to another helper or lower role.
+
+## Handoff Notes
+
+When AUTH-002 is completed, later tickets may assume:
+
+- a missing local user is never created by request-time authentication;
+- the replacement onboarding/bootstrap responsibility is explicit and outside the guard;
+- AUTH-005 can audit/backfill identity mappings without worrying that login is creating new rows concurrently as an intended feature;
+- AUTH-008 can own first-admin bootstrap without a competing login-time bootstrap;
+- AUTH-015/AUTH-017 can enforce zero-write missing-user behavior as a permanent regression invariant.
+
+This ticket does not yet guarantee strict Clerk-ID lookup. That remains AUTH-005/AUTH-006.
