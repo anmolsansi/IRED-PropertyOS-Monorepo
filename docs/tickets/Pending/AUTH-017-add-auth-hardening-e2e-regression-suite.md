@@ -2,241 +2,454 @@
 
 **Status:** Pending  
 **Priority:** P0  
-**Area:** Testing / Authentication / Security  
-**Complexity:** Medium-High  
+**Area:** Testing / Authentication / Security / Integration  
+**Complexity:** High  
 **Depends On:** AUTH-006, AUTH-009, AUTH-010, AUTH-011, AUTH-012, AUTH-015, AUTH-016  
 **Blocks:** AUTH-018 production rollout  
 **Primary New File:** `Backend/test/auth-hardening.e2e-spec.ts`
 
 ## Objective
 
-Add HTTP-level regression tests proving the complete hardened authentication and user-lifecycle behavior works when NestJS guards, controllers, services, Prisma, and a disposable PostgreSQL database are wired together.
+Add an HTTP-level regression suite proving the complete hardened authentication and user-lifecycle design works when the real NestJS application pieces are assembled together.
 
-Unit tests prove individual components. This ticket proves the assembled application does not accidentally bypass those components.
+Unit tests prove components in isolation. This ticket proves that real routing, guard order, controller wiring, DTO validation, service logic, Prisma behavior, database persistence, semantic audit writes, and provider-cleanup integration do not accidentally bypass the hardened rules.
 
-## Junior Engineer Orientation
+The suite must use a disposable PostgreSQL database and the real PropertyOS security/business components. Only external Clerk boundaries should be mocked.
 
-This is the final automated safety layer before production rollout.
+---
 
-The key rule is:
+## Junior Engineer Mental Model
 
-```text
-Mock only the external Clerk boundary.
-Do NOT mock the PropertyOS security components being tested.
-```
+This is not another unit test suite.
 
-The suite should exercise:
+The request should travel through the same PropertyOS layers production uses:
 
 ```text
 HTTP request
- -> real Nest routing
- -> real JwtAuthGuard
- -> real RolesGuard/other global guards as applicable
- -> real controller
- -> real UsersService
- -> real Prisma
- -> disposable PostgreSQL
+  -> Nest router
+  -> global JwtAuthGuard
+  -> RolesGuard / OrgGuard / GeographyGuard as applicable
+  -> DTO validation
+  -> controller
+  -> real UsersService
+  -> real Prisma
+  -> disposable PostgreSQL
 ```
 
-Clerk token/session calls are external and may be mocked. The PropertyOS guard/service must remain real.
+External Clerk verification/session APIs may be mocked so CI does not need real credentials/network access.
 
-A test that replaces `JwtAuthGuard` with an allow-all fake is not an auth E2E test.
+The most important rule is:
+
+```text
+Mock Clerk.
+Do NOT mock away PropertyOS security.
+```
+
+If you override `JwtAuthGuard` with an allow-all guard, the resulting test is not an authentication E2E test.
+
+---
 
 ## Why This Exists
 
-The existing E2E suite mainly exercises the legacy email/password + OTP + JWT path. Production Clerk hardening changes a separate request path and administrator lifecycle.
+Individually correct components can still fail when assembled.
 
-Security can still fail when individually correct units are assembled incorrectly, for example:
+Examples this suite must catch:
 
-- wrong global guard order;
-- controller route bypasses service invariant;
-- DTO allows missing reason;
-- database state is mutated despite HTTP rejection;
-- strict Clerk-ID lookup works in unit test but AppModule still uses another path;
-- session cleanup provider failure changes API behavior unexpectedly.
+- the app bootstraps a different guard than the unit-tested guard;
+- global guard order is wrong;
+- one user controller route bypasses `UsersService` last-admin checks;
+- DTO validation lets a sensitive action through without required reason;
+- HTTP rejection occurs after a dangerous DB mutation;
+- strict Clerk-ID lookup exists in unit code but another helper still falls back to email;
+- a suspended account is repaired during app restart/startup;
+- authenticated actor context is not passed into semantic audit;
+- provider cleanup failure accidentally changes HTTP/local-state behavior;
+- test-only wiring accidentally disables global guards.
 
-## Test Architecture
+---
 
-Create:
+## Architecture Discussion and Decisions
 
-`Backend/test/auth-hardening.e2e-spec.ts`
+### Decision 1: Use real `AppModule`
 
-Use:
+**Chosen:** Boot the real application module and real guards/controllers/services.
 
-- real `AppModule`;
-- real Nest guards/controllers/services;
-- real disposable PostgreSQL/Testcontainers setup already used by backend E2E;
-- deterministic fake local users;
-- mocked Clerk SDK boundary only;
-- Supertest HTTP requests.
+**Rejected:** Create a simplified test module that manually omits unrelated/global security components.
 
-Do **not** call real Clerk in CI.
+**Why:** The purpose is to validate assembled production wiring.
 
-## Required Reading
+### Decision 2: Use real disposable PostgreSQL
 
-1. `Backend/test/app.e2e-spec.ts`
-2. `Backend/test/setup.ts`
-3. `Backend/test/jest-e2e.json`
-4. final `JwtAuthGuard`
-5. final UsersService lifecycle implementation
-6. AUTH-015 and AUTH-016 tests/invariants
-7. user controller routes/DTOs
-8. `docs/tickets/TICKET_DETAIL_STANDARD.md`
+**Chosen:** Reuse existing Testcontainers/disposable DB E2E setup.
 
-## Existing E2E Detail
+**Rejected:** In-memory Prisma mock.
 
-Backend E2E Jest config matches `*.e2e-spec.ts` under `Backend/test`, so the new file should be discovered automatically by the backend E2E command.
+**Why:** Persistence, transactions, constraints, restart behavior, and audit rows are part of the contract.
 
-Verify this with a list/test run rather than assuming.
-
-## External Boundary Mocking
-
-Mock Clerk, not PropertyOS.
+### Decision 3: Mock external Clerk boundary only
 
 Mock:
 
-- `verifyToken(token, options)`;
-- `createClerkClient()` only for session operations still needed by lifecycle.
+- `verifyToken`;
+- Clerk session list/revoke APIs required by AUTH-011.
 
-Do **not** override:
+Do not mock:
 
 - `JwtAuthGuard`;
 - `RolesGuard`;
 - `UsersController`;
 - `UsersService`;
-- Prisma with an in-memory fake for this E2E suite.
+- Prisma service/database.
 
-## Test Identity Design
+### Decision 4: Use deterministic fake tokens rather than real JWTs
 
-Use obvious fake bearer tokens:
+Example mapping:
 
 ```text
-token-admin-a -> clerk_admin_a
-token-admin-b -> clerk_admin_b
-token-worker-a -> clerk_worker_a
-token-worker-b -> clerk_worker_b
-token-rider-a -> clerk_rider_a
-token-unmapped -> clerk_unmapped
-token-invalid -> verifyToken throws
+token-admin-a   -> clerk_admin_a
+token-admin-b   -> clerk_admin_b
+token-worker-a  -> clerk_worker_a
+token-worker-b  -> clerk_worker_b
+token-rider-a   -> clerk_rider_a
+token-unmapped  -> clerk_unmapped
+token-invalid   -> provider verification throws
 ```
 
-These are test strings, not real JWTs.
+The test is verifying PropertyOS behavior after Clerk verification, not Clerk cryptography.
 
-Seed matching local users with exact `clerkUserId` values for mapped identities.
+### Decision 5: Restart test must preserve the database
 
-Use only `example.test` emails.
+To prove non-active status is durable:
+
+```text
+suspend user
+-> close Nest app
+-> recreate Nest app against same disposable DB
+-> retry access
+```
+
+Do not reset/reseed between suspension and restart assertion.
+
+### Decision 6: Each test is isolated
+
+Tests must not depend on execution order.
+
+Reset relevant tables/fixtures before each test or use another established repository isolation method.
+
+### Decision 7: E2E assertions include DB state, not only HTTP status
+
+A `403` is not enough if the request created/updated data before failing.
+
+For sensitive cases reload the DB and assert exact before/after state.
+
+---
+
+## Facts, Assumptions, and Unknowns
+
+### Facts / Expected State
+
+- backend already has E2E/Testcontainers infrastructure;
+- E2E Jest config discovers `*.e2e-spec.ts` under `Backend/test`;
+- production Clerk mode is configured through environment variables;
+- AUTH-015 protects guard behavior in unit tests;
+- AUTH-016 protects UsersService domain behavior in service tests.
+
+### Assumptions To Verify
+
+- existing Testcontainers helper can preserve a DB while recreating Nest app;
+- Clerk module mocks can be installed before application module import/init;
+- test app can apply the same global prefix/versioning/pipes as production;
+- semantic audit rows are queryable through Prisma in tests.
+
+### Unknowns That Must Not Be Guessed
+
+- exact endpoint paths after final controller changes;
+- exact partial-success HTTP response for provider cleanup failure;
+- whether frontend/authorized-party configuration is required by `verifyToken` mock options;
+- whether a minimal external-token verifier abstraction is needed to make module mocking reliable.
+
+Read final code first.
+
+---
+
+## Scope
+
+### Create
+
+- `Backend/test/auth-hardening.e2e-spec.ts`
+
+Potentially create small E2E-only fixture/helper utilities if repository style already supports them.
+
+### Out Of Scope
+
+Do not:
+
+- call production Clerk;
+- point tests to shared/developer/prod DB;
+- test frontend UI here;
+- override real guards with permissive test guards;
+- duplicate every unit-test branch at HTTP level;
+- test unrelated PropertyOS workflows.
+
+Focus E2E effort on cross-layer security guarantees and bypass risks.
+
+---
+
+## Required Reading
+
+Before coding:
+
+1. `Backend/test/app.e2e-spec.ts`
+2. `Backend/test/setup.ts`
+3. `Backend/test/jest-e2e.json`
+4. production app bootstrap (`main.ts`) for prefix/versioning/pipes
+5. final `JwtAuthGuard`
+6. global guard registration order
+7. final user controller/service/DTOs
+8. AUTH-015 test contract
+9. AUTH-016 test contract
+10. `docs/tickets/TICKET_DETAIL_STANDARD.md`
+
+The intern must be able to draw the real request path and name which pieces are real vs mocked in this E2E suite.
+
+---
+
+## Test Identity and Database Fixtures
+
+Seed at minimum:
+
+```text
+Admin A    ADMIN  active     clerk_admin_a
+Admin B    ADMIN  active     clerk_admin_b
+Worker A   WORKER active     clerk_worker_a
+Worker B   WORKER suspended  clerk_worker_b
+Rider A    RIDER  active     clerk_rider_a
+```
+
+Also create scenario-specific fixtures for:
+
+- inactive user;
+- user with null/different Clerk mapping for email-collision test;
+- no local row for `clerk_unmapped`;
+- known `deactivatedAt` timestamp;
+- safe audit reasons/request IDs.
+
+Use only fake UUIDs and `example.test` emails.
+
+---
+
+## Clerk Mock Contract
+
+Mock verification deterministically:
+
+```text
+verifyToken(token-admin-a)  => { sub: clerk_admin_a }
+verifyToken(token-worker-a) => { sub: clerk_worker_a }
+verifyToken(token-unmapped) => { sub: clerk_unmapped }
+verifyToken(token-invalid)  => throw
+```
+
+Session cleanup mock should support:
+
+- zero sessions;
+- multiple active sessions;
+- pagination if final helper handles it at this layer;
+- list failure;
+- partial revoke failure;
+- already-ended/revoked sessions.
+
+Do not mock PropertyOS user lookup.
+
+---
 
 ## Test Isolation Rules
 
-Each test must start from known DB state.
+Before each test:
 
-Use one of the existing accepted patterns:
+1. restore deterministic auth-related tables/fixtures;
+2. clear semantic audit events created by prior test;
+3. reset Clerk mocks/counters;
+4. reset fake provider cleanup behavior;
+5. reset environment overrides needed per case.
 
-- reset/reseed relevant tables in `beforeEach`;
-- transaction rollback if current Testcontainers/Prisma setup supports it safely;
-- dedicated helper that restores deterministic auth fixtures.
+Do not rely on:
 
-Do not rely on test execution order.
+```text
+TEST-08 runs before TEST-09
+```
 
-If a test deactivates Admin B, the next test must not accidentally inherit that unless explicitly arranged.
+Restart tests may intentionally perform multiple app instances within one test while preserving that test's DB state.
 
-## Step-by-Step Implementation
+---
 
-### Step 1 - Create the dedicated E2E file
+## Step-by-Step Execution Plan for an Intern
 
-Do not overload the large legacy E2E file unless repository owner explicitly prefers one file.
+### Phase 0 - Baseline Existing E2E Infrastructure
 
-### Step 2 - Establish Clerk-mode environment before module initialization
+Run current E2E suite before creating the file.
 
-Set fake/test:
+Record:
 
-- `AUTH_PROVIDER=clerk`;
-- `CLERK_SECRET_KEY`;
-- authorized parties/frontend URL as needed.
+- command used;
+- Testcontainers startup behavior;
+- migrations applied;
+- current failures.
 
-Restore environment after suite.
+### Phase 1 - Create Dedicated Spec File
 
-### Step 3 - Mock Clerk module early enough
+Create:
 
-Jest module mocking/hoisting must happen before the application imports the real SDK behavior.
+```text
+Backend/test/auth-hardening.e2e-spec.ts
+```
 
-Map fake tokens to deterministic `sub` values.
+Do not overload the existing large E2E file unless repository conventions strongly require it.
 
-Provider session client mock must support AUTH-011 scenarios.
+### Phase 2 - Configure Clerk Mode Before App Initialization
 
-If import order makes this impossible, stop and create/approve a minimal external-token verifier abstraction rather than mocking the real guard.
+Set deterministic test environment values before importing/initializing the app:
 
-### Step 4 - Start disposable PostgreSQL
+```text
+AUTH_PROVIDER=clerk
+CLERK_SECRET_KEY=fake-test-secret
+authorized parties/front-end URL if required
+```
 
-Reuse existing `setupTestContainers()` and migration/seed setup where safe.
+Restore them after the suite.
 
-Never point tests at developer/shared/production DB.
+### Phase 3 - Install Clerk Module Mocks Early
 
-### Step 5 - Seed auth-hardening fixtures
+Jest module mocking must occur before real provider functions are captured by imported modules.
 
-At minimum:
+If import order makes reliable mocking impossible, **STOP - NEEDS ARCHITECT DECISION** for a minimal provider-verifier abstraction. Do not solve it by replacing the real guard.
 
-- Admin A active/mapped;
-- Admin B active/mapped;
-- Worker A active/mapped;
-- Worker B suspended or inactive/mapped;
-- Rider A active/mapped;
-- no row for `clerk_unmapped`.
+### Phase 4 - Start Disposable PostgreSQL
 
-Keep known timestamps for non-active users where state immutability is asserted.
+Reuse existing test setup.
 
-### Step 6 - Start real Nest application
+Verify the DB connection string points only to disposable test infrastructure.
 
-Apply the same global prefix/versioning/pipes required to match production app setup.
+Apply migrations using existing test mechanism.
 
-Prefer using shared app-bootstrap test helper if repository has one, but do not remove global security guards.
+Do not use production seed if it introduces unrelated data; create focused fixtures.
 
-### Step 7 - Add HTTP helper functions
+### Phase 5 - Create Fixture Reset Helper
 
-Helpers may set bearer token and issue Supertest requests, but cannot bypass auth.
+Write one test helper that restores the deterministic auth users/audit state.
 
-Example conceptual helper:
+The helper must not create hidden privileged behavior that production does not have.
+
+### Phase 6 - Start Real Nest App
+
+Use real `AppModule`.
+
+Apply the same relevant production bootstrap configuration:
+
+- global prefix;
+- URI versioning;
+- validation pipe;
+- global guards through module registration;
+- interceptors/middleware needed for request ID/audit behavior.
+
+### Phase 7 - Prove The Guard Is Actually Active
+
+Make the first test a no-token request to a protected route.
+
+If it succeeds, stop. The E2E harness is invalid.
+
+### Phase 8 - Add HTTP Helpers
+
+Helpers may only simplify request construction, e.g.:
 
 ```text
 getAs(token, path)
 patchAs(token, path, body)
 ```
 
-### Step 8 - Add DB assertion helpers
+They must still set normal HTTP Authorization headers and travel through guards.
 
-Create small helpers to reload user, count users/admins, and query semantic audit records. Keep them test-only.
+### Phase 9 - Add DB Assertion Helpers
 
-### Step 9 - Implement authentication tests first
+Create test-only helpers to:
 
-Cover no token, invalid token, mapped success, unmapped rejection, email-collision rejection, non-active rejection.
+- reload user;
+- count users/admins;
+- query semantic audits;
+- snapshot role/status/clerkUserId/org/deactivatedAt;
+- count audit events for target/request.
 
-### Step 10 - Implement lifecycle HTTP tests
+### Phase 10 - Implement Authentication E2E Cases
 
-Exercise real status/role endpoints, including reasons where required.
+Start with:
 
-### Step 11 - Implement restart persistence test
+- missing token;
+- invalid token;
+- mapped active users;
+- unmapped identity;
+- email collision/no fallback;
+- inactive/suspended immutability.
 
-Close and recreate the Nest app **without destroying the disposable DB** between suspension and second access attempt.
+### Phase 11 - Implement Lifecycle HTTP Cases
 
-This is a key regression test for old auto-reactivation behavior.
+Use real admin status/role endpoints and real DTO validation.
 
-### Step 12 - Implement provider cleanup failure scenario
+Assert DB state and semantic audit rows.
 
-Configure mock session API to fail after local status update. Assert HTTP/local behavior according to AUTH-011 approved contract and reload DB.
+### Phase 12 - Implement Restart Persistence Case
 
-### Step 13 - Implement audit assertions
+Within one test:
 
-Query DB semantic audit rows. Assert actor/target/before/after/reason and no secret markers.
+1. suspend a user;
+2. verify denial;
+3. close app;
+4. recreate app using same DB container/database;
+5. retry user access;
+6. verify still suspended.
 
-### Step 14 - Implement zero-auth-write regression
+Do not call fixture reset between steps.
 
-Capture mapped user's role/status/clerkUserId/organization and relevant timestamps before repeated `/auth/me` or protected requests. Compare after.
+### Phase 13 - Implement Last-Admin HTTP Cases
 
-### Step 15 - Run dedicated file until stable
+Exercise every supported route capable of removing active-admin state:
 
-Use E2E Jest config/path filtering.
+- status endpoint;
+- role update;
+- delete/deactivate alias;
+- self-action if supported.
 
-### Step 16 - Run full backend validation
+### Phase 14 - Implement Provider Failure Case
+
+Configure Clerk session cleanup mock to fail after local suspension/deactivation.
+
+Assert approved HTTP contract plus final DB denial state.
+
+### Phase 15 - Implement Semantic Audit HTTP Actor Case
+
+Promote/suspend through HTTP and query DB audit event.
+
+Actor must equal the authenticated caller, not body input.
+
+### Phase 16 - Implement Auth Read-Only Snapshot Case
+
+Snapshot a mapped user's security fields.
+
+Call protected endpoint repeatedly.
+
+Reload and compare exact state.
+
+### Phase 17 - Add Concurrency Case If Supported
+
+If AUTH-009/016 claims concurrency-safe last-admin protection, execute concurrent HTTP/service mutations against the real disposable DB and assert final active-admin count >=1.
+
+If the implementation does not claim concurrency safety yet, record a blocking architect decision instead of writing a test that cannot pass reliably.
+
+### Phase 18 - Run Dedicated Spec Repeatedly
+
+Run the new file multiple times to detect order/flakiness issues.
+
+### Phase 19 - Run Full Validation
+
+At minimum:
 
 ```bash
 npm run typecheck:backend
@@ -246,431 +459,428 @@ npm run test:e2e -w ired-propertyos-backend
 npm run build:backend
 ```
 
+Use actual repository command names if changed.
+
+---
+
 ## Detailed E2E Test Catalog
 
 ### TEST-AUTH017-01: Protected route without token is denied
 
-**Purpose:** Prove real global guard protects the route.
+**Purpose:** Prove real global auth guard is active.
 
-**Level:** E2E.
+**Action:** call known protected route without auth header.
 
-**Setup:** Real app/test DB running.
+**Expected Result:** 401/approved rejection.
 
-**Action:** `GET /api/v1/auth/me` or another known protected route without Authorization header.
+**Required Assertions:** no user DB state change; provider verification not called if guard fails before it.
 
-**Expected Result:** 401/rejected according to final contract.
+### TEST-AUTH017-02: Malformed/non-Bearer header is denied
 
-**Required Assertions:** No user row changes; Clerk verify mock not called if missing-token branch fails earlier.
+**Purpose:** Protect bearer parsing through real HTTP headers.
 
-**Why This Test Exists:** Ensures test app has not accidentally disabled the real guard.
+**Expected Result:** rejection; no local mutation.
 
-**If This Test Fails:** Check global guard registration/app bootstrap before changing auth logic.
+### TEST-AUTH017-03: Invalid fake Clerk token is denied
 
-### TEST-AUTH017-02: Invalid fake Clerk token is denied
+**Purpose:** Verify external verifier wiring through real guard.
 
-**Purpose:** Prove real guard uses mocked external verifier and fails closed.
+**Setup:** `token-invalid` causes mocked `verifyToken` to throw.
 
-**Level:** E2E.
+**Expected Result:** rejection; user table unchanged.
 
-**Setup:** `token-invalid` makes mocked `verifyToken` throw.
+### TEST-AUTH017-04: Active mapped ADMIN reaches protected and ADMIN-only route
 
-**Action:** Protected request with token-invalid.
+**Purpose:** Prevent production admin lockout from hardening.
 
-**Expected Result:** Rejected.
+**Required Assertions:** role/status/mapping unchanged after request.
 
-**Required Assertions:** User table unchanged; no synthetic request user/provisioning.
+### TEST-AUTH017-05: Active mapped WORKER authenticates but is denied ADMIN-only route
 
-**Why This Test Exists:** Validates provider-verification integration through HTTP.
+**Purpose:** Prove authentication and role authorization remain separate.
 
-**If This Test Fails:** Check Jest module mock ordering and real guard use.
+**Expected Result:** `/auth/me`/normal protected route succeeds; ADMIN-only route denied.
 
-### TEST-AUTH017-03: Active mapped ADMIN/WORKER/RIDER can reach appropriate protected behavior
+**Required Assertions:** WORKER is not promoted.
 
-**Purpose:** Prove strict mapping works across roles in assembled app.
+### TEST-AUTH017-06: Active mapped RIDER follows stored role
 
-**Level:** E2E parameterized.
+**Purpose:** Cover less-common current role through real app.
 
-**Setup:** Seed mapped active users for each role.
-
-**Action:** Call `/auth/me` and, where useful, role-appropriate route.
-
-**Expected Result:** Authentication succeeds; role in response/context matches DB.
-
-**Required Assertions:** DB role/status/clerkUserId unchanged after requests.
-
-**Why This Test Exists:** Ensures hardening did not make login admin-specific or break less-common RIDER role.
-
-**If This Test Fails:** Inspect guard lookup vs downstream role guard separately.
-
-### TEST-AUTH017-04: Unmapped Clerk subject is denied with zero user creation
+### TEST-AUTH017-07: Unmapped Clerk subject is denied with zero user creation
 
 **Purpose:** Protect explicit provisioning boundary end to end.
 
-**Level:** E2E.
+**Setup:** no local row for `clerk_unmapped`; record user/admin counts.
 
-**Setup:** `token-unmapped` resolves to a `sub` with no local row. Record user count/admin count.
+**Expected Result:** reject.
 
-**Action:** Protected request.
+**Required Assertions:** counts unchanged; no new mapping/user/admin.
 
-**Expected Result:** Rejected.
+### TEST-AUTH017-08: Email coincidence cannot substitute for provider-ID mapping
 
-**Required Assertions:** User count/admin count unchanged; no row with `clerk_unmapped` appears.
+**Purpose:** Detect fallback outside the unit-tested guard.
 
-**Why This Test Exists:** Directly catches request-time auto-provisioning through real app wiring.
+**Setup:** local user with same fake email concept but null/different Clerk ID; token resolves to unmapped sub.
 
-**If This Test Fails:** Search auth path for create/upsert or test fixture accidentally pre-seeded mapping.
+**Expected Result:** reject; local row not linked/modified.
 
-### TEST-AUTH017-05: Email coincidence cannot substitute for Clerk-ID mapping
+### TEST-AUTH017-09: Inactive mapped user remains inactive after rejected request
 
-**Purpose:** Protect strict identity join at assembled level.
+**Purpose:** Catch mutation-before-error.
 
-**Level:** E2E.
+**Required Assertions:** role/status/clerkUserId/deactivatedAt unchanged after DB reload.
 
-**Setup:** Local fake user has same fake email conceptually associated with unmapped token but different/null `clerkUserId`.
+### TEST-AUTH017-10: Suspended mapped user remains suspended
 
-**Action:** Request using unmapped token.
+**Purpose:** Protect temporary lock end to end.
 
-**Expected Result:** Denied.
+**Expected Result:** reject; exact row unchanged.
 
-**Required Assertions:** Existing local row unchanged and not linked to token sub.
+### TEST-AUTH017-11: Repeated protected requests are auth-write-free
 
-**Why This Test Exists:** Prevents hidden email fallback in a helper/service outside unit-tested guard code.
+**Purpose:** Prove request-time auth is read-only in assembled app.
 
-**If This Test Fails:** Remove email-based join/repair outside explicit migration/provisioning.
+**Setup:** snapshot active user's role/status/clerkUserId/org/lifecycle fields.
 
-### TEST-AUTH017-06: Inactive mapped user remains inactive after request
+**Action:** issue repeated protected requests.
 
-**Purpose:** Protect removal of login-time auto-reactivation through real DB.
+**Expected Result:** all security fields identical afterward.
 
-**Level:** E2E.
+### TEST-AUTH017-12: Admin suspends worker and worker loses access immediately
 
-**Setup:** Seed inactive mapped user with known `deactivatedAt`.
+**Purpose:** Validate central lifecycle workflow.
 
-**Action:** Protected request with mapped token.
+**Action:** Admin A calls real status endpoint with valid reason, then Worker A calls protected route.
 
-**Expected Result:** Rejected.
+**Expected Result:** suspension succeeds; worker denied.
 
-**Required Assertions:** Reload row: status, role, clerkUserId, deactivatedAt unchanged.
+**Required Assertions:** DB suspended + timestamp; semantic audit exists; provider cleanup mock invoked after local success.
 
-**Why This Test Exists:** A rejection status alone would not catch mutation-before-failure.
+### TEST-AUTH017-13: Suspended state survives app restart
 
-**If This Test Fails:** Inspect request-time DB writes.
+**Purpose:** Permanently prevent old auto-reactivation/startup repair regression.
 
-### TEST-AUTH017-07: Suspended mapped user remains suspended
+**Action:** suspend -> close app -> recreate against same DB -> retry worker.
 
-**Purpose:** Same protection for temporary security lock.
+**Expected Result:** still denied; DB still suspended.
 
-**Level:** E2E.
+### TEST-AUTH017-14: Explicit reactivation restores access only after admin action
 
-**Setup:** Suspended mapped user.
+**Purpose:** Validate intended restoration path.
 
-**Action:** Protected request.
+**Action:** admin reactivates suspended worker, worker retries.
 
-**Expected Result:** Rejected; row unchanged.
+**Expected Result:** active, deactivatedAt=null, activation audit, subsequent auth succeeds.
 
-**Required Assertions:** No reactivation/metadata change.
+### TEST-AUTH017-15: Deactivation denies access and persists
 
-**Why This Test Exists:** Ensures status gate handles all non-active states.
+**Purpose:** Cover permanent non-active path separately from suspension.
 
-**If This Test Fails:** Restore `status === active` invariant.
+### TEST-AUTH017-16: Sole active admin cannot suspend themselves
 
-### TEST-AUTH017-08: Admin suspends worker through real API and access is immediately denied
+**Purpose:** Protect lockout boundary through controller/HTTP wiring.
 
-**Purpose:** Validate assembled lifecycle + auth + audit + session cleanup path.
+**Required Assertions:** HTTP rejects; DB unchanged; no success audit; no provider cleanup.
 
-**Level:** E2E.
+### TEST-AUTH017-17: Sole active admin cannot deactivate themselves
 
-**Setup:** Admin A active; Worker A active/mapped; provider session mock configured; valid reason if required.
+**Purpose:** Same for inactive transition.
 
-**Action:** Admin calls real status endpoint to suspend Worker A, then Worker A calls protected endpoint.
+### TEST-AUTH017-18: Sole active admin cannot demote themselves
 
-**Expected Result:** Admin request succeeds; worker request denied.
+**Purpose:** Protect role-based lockout path.
 
-**Required Assertions:** DB status suspended; deactivatedAt set; semantic audit exists; provider cleanup mock called for worker's `clerkUserId`.
+### TEST-AUTH017-19: Delete/deactivate route cannot bypass last-admin protection
 
-**Why This Test Exists:** This is the central user-facing hardening workflow.
+**Purpose:** Test alternate convenience endpoint.
 
-**If This Test Fails:** Determine which layer failed instead of weakening E2E expectations.
+### TEST-AUTH017-20: With two active admins, one can be safely removed
 
-### TEST-AUTH017-09: Suspended state survives backend restart
+**Purpose:** Ensure safety does not overblock operations.
 
-**Purpose:** Protect persistence and old auto-reactivation regression.
+**Required Assertions:** one active admin remains; target final state/audit correct.
 
-**Level:** E2E restart scenario.
+### TEST-AUTH017-21: Inactive/suspended second admin does not satisfy redundancy
 
-**Setup:** Suspend Worker A successfully.
+**Purpose:** Prove HTTP path uses active-admin semantics, not raw ADMIN count.
 
-**Action:** Close Nest app, recreate app against same test DB, retry Worker A protected request.
+### TEST-AUTH017-22: Required reason is enforced by real DTO/controller path
 
-**Expected Result:** Still denied.
+**Purpose:** Prove validation is wired, not only service-tested.
 
-**Required Assertions:** DB remains suspended; no startup/auth repair; role/deactivatedAt unchanged.
+**Cases:** suspend, deactivate, ADMIN grant/revoke as supported.
 
-**Why This Test Exists:** Demonstrates disabled state is durable across process lifecycle.
+**Expected Result:** missing/blank reason rejected before mutation.
 
-**If This Test Fails:** Search startup seed/hooks and auth reactivation logic.
+### TEST-AUTH017-23: Invalid status string rejected before service mutation
 
-### TEST-AUTH017-10: Explicit reactivation restores access only after admin action
+**Purpose:** Protect finite state machine at HTTP boundary.
 
-**Purpose:** Prove approved restoration path end to end.
+**Action:** send unsupported status.
 
-**Level:** E2E.
+**Expected Result:** validation error; DB/audit/provider untouched.
 
-**Setup:** Worker A suspended.
+### TEST-AUTH017-24: Sensitive role change creates semantic audit with authenticated actor
 
-**Action:** Admin A calls reactivation endpoint, then Worker A calls protected endpoint.
+**Purpose:** Prove `@CurrentUser`/request context wiring.
 
-**Expected Result:** Reactivation succeeds; worker subsequently authenticates.
+**Action:** Admin A promotes Worker A with reason.
 
-**Required Assertions:** DB active; deactivatedAt null; activation audit exists; no session revoke triggered by reactivation.
+**Required Assertions:** audit actor=A, target=Worker, old/new role, reason/request ID, no secrets.
 
-**Why This Test Exists:** Replaces hidden login recovery with intentional administration.
+### TEST-AUTH017-25: Client cannot spoof semantic-audit actor
 
-**If This Test Fails:** Fix lifecycle endpoint/service, not auth fallback.
+**Purpose:** Protect audit integrity at external boundary.
 
-### TEST-AUTH017-11: Sole active admin cannot deactivate/suspend/demote themselves
+**Action:** send malicious/extra actor field if possible.
 
-**Purpose:** Protect final-admin invariant at HTTP route level.
+**Expected Result:** unknown field rejected or ignored by contract; stored actor remains authenticated Admin A.
 
-**Level:** E2E parameterized.
+### TEST-AUTH017-26: Rejected last-admin action creates no success semantic event
 
-**Setup:** Admin A active; Admin B inactive/suspended so A is sole active admin.
+**Purpose:** Audit truthfulness through full HTTP stack.
 
-**Action:** As A, attempt deactivate, suspend, and supported demotion operations against A.
+### TEST-AUTH017-27: Profile-only update creates no role/status semantic event
 
-**Expected Result:** Each rejected.
+**Purpose:** Keep security audit high-signal end to end.
 
-**Required Assertions:** Reload A after each: still ADMIN/active; no success semantic audit/provider cleanup.
+### TEST-AUTH017-28: Audit persistence failure follows mandatory atomicity contract
 
-**Why This Test Exists:** Proves controllers/routes cannot bypass UsersService safety.
+**Purpose:** Verify real transaction behavior if failure can be safely induced in test seam.
 
-**If This Test Fails:** Identify bypassing endpoint or missing actor/target state handling.
+**Setup:** controlled test-only DB/audit failure technique without mocking service away.
 
-### TEST-AUTH017-12: With two active admins, one can be removed safely
+**Expected Result:** user security mutation does not commit.
 
-**Purpose:** Ensure operational usability.
+**If inducing failure would require unrealistic wiring, rely on AUTH-016 service test and document why rather than corrupting E2E design.**
 
-**Level:** E2E.
+### TEST-AUTH017-29: Clerk session cleanup failure never restores local access
 
-**Setup:** A and B active admins.
+**Purpose:** Highest-risk cross-system failure case.
 
-**Action:** A deactivates or demotes B with required reason.
+**Setup:** provider cleanup mock fails after local access removal.
 
-**Expected Result:** Success.
+**Action:** admin suspends/deactivates worker; worker retries access.
 
-**Required Assertions:** A remains active; B reflects requested final state; semantic audit correct.
+**Expected Result:** worker remains non-active and denied according to approved partial-success HTTP contract.
 
-**Why This Test Exists:** Safety control should block only last-admin boundary.
+### TEST-AUTH017-30: Partial session revoke still leaves local user denied
 
-**If This Test Fails:** Inspect count logic/fixture state.
+**Purpose:** Provider cleanup quality cannot affect authorization truth.
 
-### TEST-AUTH017-13: Clerk session cleanup failure never restores local access
+### TEST-AUTH017-31: Missing `clerkUserId` user can still be disabled locally without email fallback
 
-**Purpose:** Validate fail-closed external dependency behavior through HTTP.
+**Purpose:** Broken provider mapping must not block local access removal.
 
-**Level:** E2E.
+**Expected Result:** status/audit commit; cleanup skipped; no provider email lookup.
 
-**Setup:** Worker active; mock Clerk session listing/revoke to fail according to AUTH-011 scenario.
+### TEST-AUTH017-32: Repeated lifecycle request is idempotent according to final policy
 
-**Action:** Admin suspends/deactivates Worker; then Worker requests protected route.
+**Purpose:** Verify retries do not rewrite timestamps/create misleading duplicate state-change audits.
 
-**Expected Result:** Local operation reflects approved partial-cleanup contract; worker is denied afterward.
+### TEST-AUTH017-33: Auth logs through HTTP contain safe reason signals without fake sensitive markers
 
-**Required Assertions:** DB remains non-active; no rollback to active.
+**Purpose:** Add one assembled check for AUTH-014.
 
-**Why This Test Exists:** This is the highest-risk cross-system failure case.
+**Setup:** invalid/unmapped fake tokens/identities.
 
-**If This Test Fails:** Fix ordering/error contract, not by allowing access.
+**Expected Result:** safe logs; fake token/email/provider ID absent.
 
-### TEST-AUTH017-14: Security-sensitive role change creates semantic audit with real HTTP actor
+### TEST-AUTH017-34: Concurrent final-admin removal cannot leave zero active admins
 
-**Purpose:** Validate controller `@CurrentUser` -> service -> audit wiring.
+**Purpose:** Verify real DB transaction/isolation design.
 
-**Level:** E2E.
+**Setup:** two active admins; launch concurrent allowed-looking operations that each remove one.
 
-**Setup:** Admin A, Worker A, valid reason.
+**Expected Result:** at least one fails/retries; final DB active-admin count >=1.
 
-**Action:** Promote Worker A through real supported API.
+**Required Assertions:** no state where both committed non-active/non-admin.
 
-**Expected Result:** Role changes and semantic audit created.
+**STOP:** If final architecture has not solved this race, this test becomes a rollout blocker/architect decision rather than something to disable.
 
-**Required Assertions:** actorUserId=A; entityId=Worker A; previous/new roles; reason; no secret markers.
+### TEST-AUTH017-35: Test suite does not depend on execution order
 
-**Why This Test Exists:** Service unit tests cannot prove controller passes authenticated actor correctly.
+**Purpose:** Prevent false security confidence/flakiness.
 
-**If This Test Fails:** Check controller actor-context wiring and transaction/event creation.
+**Action:** run file repeatedly/randomized order if supported.
 
-### TEST-AUTH017-15: Client cannot spoof audit actor through HTTP body
+**Expected Result:** deterministic pass because fixtures reset each test.
 
-**Purpose:** Protect semantic audit integrity at external API boundary.
+---
 
-**Level:** E2E.
+## Manual Review of E2E Harness Before Trusting Results
 
-**Setup:** Admin A authenticated. Send an extra/malicious actor field if DTO validation path permits testing it.
+A reviewer must confirm:
 
-**Action:** Perform allowed sensitive action.
+- `AppModule` is real;
+- `JwtAuthGuard` is not overridden;
+- `UsersService` is not mocked;
+- Prisma points to disposable Postgres;
+- Clerk is the only mocked external security boundary;
+- validation pipe/global prefix/versioning match production behavior relevant to tests;
+- fixture reset does not invoke privileged seed/bootstrap behavior;
+- restart test truly reuses same DB state.
 
-**Expected Result:** Unknown field rejected by whitelist/forbid policy or ignored by DTO contract; semantic audit actor remains Admin A.
+A green suite with the wrong harness is worse than no suite because it creates false confidence.
 
-**Required Assertions:** Client-provided actor ID never becomes audit actor.
-
-**Why This Test Exists:** HTTP is where spoofing attempts originate.
-
-**If This Test Fails:** Remove actor authority from DTO and rely on authenticated context.
-
-### TEST-AUTH017-16: Missing required reason is rejected with zero security mutation
-
-**Purpose:** Validate DTO/controller/service reason policy together.
-
-**Level:** E2E.
-
-**Setup:** Sensitive action requiring reason.
-
-**Action:** Omit/blank reason.
-
-**Expected Result:** Validation/business rejection.
-
-**Required Assertions:** Target user unchanged; no success semantic audit; no provider cleanup.
-
-**Why This Test Exists:** Unit validation may pass while route DTO wiring forgets the field/rule.
-
-**If This Test Fails:** Fix validation/service ordering.
-
-### TEST-AUTH017-17: Repeated successful auth performs zero identity/privilege writes
-
-**Purpose:** Prove hardened request path is stable under normal traffic.
-
-**Level:** E2E.
-
-**Setup:** Active mapped Worker A; record role/status/clerkUserId/org/updatedAt where appropriate.
-
-**Action:** Call `/auth/me` or protected route multiple times.
-
-**Expected Result:** All requests succeed.
-
-**Required Assertions:** Security fields unchanged; no mapping/lifecycle drift. If `updatedAt` changes for unrelated reasons, investigate rather than relying solely on it.
-
-**Why This Test Exists:** Hidden synchronization often appears only on normal successful requests.
-
-**If This Test Fails:** Search auth path for request-time writes.
-
-### TEST-AUTH017-18: Auth/log response does not expose fake sensitive markers
-
-**Purpose:** Validate AUTH-014 through assembled app.
-
-**Level:** E2E/manual log capture if practical.
-
-**Setup:** Fake sensitive token/email/provider-ID marker; trigger invalid/missing mapping condition.
-
-**Action:** HTTP request.
-
-**Expected Result:** Client response generic; captured test logs contain no sensitive markers according to logging policy.
-
-**Required Assertions:** No raw token/provider error/PII in response.
-
-**Why This Test Exists:** Integration layers can reintroduce leakage outside unit-tested logger branch.
-
-**If This Test Fails:** Identify leaking layer and sanitize there.
-
-## Checkpoint
-
-- [ ] Real JwtAuthGuard is used.
-- [ ] Only external Clerk boundary is mocked.
-- [ ] Real controllers/services/Prisma test DB are used.
-- [ ] Tests are independent/order-safe.
-- [ ] Restart-persistence scenario passes.
-- [ ] Last-admin API behavior passes.
-- [ ] Audit/session-cleanup/reason behavior is exercised.
-- [ ] DB state is checked after rejection/failure, not only HTTP status.
+---
 
 ## Failure Diagnosis Guide
 
-### Every protected request returns 401
+### No-token protected request succeeds
 
-Check mock module initialization/`verifyToken` token mapping and whether app started in Clerk mode. Do not bypass guard.
+Stop. Your test app does not have real auth guards registered. Fix harness before any other test.
 
-### Clerk mock is not being used
+### Unmapped user is rejected but user count increases
 
-Jest import/hoisting order is wrong. Establish mock before importing/compiling AppModule or create an approved DI seam.
+Critical regression. Authentication is still provisioning/mutating before failure.
 
-### Tests hang during restart
+### Restart test passes only after fixture reseed
 
-Ensure app closes cleanly without tearing down Testcontainers DB, and no dangling worker/socket handles remain.
+Invalid test. Preserve the same DB across app recreation.
 
-### Test passes alone but fails full E2E suite
+### Last-admin unit tests pass but HTTP route succeeds
 
-Fixture/env/container state is leaking. Reset environment/database deterministically; do not depend on test order.
+A controller/alternate service path bypasses centralized invariant.
 
-### Status code is correct but DB state changed unexpectedly
+### Audit actor is null/wrong
 
-Treat as real security regression. Add state assertions and fix implementation.
+Controller is not passing authenticated context into service correctly.
 
-### Existing legacy E2E suite breaks in Clerk mode
+### Provider failure causes 500 but DB is safely non-active
 
-Keep environment isolation between files. One E2E suite should not leave `AUTH_PROVIDER=clerk` for another.
+Compare with AUTH-011 approved partial-success API contract. Fix response handling, but do not reactivate the user.
+
+### E2E requires real Clerk secret
+
+External mocking seam is wrong. Do not put real credentials in CI.
+
+### Concurrency test leaves zero admins intermittently
+
+Treat as real architecture defect. Do not mark test flaky/skip without resolving transaction strategy.
+
+---
+
+## Reviewer Walkthrough
+
+Reviewer should verify:
+
+1. harness authenticity;
+2. strict Clerk-ID mapping through real HTTP path;
+3. no email fallback;
+4. unmapped requests are write-free;
+5. non-active DB state is immutable through login;
+6. restart persistence works;
+7. every admin-removal route respects last-admin invariant;
+8. reason/DTO validation is real;
+9. semantic actor/target wiring is real;
+10. provider failure remains fail-closed locally;
+11. audit/log privacy assertions exist at assembled level;
+12. concurrency behavior matches production claim;
+13. repeated runs are deterministic.
+
+---
 
 ## PR Evidence Required
 
 Include:
 
-- E2E file path and test count;
-- statement that real PropertyOS guard/controller/service/Prisma are used;
-- exact Clerk boundary mocked;
-- fixture identity map (fake IDs only);
-- targeted new-suite result;
-- full existing E2E result;
-- unit/typecheck/lint/build results;
+- E2E architecture diagram/list of real vs mocked components;
+- test file path;
+- fixture identities/roles without real PII;
+- dedicated E2E command/result;
+- full E2E suite result;
+- unit/service suite result references;
+- typecheck/lint/build results;
 - restart-persistence result;
-- last-admin HTTP cases result;
+- last-admin route coverage result;
 - provider-failure result;
-- audit/reason/spoofing result;
-- statement that no live Clerk/production DB credentials are needed.
+- semantic audit actor result;
+- concurrency result or explicit rollout blocker;
+- confirmation no real Clerk/database credentials were used.
+
+---
 
 ## Acceptance Criteria
 
-- [ ] Dedicated auth-hardening E2E file exists.
-- [ ] No real Clerk/network secret required.
-- [ ] No production/shared developer DB required.
-- [ ] Detailed catalog above passes or equivalent coverage is documented.
-- [ ] Suite catches auto-provisioning/auto-reactivation/email fallback regressions.
-- [ ] Suite catches controller/service last-admin bypass.
-- [ ] Suite catches local-access rollback on provider failure.
-- [ ] Suite validates semantic audit actor/reason behavior.
-- [ ] Existing E2E suite still passes.
+- [ ] Real AppModule/global guards/controllers/services/Prisma are exercised.
+- [ ] Only external Clerk boundary is mocked.
+- [ ] Disposable PostgreSQL is used.
+- [ ] Strict provider-ID mapping is proven through HTTP.
+- [ ] Unmapped identity cannot create/link a user.
+- [ ] Inactive/suspended state cannot be repaired by request or restart.
+- [ ] Explicit reactivation is the only normal restoration path.
+- [ ] Last-admin rule covers all real routes.
+- [ ] Required reason/validation works through HTTP.
+- [ ] Semantic audit actor/target/before/after is correct.
+- [ ] Provider cleanup failure never restores local access.
+- [ ] Auth requests remain DB-write-free for user security state.
+- [ ] Concurrency guarantee is proven or blocks rollout.
+- [ ] Suite is isolated and deterministic.
+
+---
 
 ## Definition of Done
 
-- [ ] New E2E suite passes locally/CI-capable environment.
-- [ ] Existing E2E suite passes.
-- [ ] Unit tests pass.
-- [ ] Typecheck passes.
-- [ ] Lint passes.
-- [ ] Backend build passes.
-- [ ] Required PR evidence recorded.
-- [ ] Reviewer confirms real guard/security stack is not bypassed.
+- [ ] Dedicated E2E file implemented.
+- [ ] Dedicated file passes repeatedly.
+- [ ] Full E2E suite passes.
+- [ ] AUTH-015/016 suites pass.
+- [ ] Typecheck/lint/build pass.
+- [ ] No real external credentials required.
+- [ ] PR evidence complete.
+- [ ] Security/staff reviewer confirms harness is meaningful.
+- [ ] No unresolved P0/STOP item remains before AUTH-018.
+
+---
 
 ## Rollback
 
-Do not remove the E2E suite because it exposes a regression. Fix product behavior or update the suite only after an approved architecture change.
+This ticket adds tests. Do not remove them because hardened code fails.
+
+If an intentional architecture/API change invalidates an E2E expectation, update the documented architecture and dependent tickets first, then modify the test with explicit review.
+
+---
 
 ## Forbidden Shortcuts
 
 Do not:
 
-- override JwtAuthGuard with allow-all fake;
-- mock UsersService/controller logic under test;
-- call real Clerk in CI;
-- use production credentials/database;
-- rely on test order;
-- skip restart-persistence scenario;
-- assert only HTTP status without DB security state;
-- mark security scenarios `.skip` to get CI green.
+- override `JwtAuthGuard` with allow-all;
+- mock `UsersService`;
+- mock Prisma with in-memory objects for this E2E suite;
+- call real Clerk;
+- use production/shared DB;
+- reseed between suspension and restart assertion;
+- assert only HTTP status on state-sensitive cases;
+- skip concurrency failure as “flaky” if production claims safety;
+- use real personal identity data;
+- make tests order-dependent.
+
+---
 
 ## STOP - NEEDS ARCHITECT DECISION
 
-Stop if test environment cannot initialize Clerk-mode AppModule without substantial production-code changes. Propose the smallest DI seam for the **external** token/session provider boundary rather than bypassing PropertyOS guards.
+Stop if:
 
-Also stop if existing Testcontainers helper fundamentally cannot support multiple E2E files safely. Reconcile shared test infrastructure rather than pointing the suite to a persistent database.
+- Clerk cannot be mocked reliably without a small adapter abstraction;
+- final provider-cleanup API response contract is undefined;
+- last-admin transaction strategy does not survive real concurrency testing;
+- organization-scoped admin roles change the invariant;
+- app E2E bootstrap differs materially from production security wiring.
+
+AUTH-018 production rollout must not proceed while a P0 STOP item from this suite remains unresolved.
+
+---
+
+## Handoff To AUTH-018
+
+AUTH-018 may treat a green AUTH-017 as evidence that the assembled application satisfies the hardened contract in a production-like disposable environment.
+
+It does **not** replace production identity audit/admin verification/rollback preparation. Those remain operational gates.
+
+---
 
 ## Completion Record
 
@@ -679,8 +889,9 @@ Also stop if existing Testcontainers helper fundamentally cannot support multipl
 **PR:**  
 **Final Commit:**  
 **Completed Date:**  
-**New E2E Test Count:**  
-**New E2E Result:** Pass / Fail  
-**Existing E2E Result:** Pass / Fail  
+**Dedicated E2E Suite:** Pass / Fail  
+**Full E2E Suite:** Pass / Fail  
 **Restart Persistence:** Pass / Fail  
+**Concurrency Test:** Pass / Fail / Needs Decision  
+**Provider Failure Test:** Pass / Fail  
 **Notes:**
