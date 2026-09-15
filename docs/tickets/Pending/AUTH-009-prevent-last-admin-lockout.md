@@ -14,13 +14,27 @@ Prevent normal user-management operations from leaving PropertyOS with zero acti
 
 After this ticket, the backend must reject any operation that would demote, suspend, or deactivate the final active `ADMIN`.
 
-## Why This Exists
+## Junior Engineer Orientation
 
-Removing automatic master-admin recovery is correct, but it also means the application must protect itself from accidental administrative lockout.
+Removing the magical master-admin recovery path is correct, but it creates a new operational responsibility: the normal application must not let an administrator accidentally remove the final administrator.
+
+Think of the invariant as a database safety rule:
+
+```text
+After any ordinary user-management operation,
+there must still be >= 1 user where:
+role = ADMIN AND status = active
+```
+
+This rule belongs in backend service/domain logic. A disabled frontend button is not enough because an API caller, old frontend build, script, or future endpoint could still call the backend directly.
+
+You are not creating a new admin automatically. If the operation would remove the last active admin, the correct behavior is to **reject the operation**.
+
+## Why This Exists
 
 The current `UsersService.updateStatus()` and `UsersService.update()` can change administrator status/role. The `DELETE /users/:id` controller route also maps to setting the target user inactive.
 
-The invariant must be enforced in backend business logic, not only in the UI.
+Once AUTH-003 removes automatic admin reactivation, an accidental final-admin status/role change could lock everyone out of administration.
 
 ## Security Invariant
 
@@ -30,13 +44,32 @@ At the end of every ordinary user-administration transaction:
 count(users where role = ADMIN and status = active) >= 1
 ```
 
-This ticket applies to normal application operations. It does not define emergency production recovery.
+This applies to ordinary product operations. It does not define emergency production recovery.
+
+### What counts as removing an active admin?
+
+A target currently contributes to the count only when:
+
+```text
+current.role = ADMIN
+AND
+current.status = active
+```
+
+A requested change removes that contribution if resulting state is anything other than active ADMIN, for example:
+
+- ADMIN -> WORKER;
+- ADMIN -> RIDER;
+- active -> inactive;
+- active -> suspended;
+- combined update that changes both fields;
+- delete/deactivate route that ultimately sets inactive.
 
 ## Expected Files To Modify
 
 - `Backend/src/modules/users/users.service.ts`
 - `Backend/src/modules/users/users.controller.ts` only if actor/self information is required by implementation
-- `Backend/src/modules/users/dto/users.schema.ts` only if response/error contracts need a documented field
+- `Backend/src/modules/users/dto/users.schema.ts` only if error/API contract changes require it
 - user service tests
 
 No Prisma schema migration should be necessary.
@@ -48,12 +81,11 @@ No Prisma schema migration should be necessary.
 3. `Backend/src/modules/users/dto/users.schema.ts`
 4. Prisma `UserRole` and `UserStatus` enums
 5. `Backend/src/shared/guards/roles.guard.ts`
+6. `docs/tickets/TICKET_DETAIL_STANDARD.md`
 
-Understand all routes that can change a user's `role` or `status`.
+Before editing, list **every production path** that can change `User.role` or `User.status`.
 
-## Target Behavior
-
-Examples:
+## Target Behavior Examples
 
 ```text
 1 active ADMIN exists
@@ -80,6 +112,14 @@ Examples:
  -> 1 active ADMIN remains
 ```
 
+```text
+1 active ADMIN + 1 inactive ADMIN
+ -> deactivate/demote active ADMIN
+ -> reject
+```
+
+The inactive admin does not count as an available administrator.
+
 ## Architecture Contract
 
 The invariant belongs in the service/domain layer so every controller/API path gets the same protection.
@@ -88,60 +128,59 @@ Do not rely on:
 
 - frontend button disabling;
 - controller-only checks;
-- a count performed minutes earlier;
-- client-provided role counts.
+- a count performed long before mutation;
+- client-provided role counts;
+- auto-promoting another worker;
+- login-time recovery.
 
-The check and mutation must be protected from obvious race conditions.
+The check and mutation must be protected from obvious race conditions as far as practical with the current Prisma/PostgreSQL architecture.
 
 ## Step-by-Step Implementation
 
 ### Step 1 - Inventory every privilege-removal path
 
-Search `Backend/src/modules/users/` for:
+Search `Backend/src/modules/users/` and repository-wide for:
 
-- `role` updates;
-- `status` updates;
+- role updates;
+- status updates;
 - `updateStatus`;
 - `update(`;
-- `deactivate`;
-- delete routes.
+- deactivate/delete routes;
+- any direct `prisma.user.update` outside `UsersService` that can change role/status.
 
 Create a short list in the PR description.
 
-### Step 2 - Define when a change can reduce active-admin count
+**Why:** The invariant is useless if one endpoint bypasses it.
 
-A target user currently contributes to the active-admin count only when:
+### Step 2 - Model current and resulting authorization state
+
+For a partial update, calculate:
 
 ```text
-role === ADMIN && status === active
+resultingRole = data.role ?? current.role
+resultingStatus = data.status ?? current.status
 ```
 
-A requested update is dangerous when that true condition becomes false.
+Then compare:
 
-Examples:
+```text
+currentIsActiveAdmin
+resultingIsActiveAdmin
+```
 
-- role ADMIN -> WORKER/RIDER;
-- status active -> inactive;
-- status active -> suspended;
-- combined role/status update causing the same result.
-
-A name/mobile/email change is not dangerous.
+A last-admin check is required only when current is active admin and resulting is not.
 
 ### Step 3 - Centralize the invariant check
 
-Inside `UsersService`, add a private/helper method with a clear purpose, for example conceptually:
+Inside `UsersService`, add/reuse one helper with a clear purpose, conceptually:
 
 `assertCanRemoveActiveAdmin(targetUser, requestedChanges)`
 
-Exact name may follow repository conventions.
-
-The helper should return immediately if the target is not an active admin or the requested change does not remove active-admin status.
+Do not duplicate slightly different last-admin logic in `update()`, `updateStatus()`, and controller routes.
 
 ### Step 4 - Count other active administrators
 
-When the operation would remove an active admin, count **other** active admins.
-
-Use a query equivalent to:
+When the operation would remove an active admin, count **other** active admins:
 
 ```text
 role = ADMIN
@@ -149,64 +188,68 @@ status = active
 id != targetUser.id
 ```
 
-If count is zero, reject.
-
-Use a stable backend error message/code such as `CANNOT_REMOVE_LAST_ACTIVE_ADMIN` if the project's error framework supports codes.
+If count is zero, reject using a stable backend error/message such as `CANNOT_REMOVE_LAST_ACTIVE_ADMIN` if the project has/introduces error codes.
 
 ### Step 5 - Protect `updateStatus()`
 
 Before changing status:
 
-1. load target user;
-2. if active ADMIN and new status is not active, run last-admin check;
-3. if no other active admin, reject;
-4. otherwise update normally.
+1. load target;
+2. determine whether it is currently active ADMIN;
+3. if target status is non-active, run invariant;
+4. reject if no other active admin;
+5. otherwise update normally.
 
 ### Step 6 - Protect generic `update()`
 
-Because `update()` accepts both role and status, compute the **resulting** role/status after applying the requested partial update.
+Because `update()` accepts role and status, compute resulting state from both current + requested values.
 
 Do not check only `data.role` or only `data.status`.
 
-Example:
+### Step 7 - Protect DELETE/deactivate path through the same service rule
 
-```text
-current role=ADMIN, status=active
-data={ fullName: ... }
-result remains active ADMIN -> safe
-```
+The controller's delete/deactivate route should continue to call protected service logic.
 
-```text
-current role=ADMIN, status=active
-data={ role: WORKER }
-result not active ADMIN -> check required
-```
+Do not add an independent controller count check and assume that is enough.
 
-### Step 7 - Protect DELETE/deactivate path indirectly through service
+### Step 8 - Decide self-deactivation behavior through the same invariant
 
-The controller's delete/deactivate route should continue to call the protected service method.
+An admin may target their own account if current API permits it.
 
-Do not duplicate the invariant in the controller.
+Rule for this ticket:
 
-### Step 8 - Consider transaction/race safety
+- if another active admin exists, self-deactivation may follow normal lifecycle behavior;
+- if this user is the last active admin, reject.
 
-Two admins could theoretically deactivate each other concurrently.
+Do not special-case self actions to bypass the invariant.
 
-Use the simplest repository-compatible strategy that makes the count-and-update atomic enough for this system, preferably a Prisma transaction with appropriate checks.
+### Step 9 - Consider transaction/race safety
 
-If the current database/isolation setup cannot guarantee the invariant under concurrent writes without a more advanced mechanism, document the residual risk and escalate rather than pretending it is impossible.
+Two active admins could issue concurrent operations that each see the other as active and both become non-active.
 
-### Step 9 - Do not auto-create a replacement admin
+Use the simplest repository-compatible transactional strategy. At minimum, group the relevant read/check/update in a Prisma transaction and document the isolation assumptions.
 
-If the final-admin operation is rejected, return an error. Do not automatically promote another worker.
+If true serializable protection is needed but current transaction API/isolation is not clear, stop for architect review. Do not claim a race is solved merely because `$transaction` exists.
 
-### Step 10 - Add tests
+### Step 10 - Never auto-create/promote replacement admin
 
-Use service-level tests with mocked or test Prisma behavior.
+If last-admin removal is rejected, return an error.
 
-Cover all cases below.
+Do not:
 
-### Step 11 - Run validation
+- promote oldest worker;
+- reactivate an inactive admin;
+- invoke bootstrap automatically.
+
+### Step 11 - Add service tests
+
+Test current/resulting state combinations and negative update assertions.
+
+### Step 12 - Add API/E2E coverage later through AUTH-017
+
+Service tests prove the invariant implementation; E2E proves every route reaches it.
+
+### Step 13 - Validate
 
 ```bash
 npm run typecheck:backend
@@ -214,81 +257,299 @@ npm run lint:backend
 npm run test:backend
 ```
 
-## Tests Required
+## Detailed Test Specification
 
-### Test 1 - only active admin cannot be deactivated
+### TEST-AUTH009-01: Only active admin cannot be deactivated
 
-Expected: rejection; DB update not executed.
+**Purpose:** Protect the core lockout invariant.
 
-### Test 2 - only active admin cannot be suspended
+**Level:** Service unit/integration.
 
-Expected: rejection.
+**Setup:** Target Admin A is `ADMIN/active`. Count query for other active admins returns 0.
 
-### Test 3 - only active admin cannot be demoted to WORKER
+**Action:** Request status `inactive` through protected service method.
 
-Expected: rejection.
+**Expected Result:** Operation rejected.
 
-### Test 4 - only active admin cannot be demoted to RIDER
+**Required Assertions:**
 
-Expected: rejection.
+- `user.update` for deactivation not called;
+- Admin A remains active;
+- no Clerk session revocation should occur in AUTH-011 path because status change never committed;
+- no success audit event created.
 
-### Test 5 - non-security profile update on only admin
+**Why This Test Exists:** This is the most direct accidental-lockout scenario.
 
-Expected: allowed.
+**If This Test Fails:** Verify count query excludes target and filters both role and active status before update.
 
-### Test 6 - two active admins, deactivate one
+### TEST-AUTH009-02: Only active admin cannot be suspended
 
-Expected: allowed; one active admin remains.
+**Purpose:** Suspension removes administrative access just like deactivation.
 
-### Test 7 - active admin plus inactive admin
+**Level:** Service.
 
-Deactivating active admin should still be rejected because the other admin is not active.
+**Setup:** Same as Test 01.
 
-### Test 8 - active admin plus suspended admin
+**Action:** Target `suspended`.
 
-Same: reject.
+**Expected Result:** Rejected; no status mutation.
 
-### Test 9 - worker status changes
+**Required Assertions:** Admin remains `active`.
 
-Normal worker activation/deactivation behavior remains unchanged.
+**Why This Test Exists:** A rule checking only `inactive` would leave a simple bypass.
 
-### Test 10 - combined role/status update
+**If This Test Fails:** Treat every resulting non-active state consistently.
 
-Ensure resulting-state logic works.
+### TEST-AUTH009-03: Only active admin cannot be demoted to WORKER
+
+**Purpose:** Protect role-based removal from bypassing status protection.
+
+**Level:** Service.
+
+**Setup:** Last active ADMIN.
+
+**Action:** Generic update with `role=WORKER`.
+
+**Expected Result:** Rejected.
+
+**Required Assertions:** Role remains ADMIN; status remains active; no update.
+
+**Why This Test Exists:** The invariant is about resulting active-admin state, not only status field.
+
+**If This Test Fails:** Ensure generic `update()` participates in the same helper.
+
+### TEST-AUTH009-04: Only active admin cannot be demoted to RIDER
+
+**Purpose:** Cover every current non-admin role.
+
+**Level:** Service.
+
+**Setup/Action:** Same as above with `RIDER`.
+
+**Expected Result:** Rejected.
+
+**Required Assertions:** No update.
+
+**Why This Test Exists:** Hardcoded WORKER-only checks can miss RIDER.
+
+**If This Test Fails:** Compare resulting role generically against ADMIN.
+
+### TEST-AUTH009-05: Profile-only update on last admin is allowed
+
+**Purpose:** Avoid overblocking safe updates.
+
+**Level:** Service.
+
+**Setup:** Last active admin.
+
+**Action:** Change only `fullName` or `mobileNumber`.
+
+**Expected Result:** Allowed.
+
+**Required Assertions:** Role/status unchanged; helper does not reject merely because target is last admin.
+
+**Why This Test Exists:** The rule applies only when the operation removes active-admin status.
+
+**If This Test Fails:** Your helper is checking target identity without computing resulting state.
+
+### TEST-AUTH009-06: Two active admins allow one to be deactivated
+
+**Purpose:** Ensure legitimate admin lifecycle remains possible.
+
+**Level:** Service/integration.
+
+**Setup:** Admin A and Admin B both active. Target B; count of other active admins = 1.
+
+**Action:** Deactivate B.
+
+**Expected Result:** Allowed; A remains active.
+
+**Required Assertions:** Exactly one active admin remains after operation.
+
+**Why This Test Exists:** Safety controls should not make admin accounts impossible to manage.
+
+**If This Test Fails:** Verify count query and condition only reject when zero *other* active admins exist.
+
+### TEST-AUTH009-07: Inactive/suspended admins do not satisfy redundancy requirement
+
+**Purpose:** Prevent counting unusable admins.
+
+**Level:** Service.
+
+**Setup:** Admin A active; Admin B inactive or suspended.
+
+**Action:** Try to remove active-admin state from A.
+
+**Expected Result:** Rejected.
+
+**Required Assertions:** Count query requires `status=active`.
+
+**Why This Test Exists:** Counting all ADMIN rows would create a false sense of recoverability.
+
+**If This Test Fails:** Tighten count filter.
+
+### TEST-AUTH009-08: Worker/Rider status changes are not blocked by admin invariant
+
+**Purpose:** Prevent collateral damage to normal user lifecycle.
+
+**Level:** Service.
+
+**Setup:** Active worker/rider; one active admin exists separately.
+
+**Action:** Suspend/deactivate worker/rider.
+
+**Expected Result:** Allowed according to normal lifecycle rules.
+
+**Required Assertions:** Last-admin helper returns early for non-admin target.
+
+**Why This Test Exists:** A broad "must always count admin first" implementation may unnecessarily complicate/deny all status changes.
+
+**If This Test Fails:** Limit invariant to operations that actually reduce active-admin count.
+
+### TEST-AUTH009-09: Combined role/status update uses resulting state
+
+**Purpose:** Catch partial-update logic bugs.
+
+**Level:** Service.
+
+**Setup:** Last active ADMIN.
+
+**Action:** Send update containing multiple fields, e.g. `role=WORKER`, `status=inactive`, plus profile fields.
+
+**Expected Result:** Rejected before mutation.
+
+**Required Assertions:** None of the requested fields are partially written.
+
+**Why This Test Exists:** Checking only one field or mutating in stages can bypass/partially apply security rules.
+
+**If This Test Fails:** Compute resulting state before any update and write atomically.
+
+### TEST-AUTH009-10: DELETE/deactivate endpoint reaches same protection
+
+**Purpose:** Ensure alternate API route cannot bypass service invariant.
+
+**Level:** Controller/E2E or service-call verification.
+
+**Setup:** Last active admin.
+
+**Action:** Invoke route that maps `DELETE /users/:id` to inactive.
+
+**Expected Result:** Rejected; admin remains active.
+
+**Required Assertions:** Controller delegates to protected service path; no separate direct Prisma write.
+
+**Why This Test Exists:** Security rules often get bypassed through convenience endpoints.
+
+**If This Test Fails:** Route is not using centralized lifecycle logic.
+
+### TEST-AUTH009-11: Self-deactivation follows the same rule
+
+**Purpose:** Protect against an admin locking themselves out when they are the last active admin.
+
+**Level:** Service/E2E.
+
+**Setup:** Actor and target are Admin A; no other active admin.
+
+**Action:** Deactivate self.
+
+**Expected Result:** Rejected.
+
+**Required Assertions:** State unchanged.
+
+**Why This Test Exists:** Self-actions are still ordinary user-management operations with the same system invariant.
+
+**If This Test Fails:** Remove self-specific bypass.
+
+### TEST-AUTH009-12: Concurrent last-admin removal risk is tested/documented
+
+**Purpose:** Verify race handling matches implementation's transaction guarantees.
+
+**Level:** Integration/concurrency test if practical; otherwise explicit documented review with a focused transaction test.
+
+**Setup:** Two active admins and concurrent operations attempting to remove each other's active-admin state.
+
+**Action:** Execute operations concurrently against disposable DB using the chosen transaction/isolation strategy.
+
+**Expected Result:** At least one operation must fail or final state must still have one active admin according to approved concurrency design.
+
+**Required Assertions:** Final DB count of active admins >= 1.
+
+**Why This Test Exists:** Two individually correct count-then-update calls can race.
+
+**If This Test Fails:** Do not ignore it. Review transaction isolation/locking/serializable strategy with architect.
 
 ## Manual Verification
 
 Use a disposable/local DB:
 
 1. create Admin A active;
-2. verify Admin A is the only active admin;
+2. verify A is the only active admin;
 3. try deactivate A -> rejected;
 4. try suspend A -> rejected;
-5. try demote A -> rejected;
-6. create Admin B active;
-7. deactivate B -> allowed;
-8. verify A remains active;
-9. reactivate B through the explicit workflow;
-10. demote B -> allowed;
-11. verify A remains active.
+5. try demote A to WORKER/RIDER -> rejected;
+6. update A's name -> allowed;
+7. create Admin B active;
+8. deactivate B -> allowed;
+9. verify A remains active;
+10. reactivate B through explicit workflow;
+11. demote B -> allowed;
+12. verify A remains active;
+13. exercise DELETE/deactivate path for last-admin case;
+14. if practical, run the concurrency scenario.
+
+## Failure Diagnosis Guide
+
+### Last admin can still be removed through one endpoint
+
+Your rule is not centralized. Inventory all role/status mutation paths again and route them through the same service invariant.
+
+### Two admins exist but removal is incorrectly rejected
+
+Check whether query excludes target user. Counting the target as the "other" admin is wrong.
+
+### Inactive admin is being counted
+
+Ensure count filters `status=active`.
+
+### Profile edit is rejected
+
+Compute resulting role/status before invoking the safety check. Do not block safe profile changes.
+
+### Concurrency test leaves zero admins
+
+Simple read-then-update transaction is insufficient under current isolation. Escalate and implement an appropriate atomic/locking/serializable strategy.
+
+## PR Evidence Required
+
+Include:
+
+- inventory of all role/status mutation paths;
+- central helper/service design;
+- exact active-admin count query semantics;
+- test results for last-admin status changes, role changes, DELETE path, safe profile update, two-admin cases, and concurrency reasoning;
+- manual test results;
+- documented transaction/isolation approach and residual risk if any.
 
 ## Acceptance Criteria
 
 - [ ] Backend prevents zero active admins.
 - [ ] Protection covers status and role changes.
-- [ ] Protection covers the delete/deactivate API path.
-- [ ] Frontend cannot bypass the invariant by calling another endpoint.
+- [ ] Protection covers delete/deactivate API path.
+- [ ] Protection applies to self-deactivation.
+- [ ] Inactive/suspended admins do not count as active redundancy.
+- [ ] Frontend/API alternatives cannot bypass the invariant.
 - [ ] Non-admin user lifecycle behavior remains unaffected.
-- [ ] Tests cover one-admin and two-admin scenarios.
+- [ ] Concurrency behavior is tested or explicitly architect-reviewed.
 
 ## Definition of Done
 
-- [ ] Service invariant implemented.
-- [ ] Relevant tests pass.
+- [ ] Service invariant implemented once and reused.
+- [ ] Detailed tests pass.
 - [ ] Typecheck passes.
 - [ ] Lint passes.
 - [ ] Manual verification passes.
-- [ ] Reviewer checks concurrency reasoning.
+- [ ] Required PR evidence recorded.
+- [ ] Reviewer checks resulting-state and concurrency reasoning.
 - [ ] Error behavior is documented.
 
 ## Rollback
@@ -305,11 +566,15 @@ Do not:
 - auto-promote a worker;
 - reactivate an inactive admin automatically;
 - allow bypass via `DELETE`;
-- catch the invariant error and continue with update.
+- catch the invariant error and continue with update;
+- ignore a demonstrated concurrency race;
+- add a hidden force parameter without security review.
 
 ## STOP - NEEDS ARCHITECT DECISION
 
-Stop if the product introduces organization-scoped administrators and the invariant needs to be "one active admin per organization" rather than one globally. The current role model is coarse; changing the boundary requires an explicit tenant/role architecture decision.
+Stop if the product introduces organization-scoped administrators and the invariant needs to be "one active admin per organization" rather than one globally.
+
+Also stop if the current database transaction/isolation approach cannot reliably protect against concurrent final-admin removal. Do not claim race safety without evidence.
 
 ## Completion Record
 
@@ -318,4 +583,6 @@ Stop if the product introduces organization-scoped administrators and the invari
 **PR:**  
 **Final Commit:**  
 **Completed Date:**  
+**Mutation Paths Reviewed:**  
+**Concurrency Test/Review:**  
 **Notes:**
