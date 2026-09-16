@@ -1,0 +1,2673 @@
+{
+  "sourceRevision": "06ce222654fbaed7bfda33802a89c305574f0e95",
+  "ticketCount": 126,
+  "tickets": [
+    {
+      "id": "DEC-001",
+      "title": "Approve the first pilot and measurement baseline",
+      "path": "Pending/DEC-001-approve-the-first-pilot-and-measurement-baseline.md",
+      "status": "Pending",
+      "type": "Decision",
+      "priority": "P1",
+      "sources": ["P01", "P30"],
+      "dependsOn": [],
+      "files": [
+        "docs/MARKET_AI_ASSESSMENT.md",
+        "Backend/src/modules/clients/dto/clients.schema.ts",
+        "Backend/src/modules/buildings/buildings.service.ts",
+        "docs/new-features/decisions/pilot-scope.md"
+      ],
+      "evidenceFiles": [
+        "docs/MARKET_AI_ASSESSMENT.md",
+        "Backend/src/modules/clients/dto/clients.schema.ts",
+        "Backend/src/modules/buildings/buildings.service.ts"
+      ]
+    },
+    {
+      "id": "DEC-002",
+      "title": "Ratify tenant ownership and administrator boundaries",
+      "path": "Pending/DEC-002-ratify-tenant-ownership-and-administrator-boundaries.md",
+      "status": "Pending",
+      "type": "Decision",
+      "priority": "P0",
+      "sources": ["D01", "P23", "P22"],
+      "dependsOn": [],
+      "files": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/shared/guards/org.guard.ts",
+        "Backend/src/shared/guards/jwt-auth.guard.ts",
+        "docs/tickets/README.md",
+        "docs/new-features/decisions/tenant-ownership.md"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/shared/guards/org.guard.ts",
+        "Backend/src/shared/guards/jwt-auth.guard.ts",
+        "docs/tickets/README.md"
+      ]
+    },
+    {
+      "id": "DEC-003",
+      "title": "Select AI providers budgets and processing regions",
+      "path": "Pending/DEC-003-select-ai-providers-budgets-and-processing-regions.md",
+      "status": "Pending",
+      "type": "Decision",
+      "priority": "P1",
+      "sources": ["A01", "A04", "A05", "A11"],
+      "dependsOn": [],
+      "files": [
+        "Backend/package.json",
+        "Backend/src/config/configuration.ts",
+        "render.yaml",
+        "docs/MARKET_AI_ASSESSMENT.md",
+        "docs/new-features/decisions/ai-provider-budget.md"
+      ],
+      "evidenceFiles": [
+        "Backend/package.json",
+        "Backend/src/config/configuration.ts",
+        "render.yaml",
+        "docs/MARKET_AI_ASSESSMENT.md"
+      ]
+    },
+    {
+      "id": "DEC-004",
+      "title": "Approve legacy money conversion and rounding",
+      "path": "Pending/DEC-004-approve-legacy-money-conversion-and-rounding.md",
+      "status": "Pending",
+      "type": "Decision",
+      "priority": "P1",
+      "sources": ["D12", "P05", "P21"],
+      "dependsOn": [],
+      "files": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/modules/deals/dto/deals.schema.ts",
+        "Backend/src/modules/units/dto/units.schema.ts",
+        "docs/new-features/decisions/money-migration.md"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/modules/deals/dto/deals.schema.ts",
+        "Backend/src/modules/units/dto/units.schema.ts"
+      ]
+    },
+    {
+      "id": "DEC-005",
+      "title": "Approve sharing retention and customer data use",
+      "path": "Pending/DEC-005-approve-sharing-retention-and-customer-data-use.md",
+      "status": "Pending",
+      "type": "Decision",
+      "priority": "P1",
+      "sources": ["P06", "P25", "P27", "A14"],
+      "dependsOn": ["DEC-002"],
+      "files": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/modules/media/media.service.ts",
+        "Backend/src/modules/proposals/constants/proposal-export-fields.ts",
+        "docs/new-features/decisions/data-disclosure-retention.md"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/modules/media/media.service.ts",
+        "Backend/src/modules/proposals/constants/proposal-export-fields.ts"
+      ]
+    },
+    {
+      "id": "SEARCH-001",
+      "title": "Preserve geography while applying text search",
+      "path": "Pending/SEARCH-001-preserve-geography-while-applying-text-search.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P0",
+      "sources": ["D02"],
+      "dependsOn": [],
+      "files": [
+        "Backend/src/modules/search/search.service.ts",
+        "Backend/src/shared/utils/geography-filter.ts",
+        "Backend/src/modules/search/__tests__/search.service.spec.ts",
+        "Backend/test/search-access.e2e-spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/src/modules/search/search.service.ts",
+        "Backend/src/shared/utils/geography-filter.ts",
+        "Backend/src/modules/search/__tests__/search.service.spec.ts"
+      ]
+    },
+    {
+      "id": "SEARCH-002",
+      "title": "Merge rent and area bounds without dropping filters",
+      "path": "Pending/SEARCH-002-merge-rent-and-area-bounds-without-dropping-filters.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["D06"],
+      "dependsOn": ["SEARCH-001"],
+      "files": [
+        "Backend/src/modules/search/search.service.ts",
+        "Backend/src/modules/search/dto/search.schema.ts",
+        "Backend/src/modules/search/__tests__/search.service.spec.ts",
+        "Backend/test/search-ranges.e2e-spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/src/modules/search/search.service.ts",
+        "Backend/src/modules/search/dto/search.schema.ts",
+        "Backend/src/modules/search/__tests__/search.service.spec.ts"
+      ]
+    },
+    {
+      "id": "TEN-001",
+      "title": "Create an explicit server derived access context",
+      "path": "Pending/TEN-001-create-an-explicit-server-derived-access-context.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P0",
+      "sources": ["D01"],
+      "dependsOn": ["DEC-002", "AUTH-006"],
+      "files": [
+        "Backend/src/shared/guards/org.guard.ts",
+        "Backend/src/shared/services/access-policy.service.ts",
+        "Backend/src/shared/decorators/access-context.decorator.ts",
+        "Backend/src/shared/shared.module.ts",
+        "Backend/src/shared/services/access-policy.service.spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/src/shared/guards/org.guard.ts",
+        "Backend/src/shared/shared.module.ts"
+      ]
+    },
+    {
+      "id": "TEN-002",
+      "title": "Audit and backfill organization ownership safely",
+      "path": "Pending/TEN-002-audit-and-backfill-organization-ownership-safely.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P0",
+      "sources": ["D01"],
+      "dependsOn": ["DEC-002"],
+      "files": [
+        "Backend/prisma/schema.prisma",
+        "Backend/scripts/audit-organization-ownership.ts",
+        "Backend/scripts/backfill-organization-ownership.ts",
+        "Backend/scripts/__tests__/organization-ownership.spec.ts"
+      ],
+      "evidenceFiles": ["Backend/prisma/schema.prisma"]
+    },
+    {
+      "id": "TEN-003",
+      "title": "Enforce tenant access throughout clients",
+      "path": "Pending/TEN-003-enforce-tenant-access-throughout-clients.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P0",
+      "sources": ["D01"],
+      "dependsOn": ["TEN-001", "TEN-002"],
+      "files": [
+        "Backend/src/modules/clients/clients.controller.ts",
+        "Backend/src/modules/clients/clients.service.ts",
+        "Backend/src/modules/clients/__tests__/clients.service.spec.ts",
+        "Backend/test/clients-tenant.e2e-spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/src/modules/clients/clients.controller.ts",
+        "Backend/src/modules/clients/clients.service.ts",
+        "Backend/src/modules/clients/__tests__/clients.service.spec.ts"
+      ]
+    },
+    {
+      "id": "TEN-004",
+      "title": "Enforce tenant access throughout buildings",
+      "path": "Pending/TEN-004-enforce-tenant-access-throughout-buildings.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P0",
+      "sources": ["D01"],
+      "dependsOn": ["TEN-001", "TEN-002"],
+      "files": [
+        "Backend/src/modules/buildings/buildings.controller.ts",
+        "Backend/src/modules/buildings/buildings.service.ts",
+        "Backend/src/modules/buildings/__tests__/buildings.service.spec.ts",
+        "Backend/test/buildings-tenant.e2e-spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/src/modules/buildings/buildings.controller.ts",
+        "Backend/src/modules/buildings/buildings.service.ts",
+        "Backend/src/modules/buildings/__tests__/buildings.service.spec.ts"
+      ]
+    },
+    {
+      "id": "TEN-005",
+      "title": "Enforce tenant access throughout units",
+      "path": "Pending/TEN-005-enforce-tenant-access-throughout-units.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P0",
+      "sources": ["D01"],
+      "dependsOn": ["TEN-001", "TEN-002"],
+      "files": [
+        "Backend/src/modules/units/units.controller.ts",
+        "Backend/src/modules/units/units.service.ts",
+        "Backend/src/modules/units/__tests__/units.service.spec.ts",
+        "Backend/test/units-tenant.e2e-spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/src/modules/units/units.controller.ts",
+        "Backend/src/modules/units/units.service.ts",
+        "Backend/src/modules/units/__tests__/units.service.spec.ts"
+      ]
+    },
+    {
+      "id": "TEN-009",
+      "title": "Enforce tenant access throughout floors",
+      "path": "Pending/TEN-009-enforce-tenant-access-throughout-floors.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P0",
+      "sources": ["D01"],
+      "dependsOn": ["TEN-001", "TEN-002"],
+      "files": [
+        "Backend/src/modules/floors/floors.controller.ts",
+        "Backend/src/modules/floors/floors.service.ts",
+        "Backend/src/modules/floors/__tests__/floors.service.spec.ts",
+        "Backend/test/floors-tenant.e2e-spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/src/modules/floors/floors.controller.ts",
+        "Backend/src/modules/floors/floors.service.ts",
+        "Backend/src/modules/floors/__tests__/floors.service.spec.ts"
+      ]
+    },
+    {
+      "id": "TEN-010",
+      "title": "Enforce tenant access throughout contacts",
+      "path": "Pending/TEN-010-enforce-tenant-access-throughout-contacts.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P0",
+      "sources": ["D01"],
+      "dependsOn": ["TEN-001", "TEN-002"],
+      "files": [
+        "Backend/src/modules/contacts/contacts.controller.ts",
+        "Backend/src/modules/contacts/contacts.service.ts",
+        "Backend/src/modules/contacts/__tests__/contacts.service.spec.ts",
+        "Backend/test/contacts-tenant.e2e-spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/src/modules/contacts/contacts.controller.ts",
+        "Backend/src/modules/contacts/contacts.service.ts",
+        "Backend/src/modules/contacts/__tests__/contacts.service.spec.ts"
+      ]
+    },
+    {
+      "id": "TEN-006",
+      "title": "Enforce tenant access throughout tasks",
+      "path": "Pending/TEN-006-enforce-tenant-access-throughout-tasks.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P0",
+      "sources": ["D01"],
+      "dependsOn": ["TEN-001", "TEN-002"],
+      "files": [
+        "Backend/src/modules/tasks/tasks.controller.ts",
+        "Backend/src/modules/tasks/tasks.service.ts",
+        "Backend/src/modules/tasks/__tests__/tasks.service.spec.ts",
+        "Backend/test/tasks-tenant.e2e-spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/src/modules/tasks/tasks.controller.ts",
+        "Backend/src/modules/tasks/tasks.service.ts",
+        "Backend/src/modules/tasks/__tests__/tasks.service.spec.ts"
+      ]
+    },
+    {
+      "id": "TEN-007",
+      "title": "Enforce tenant access throughout deals",
+      "path": "Pending/TEN-007-enforce-tenant-access-throughout-deals.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P0",
+      "sources": ["D01"],
+      "dependsOn": ["TEN-001", "TEN-002"],
+      "files": [
+        "Backend/src/modules/deals/deals.controller.ts",
+        "Backend/src/modules/deals/deals.service.ts",
+        "Backend/src/modules/deals/__tests__/deals.service.spec.ts",
+        "Backend/test/deals-tenant.e2e-spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/src/modules/deals/deals.controller.ts",
+        "Backend/src/modules/deals/deals.service.ts",
+        "Backend/src/modules/deals/__tests__/deals.service.spec.ts"
+      ]
+    },
+    {
+      "id": "TEN-008",
+      "title": "Enforce tenant access throughout site-visits",
+      "path": "Pending/TEN-008-enforce-tenant-access-throughout-site-visits.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P0",
+      "sources": ["D01"],
+      "dependsOn": ["TEN-001", "TEN-002"],
+      "files": [
+        "Backend/src/modules/site-visits/site-visits.controller.ts",
+        "Backend/src/modules/site-visits/site-visits.service.ts",
+        "Backend/src/modules/site-visits/__tests__/site-visits.service.spec.ts",
+        "Backend/test/site-visits-tenant.e2e-spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/src/modules/site-visits/site-visits.controller.ts",
+        "Backend/src/modules/site-visits/site-visits.service.ts",
+        "Backend/src/modules/site-visits/__tests__/site-visits.service.spec.ts"
+      ]
+    },
+    {
+      "id": "SEC-001",
+      "title": "Project safe user fields in deal responses",
+      "path": "Pending/SEC-001-project-safe-user-fields-in-deal-responses.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P0",
+      "sources": ["D05"],
+      "dependsOn": [],
+      "files": [
+        "Backend/src/modules/deals/deals.service.ts",
+        "Backend/src/modules/deals/__tests__/deals.service.spec.ts",
+        "Backend/test/deal-response-secrets.e2e-spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/src/modules/deals/deals.service.ts",
+        "Backend/src/modules/deals/__tests__/deals.service.spec.ts"
+      ]
+    },
+    {
+      "id": "PROP-001",
+      "title": "Make proposal creator and geography access explicit",
+      "path": "Pending/PROP-001-make-proposal-creator-and-geography-access-explicit.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P0",
+      "sources": ["D03", "D04"],
+      "dependsOn": ["TEN-001", "TEN-002", "TEN-003"],
+      "files": [
+        "Backend/src/modules/proposals/proposals.controller.ts",
+        "Backend/src/modules/proposals/proposals.service.ts",
+        "Backend/src/modules/proposals/__tests__/proposals.service.spec.ts",
+        "Backend/test/proposal-access.e2e-spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/src/modules/proposals/proposals.controller.ts",
+        "Backend/src/modules/proposals/proposals.service.ts",
+        "Backend/src/modules/proposals/__tests__/proposals.service.spec.ts"
+      ]
+    },
+    {
+      "id": "PROP-002",
+      "title": "Validate proposal item hierarchy before writes",
+      "path": "Pending/PROP-002-validate-proposal-item-hierarchy-before-writes.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["D07"],
+      "dependsOn": ["PROP-001", "TEN-005"],
+      "files": [
+        "Backend/src/modules/proposals/proposals.service.ts",
+        "Backend/src/modules/proposals/dto/proposals.schema.ts",
+        "Backend/src/modules/proposals/__tests__/proposals.service.spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/src/modules/proposals/proposals.service.ts",
+        "Backend/src/modules/proposals/dto/proposals.schema.ts",
+        "Backend/src/modules/proposals/__tests__/proposals.service.spec.ts"
+      ]
+    },
+    {
+      "id": "PROP-003",
+      "title": "Authorize every proposal artifact export",
+      "path": "Pending/PROP-003-authorize-every-proposal-artifact-export.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P0",
+      "sources": ["D04"],
+      "dependsOn": ["PROP-001"],
+      "files": [
+        "Backend/src/modules/proposals/proposals.controller.ts",
+        "Backend/src/modules/proposals/proposal-export.service.ts",
+        "Backend/src/modules/proposals/proposals.service.ts",
+        "Backend/src/modules/proposals/__tests__/proposal-export.service.spec.ts",
+        "Backend/test/proposal-export-access.e2e-spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/src/modules/proposals/proposals.controller.ts",
+        "Backend/src/modules/proposals/proposal-export.service.ts",
+        "Backend/src/modules/proposals/proposals.service.ts",
+        "Backend/src/modules/proposals/__tests__/proposal-export.service.spec.ts"
+      ]
+    },
+    {
+      "id": "PROP-004",
+      "title": "Enforce proposal item uniqueness under concurrency",
+      "path": "Pending/PROP-004-enforce-proposal-item-uniqueness-under-concurrency.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["D12"],
+      "dependsOn": ["PROP-002"],
+      "files": [
+        "Backend/prisma/schema.prisma",
+        "Backend/prisma/migrations/20260915000100_proposal_item_uniqueness/migration.sql",
+        "Backend/src/modules/proposals/proposals.service.ts",
+        "Backend/test/proposal-item-race.e2e-spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/modules/proposals/proposals.service.ts"
+      ]
+    },
+    {
+      "id": "DATA-001",
+      "title": "Exclude archived clients from normal reads",
+      "path": "Pending/DATA-001-exclude-archived-clients-from-normal-reads.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["D10"],
+      "dependsOn": ["TEN-003"],
+      "files": [
+        "Backend/src/modules/clients/clients.service.ts",
+        "Backend/src/modules/clients/clients.controller.ts",
+        "Backend/src/modules/clients/__tests__/clients.service.spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/src/modules/clients/clients.service.ts",
+        "Backend/src/modules/clients/clients.controller.ts",
+        "Backend/src/modules/clients/__tests__/clients.service.spec.ts"
+      ]
+    },
+    {
+      "id": "DATA-002",
+      "title": "Exclude archived deals from normal reads",
+      "path": "Pending/DATA-002-exclude-archived-deals-from-normal-reads.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["D10"],
+      "dependsOn": ["TEN-007"],
+      "files": [
+        "Backend/src/modules/deals/deals.service.ts",
+        "Backend/src/modules/deals/deals.controller.ts",
+        "Backend/src/modules/deals/__tests__/deals.service.spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/src/modules/deals/deals.service.ts",
+        "Backend/src/modules/deals/deals.controller.ts",
+        "Backend/src/modules/deals/__tests__/deals.service.spec.ts"
+      ]
+    },
+    {
+      "id": "DATA-003",
+      "title": "Exclude archived tasks from normal reads",
+      "path": "Pending/DATA-003-exclude-archived-tasks-from-normal-reads.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["D10"],
+      "dependsOn": ["TEN-006"],
+      "files": [
+        "Backend/src/modules/tasks/tasks.service.ts",
+        "Backend/src/modules/tasks/tasks.controller.ts",
+        "Backend/src/modules/tasks/__tests__/tasks.service.spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/src/modules/tasks/tasks.service.ts",
+        "Backend/src/modules/tasks/tasks.controller.ts",
+        "Backend/src/modules/tasks/__tests__/tasks.service.spec.ts"
+      ]
+    },
+    {
+      "id": "DATA-004",
+      "title": "Exclude archived site-visits from normal reads",
+      "path": "Pending/DATA-004-exclude-archived-site-visits-from-normal-reads.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["D10"],
+      "dependsOn": ["TEN-008"],
+      "files": [
+        "Backend/src/modules/site-visits/site-visits.service.ts",
+        "Backend/src/modules/site-visits/site-visits.controller.ts",
+        "Backend/src/modules/site-visits/__tests__/site-visits.service.spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/src/modules/site-visits/site-visits.service.ts",
+        "Backend/src/modules/site-visits/site-visits.controller.ts",
+        "Backend/src/modules/site-visits/__tests__/site-visits.service.spec.ts"
+      ]
+    },
+    {
+      "id": "DATA-005",
+      "title": "Make import row application atomic and resumable",
+      "path": "Pending/DATA-005-make-import-row-application-atomic-and-resumable.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["D11", "P01"],
+      "dependsOn": ["TEN-001", "TEN-002", "TEN-004", "TEN-005"],
+      "files": [
+        "Backend/src/modules/imports/imports.service.ts",
+        "Backend/prisma/schema.prisma",
+        "Backend/prisma/migrations/20260915000200_import_row_identity/migration.sql",
+        "Backend/src/modules/imports/__tests__/imports.service.spec.ts",
+        "Backend/test/import-retry.e2e-spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/src/modules/imports/imports.service.ts",
+        "Backend/prisma/schema.prisma",
+        "Backend/src/modules/imports/__tests__/imports.service.spec.ts"
+      ]
+    },
+    {
+      "id": "DATA-006",
+      "title": "Enforce shortlist entity relationships",
+      "path": "Pending/DATA-006-enforce-shortlist-entity-relationships.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["D12"],
+      "dependsOn": ["TEN-003", "TEN-005"],
+      "files": [
+        "Backend/prisma/schema.prisma",
+        "Backend/prisma/migrations/20260915000300_shortlist_relations/migration.sql",
+        "Backend/src/modules/clients/clients.service.ts",
+        "Backend/src/modules/clients/dto/clients.schema.ts",
+        "Backend/test/shortlist-integrity.e2e-spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/modules/clients/clients.service.ts",
+        "Backend/src/modules/clients/dto/clients.schema.ts"
+      ]
+    },
+    {
+      "id": "DATA-007",
+      "title": "Migrate financial values through shadow decimal columns",
+      "path": "Pending/DATA-007-migrate-financial-values-through-shadow-decimal-columns.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["D12"],
+      "dependsOn": ["DEC-004"],
+      "files": [
+        "Backend/prisma/schema.prisma",
+        "Backend/prisma/migrations/20260915000400_shadow_money/migration.sql",
+        "Backend/scripts/reconcile-money.ts",
+        "Backend/test/money-migration.e2e-spec.ts"
+      ],
+      "evidenceFiles": ["Backend/prisma/schema.prisma"]
+    },
+    {
+      "id": "DATA-008",
+      "title": "Adopt decimal money on new financial contracts",
+      "path": "Pending/DATA-008-adopt-decimal-money-on-new-financial-contracts.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["D12", "P05"],
+      "dependsOn": ["DATA-007", "TEN-007"],
+      "files": [
+        "Backend/src/modules/deals/deals.service.ts",
+        "Backend/src/modules/deals/deals.controller.ts",
+        "Backend/src/modules/deals/dto/deals.schema.ts",
+        "Backend/src/shared/interceptors/transform.interceptor.ts",
+        "Backend/test/money-contract.e2e-spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/src/modules/deals/deals.service.ts",
+        "Backend/src/modules/deals/deals.controller.ts",
+        "Backend/src/modules/deals/dto/deals.schema.ts",
+        "Backend/src/shared/interceptors/transform.interceptor.ts"
+      ]
+    },
+    {
+      "id": "DATA-009",
+      "title": "Normalize free text locations with reviewed mappings",
+      "path": "Pending/DATA-009-normalize-free-text-locations-with-reviewed-mappings.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["D18"],
+      "dependsOn": ["TEN-004"],
+      "files": [
+        "Backend/src/modules/reference/reference.service.ts",
+        "Backend/src/modules/buildings/buildings.service.ts",
+        "Backend/scripts/normalize-locations.ts",
+        "Backend/test/location-normalization.e2e-spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/src/modules/reference/reference.service.ts",
+        "Backend/src/modules/buildings/buildings.service.ts"
+      ]
+    },
+    {
+      "id": "DATA-010",
+      "title": "Commit change approval and snapshot atomically",
+      "path": "Pending/DATA-010-commit-change-approval-and-snapshot-atomically.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["D11", "A06"],
+      "dependsOn": ["TEN-001", "TEN-004"],
+      "files": [
+        "Backend/src/modules/change-requests/change-requests.service.ts",
+        "Backend/src/modules/change-requests/dto/change-requests.schema.ts",
+        "Backend/src/modules/change-requests/__tests__/change-requests.service.spec.ts",
+        "Backend/test/approval-atomicity.e2e-spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/src/modules/change-requests/change-requests.service.ts",
+        "Backend/src/modules/change-requests/dto/change-requests.schema.ts",
+        "Backend/src/modules/change-requests/__tests__/change-requests.service.spec.ts"
+      ]
+    },
+    {
+      "id": "MEDIA-001",
+      "title": "Authorize upload completion and downloads by parent",
+      "path": "Pending/MEDIA-001-authorize-upload-completion-and-downloads-by-parent.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P0",
+      "sources": ["D16", "D01"],
+      "dependsOn": ["TEN-001", "TEN-004", "TEN-005", "TEN-009"],
+      "files": [
+        "Backend/src/modules/media/media.controller.ts",
+        "Backend/src/modules/media/media.service.ts",
+        "Backend/src/modules/media/dto/media.schema.ts",
+        "Backend/src/modules/media/__tests__/media.service.spec.ts",
+        "Backend/test/media-access.e2e-spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/src/modules/media/media.controller.ts",
+        "Backend/src/modules/media/media.service.ts",
+        "Backend/src/modules/media/dto/media.schema.ts",
+        "Backend/src/modules/media/__tests__/media.service.spec.ts"
+      ]
+    },
+    {
+      "id": "MEDIA-002",
+      "title": "Verify actual uploaded bytes before completion",
+      "path": "Pending/MEDIA-002-verify-actual-uploaded-bytes-before-completion.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["D16"],
+      "dependsOn": ["MEDIA-001", "DEC-003"],
+      "files": [
+        "Backend/src/modules/media/media.service.ts",
+        "Backend/src/modules/media/dto/media.schema.ts",
+        "Backend/src/modules/media/__tests__/media.service.spec.ts",
+        "Backend/test/media-validation.e2e-spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/src/modules/media/media.service.ts",
+        "Backend/src/modules/media/dto/media.schema.ts",
+        "Backend/src/modules/media/__tests__/media.service.spec.ts"
+      ]
+    },
+    {
+      "id": "MEDIA-003",
+      "title": "Serve private media with short lived authorized URLs",
+      "path": "Pending/MEDIA-003-serve-private-media-with-short-lived-authorized-urls.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["D16", "P25"],
+      "dependsOn": ["MEDIA-001", "DEC-005", "PROP-003"],
+      "files": [
+        "Backend/src/modules/media/media.service.ts",
+        "Backend/src/modules/proposals/proposal-export.service.ts",
+        "Frontend/src/hooks/use-media.ts",
+        "Backend/test/private-media.e2e-spec.ts",
+        "docs/new-features/runbooks/private-storage.md"
+      ],
+      "evidenceFiles": [
+        "Backend/src/modules/media/media.service.ts",
+        "Backend/src/modules/proposals/proposal-export.service.ts",
+        "Frontend/src/hooks/use-media.ts"
+      ]
+    },
+    {
+      "id": "MEDIA-004",
+      "title": "Show real upload progress and retry states",
+      "path": "Pending/MEDIA-004-show-real-upload-progress-and-retry-states.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P12"],
+      "dependsOn": ["MEDIA-001", "MEDIA-002"],
+      "files": [
+        "Frontend/src/components/shared/FileUpload.tsx",
+        "Frontend/src/hooks/use-media.ts",
+        "Frontend/e2e/media-upload.spec.ts"
+      ],
+      "evidenceFiles": [
+        "Frontend/src/components/shared/FileUpload.tsx",
+        "Frontend/src/hooks/use-media.ts"
+      ]
+    },
+    {
+      "id": "MEDIA-005",
+      "title": "Clean expired pending uploads without deleting valid files",
+      "path": "Pending/MEDIA-005-clean-expired-pending-uploads-without-deleting-valid-files.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P12", "D16"],
+      "dependsOn": ["MEDIA-002", "MEDIA-003"],
+      "files": [
+        "Backend/src/modules/media/media-cleanup.service.ts",
+        "Backend/src/modules/media/media.module.ts",
+        "Backend/src/modules/media/__tests__/media-cleanup.service.spec.ts"
+      ],
+      "evidenceFiles": ["Backend/src/modules/media/media.module.ts"]
+    },
+    {
+      "id": "OPS-001",
+      "title": "Make background processing capability explicit",
+      "path": "Pending/OPS-001-make-background-processing-capability-explicit.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["D13"],
+      "dependsOn": ["DEC-003"],
+      "files": [
+        "Backend/src/modules/notifications/notifications.module.ts",
+        "Backend/src/modules/notifications/notifications.service.ts",
+        "Backend/src/health/health.controller.ts",
+        "render.yaml",
+        "Backend/src/modules/notifications/__tests__/notifications.service.spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/src/modules/notifications/notifications.module.ts",
+        "Backend/src/modules/notifications/notifications.service.ts",
+        "Backend/src/health/health.controller.ts",
+        "render.yaml",
+        "Backend/src/modules/notifications/__tests__/notifications.service.spec.ts"
+      ]
+    },
+    {
+      "id": "OPS-002",
+      "title": "Persist transactional outbox events",
+      "path": "Pending/OPS-002-persist-transactional-outbox-events.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["D13"],
+      "dependsOn": ["TEN-001"],
+      "files": [
+        "Backend/prisma/schema.prisma",
+        "Backend/prisma/migrations/20260915000500_outbox/migration.sql",
+        "Backend/src/shared/services/outbox.service.ts",
+        "Backend/src/shared/services/outbox.service.spec.ts"
+      ],
+      "evidenceFiles": ["Backend/prisma/schema.prisma"]
+    },
+    {
+      "id": "OPS-003",
+      "title": "Dispatch outbox events with retry safe claims",
+      "path": "Pending/OPS-003-dispatch-outbox-events-with-retry-safe-claims.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["D13"],
+      "dependsOn": ["OPS-001", "OPS-002"],
+      "files": [
+        "Backend/src/shared/services/outbox-dispatcher.service.ts",
+        "Backend/src/shared/services/outbox-dispatcher.service.spec.ts",
+        "Backend/src/shared/shared.module.ts",
+        "Backend/test/outbox-restart.e2e-spec.ts"
+      ],
+      "evidenceFiles": ["Backend/src/shared/shared.module.ts"]
+    },
+    {
+      "id": "OPS-004",
+      "title": "Persist notification outcomes and replay controls",
+      "path": "Pending/OPS-004-persist-notification-outcomes-and-replay-controls.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["D13", "P08", "P11"],
+      "dependsOn": ["OPS-003"],
+      "files": [
+        "Backend/prisma/schema.prisma",
+        "Backend/prisma/migrations/20260915000600_notification_delivery/migration.sql",
+        "Backend/src/modules/notifications/notifications.service.ts",
+        "Backend/src/modules/notifications/workers/email.worker.ts",
+        "Backend/src/modules/notifications/__tests__/delivery-state.spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/modules/notifications/notifications.service.ts",
+        "Backend/src/modules/notifications/workers/email.worker.ts"
+      ]
+    },
+    {
+      "id": "REQ-001",
+      "title": "Persist a versioned commercial requirement brief",
+      "path": "Pending/REQ-001-persist-a-versioned-commercial-requirement-brief.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P04", "A01", "A02"],
+      "dependsOn": ["DEC-001", "DEC-004", "DATA-007"],
+      "files": [
+        "Backend/prisma/schema.prisma",
+        "Backend/prisma/migrations/20260915000700_requirement_brief/migration.sql",
+        "Backend/src/modules/clients/dto/clients.schema.ts",
+        "Backend/test/requirement-brief-schema.e2e-spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/modules/clients/dto/clients.schema.ts"
+      ]
+    },
+    {
+      "id": "REQ-002",
+      "title": "Expose atomic brief read and replacement endpoints",
+      "path": "Pending/REQ-002-expose-atomic-brief-read-and-replacement-endpoints.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P04"],
+      "dependsOn": ["REQ-001", "TEN-003"],
+      "files": [
+        "Backend/src/modules/requirements/requirements.module.ts",
+        "Backend/src/modules/requirements/requirements.controller.ts",
+        "Backend/src/modules/requirements/requirements.service.ts",
+        "Backend/src/app.module.ts",
+        "Backend/src/modules/requirements/__tests__/requirements.service.spec.ts"
+      ],
+      "evidenceFiles": ["Backend/src/app.module.ts"]
+    },
+    {
+      "id": "REQ-003",
+      "title": "Build a requirement editor that preserves unknown values",
+      "path": "Pending/REQ-003-build-a-requirement-editor-that-preserves-unknown-values.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P04"],
+      "dependsOn": ["REQ-002"],
+      "files": [
+        "Frontend/src/hooks/use-requirement-brief.ts",
+        "Frontend/src/components/requirements/RequirementBriefForm.tsx",
+        "Frontend/src/app/(v2)/requirements/[id]/page.tsx",
+        "Frontend/e2e/requirement-brief.spec.ts"
+      ],
+      "evidenceFiles": ["Frontend/src/app/(v2)/requirements/[id]/page.tsx"]
+    },
+    {
+      "id": "COST-001",
+      "title": "Calculate occupancy cost from exact known components",
+      "path": "Pending/COST-001-calculate-occupancy-cost-from-exact-known-components.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P05", "A02"],
+      "dependsOn": ["DEC-004"],
+      "files": [
+        "Backend/src/modules/clients/occupancy-cost.ts",
+        "Backend/src/modules/clients/__tests__/occupancy-cost.spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "MATCH-001",
+      "title": "Persist and compute authorized match runs",
+      "path": "Pending/MATCH-001-persist-and-compute-authorized-match-runs.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["A02", "P14"],
+      "dependsOn": ["REQ-002", "SEARCH-002", "TEN-005", "INV-001", "COST-001"],
+      "files": [
+        "Backend/prisma/schema.prisma",
+        "Backend/prisma/migrations/20260915000800_match_runs/migration.sql",
+        "Backend/src/modules/requirements/matching.service.ts",
+        "Backend/src/modules/requirements/__tests__/matching.service.spec.ts",
+        "Backend/test/matching-access.e2e-spec.ts"
+      ],
+      "evidenceFiles": ["Backend/prisma/schema.prisma"]
+    },
+    {
+      "id": "MATCH-002",
+      "title": "Expose match runs and comparison UI",
+      "path": "Pending/MATCH-002-expose-match-runs-and-comparison-ui.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["A02", "P05", "P14"],
+      "dependsOn": ["MATCH-001", "DATA-006", "REQ-003"],
+      "files": [
+        "Backend/src/modules/requirements/requirements.controller.ts",
+        "Backend/src/modules/requirements/requirements.module.ts",
+        "Frontend/src/hooks/use-matches.ts",
+        "Frontend/src/components/requirements/MatchResults.tsx",
+        "Frontend/e2e/matches.spec.ts",
+        "Frontend/src/app/(v2)/requirements/[id]/page.tsx"
+      ],
+      "evidenceFiles": ["Frontend/src/app/(v2)/requirements/[id]/page.tsx"]
+    },
+    {
+      "id": "INV-001",
+      "title": "Store per field inventory verification evidence",
+      "path": "Pending/INV-001-store-per-field-inventory-verification-evidence.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P02", "A06"],
+      "dependsOn": ["TEN-004", "DEC-005"],
+      "files": [
+        "Backend/prisma/schema.prisma",
+        "Backend/prisma/migrations/20260915000900_verification_facts/migration.sql",
+        "Backend/src/modules/buildings/verification.service.ts",
+        "Backend/src/modules/buildings/__tests__/verification.service.spec.ts"
+      ],
+      "evidenceFiles": ["Backend/prisma/schema.prisma"]
+    },
+    {
+      "id": "INV-002",
+      "title": "Expose the verification queue and review actions",
+      "path": "Pending/INV-002-expose-the-verification-queue-and-review-actions.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P02", "A06", "P15"],
+      "dependsOn": ["INV-001", "DATA-010"],
+      "files": [
+        "Backend/src/modules/buildings/buildings.controller.ts",
+        "Backend/src/modules/buildings/buildings.module.ts",
+        "Frontend/src/hooks/use-verifications.ts",
+        "Frontend/src/app/(dashboard)/inventory-verification/page.tsx",
+        "Frontend/e2e/inventory-verification.spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/src/modules/buildings/buildings.controller.ts",
+        "Backend/src/modules/buildings/buildings.module.ts"
+      ]
+    },
+    {
+      "id": "AI-001",
+      "title": "Create private source job and review persistence",
+      "path": "Pending/AI-001-create-private-source-job-and-review-persistence.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["A01", "A04", "A05", "A11", "A14"],
+      "dependsOn": ["TEN-001", "OPS-002", "DEC-003", "DEC-005", "INV-001"],
+      "files": [
+        "Backend/prisma/schema.prisma",
+        "Backend/prisma/migrations/20260915001000_ai_intake/migration.sql",
+        "Backend/src/modules/ai/ai.module.ts",
+        "Backend/src/app.module.ts",
+        "Backend/test/ai-schema.e2e-spec.ts",
+        "Backend/src/modules/ai/command-registry.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "AI-002",
+      "title": "Add a schema constrained provider adapter",
+      "path": "Pending/AI-002-add-a-schema-constrained-provider-adapter.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["A01", "A03", "A04"],
+      "dependsOn": ["AI-001", "DEC-003"],
+      "files": [
+        "Backend/src/modules/ai/provider.adapter.ts",
+        "Backend/src/modules/ai/dto/ai-output.schema.ts",
+        "Backend/src/modules/ai/__tests__/provider.adapter.spec.ts",
+        "Backend/src/config/configuration.ts"
+      ],
+      "evidenceFiles": ["Backend/src/config/configuration.ts"]
+    },
+    {
+      "id": "AI-003",
+      "title": "Accept text intake with atomic quotas and idempotency",
+      "path": "Pending/AI-003-accept-text-intake-with-atomic-quotas-and-idempotency.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["A01"],
+      "dependsOn": ["AI-001", "OPS-003", "TEN-003", "REQ-002"],
+      "files": [
+        "Backend/src/modules/ai/ai.controller.ts",
+        "Backend/src/modules/ai/intake.service.ts",
+        "Backend/src/modules/ai/dto/intake.schema.ts",
+        "Backend/src/modules/ai/ai.module.ts",
+        "Backend/src/modules/ai/__tests__/intake.service.spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "AI-004",
+      "title": "Run recoverable AI extraction jobs",
+      "path": "Pending/AI-004-run-recoverable-ai-extraction-jobs.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["A01", "A04"],
+      "dependsOn": ["AI-002", "AI-003"],
+      "files": [
+        "Backend/src/modules/ai/intake.worker.ts",
+        "Backend/src/modules/ai/ai.module.ts",
+        "Backend/src/modules/ai/__tests__/intake.worker.spec.ts",
+        "Backend/test/ai-worker-restart.e2e-spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "AI-005",
+      "title": "Apply reviewed requirement drafts exactly once",
+      "path": "Pending/AI-005-apply-reviewed-requirement-drafts-exactly-once.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["A01"],
+      "dependsOn": ["AI-004", "REQ-002"],
+      "files": [
+        "Backend/src/modules/ai/review.service.ts",
+        "Backend/src/modules/ai/ai.controller.ts",
+        "Backend/src/modules/ai/ai.module.ts",
+        "Backend/src/modules/ai/__tests__/review.service.spec.ts",
+        "Backend/test/ai-apply-race.e2e-spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "AI-006",
+      "title": "Build source side by side draft review UI",
+      "path": "Pending/AI-006-build-source-side-by-side-draft-review-ui.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["A01", "A04"],
+      "dependsOn": ["AI-005", "REQ-003"],
+      "files": [
+        "Frontend/src/hooks/use-ai-intakes.ts",
+        "Frontend/src/components/ai/IntakeReview.tsx",
+        "Frontend/src/app/(v2)/ai-intakes/[id]/page.tsx",
+        "Frontend/src/app/(v2)/clients/[id]/page.tsx",
+        "Frontend/e2e/ai-intake-review.spec.ts"
+      ],
+      "evidenceFiles": ["Frontend/src/app/(v2)/clients/[id]/page.tsx"]
+    },
+    {
+      "id": "AI-007",
+      "title": "Gate prompt and model changes with held out evaluations",
+      "path": "Pending/AI-007-gate-prompt-and-model-changes-with-held-out-evaluations.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["A01", "A02", "A03", "A11"],
+      "dependsOn": ["AI-002"],
+      "files": [
+        "Backend/evals/ai-fixtures.jsonl",
+        "Backend/evals/run-ai-evals.ts",
+        "Backend/evals/README.md",
+        "Backend/package.json",
+        ".github/workflows/ai-evals.yml"
+      ],
+      "evidenceFiles": ["Backend/package.json"]
+    },
+    {
+      "id": "PROP-005",
+      "title": "Persist immutable releases artifact jobs and share grants",
+      "path": "Pending/PROP-005-persist-immutable-releases-artifact-jobs-and-share-grants.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["D08", "P06", "P07"],
+      "dependsOn": ["PROP-004", "DEC-005"],
+      "files": [
+        "Backend/prisma/schema.prisma",
+        "Backend/prisma/migrations/20260915001100_proposal_releases/migration.sql",
+        "Backend/test/proposal-release-schema.e2e-spec.ts"
+      ],
+      "evidenceFiles": ["Backend/prisma/schema.prisma"]
+    },
+    {
+      "id": "PROP-006",
+      "title": "Create immutable reviewed proposal releases",
+      "path": "Pending/PROP-006-create-immutable-reviewed-proposal-releases.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["D08", "A03"],
+      "dependsOn": ["PROP-005", "PROP-003"],
+      "files": [
+        "Backend/src/modules/proposals/proposal-release.service.ts",
+        "Backend/src/modules/proposals/proposals.controller.ts",
+        "Backend/src/modules/proposals/proposals.module.ts",
+        "Backend/src/modules/proposals/dto/proposal-release.schema.ts",
+        "Backend/src/modules/proposals/__tests__/proposal-release.service.spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/src/modules/proposals/proposals.controller.ts",
+        "Backend/src/modules/proposals/proposals.module.ts"
+      ]
+    },
+    {
+      "id": "PROP-007",
+      "title": "Render PDF and XLSX from immutable release data",
+      "path": "Pending/PROP-007-render-pdf-and-xlsx-from-immutable-release-data.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["D08", "D09", "A03"],
+      "dependsOn": ["PROP-006", "MEDIA-003"],
+      "files": [
+        "Backend/src/modules/proposals/release-renderer.service.ts",
+        "Backend/src/modules/proposals/__tests__/release-renderer.spec.ts",
+        "Backend/src/modules/proposals/proposals.module.ts"
+      ],
+      "evidenceFiles": ["Backend/src/modules/proposals/proposals.module.ts"]
+    },
+    {
+      "id": "PROP-008",
+      "title": "Generate artifact jobs without changing deal status",
+      "path": "Pending/PROP-008-generate-artifact-jobs-without-changing-deal-status.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["D09"],
+      "dependsOn": ["PROP-007", "OPS-003"],
+      "files": [
+        "Backend/src/modules/proposals/artifact.service.ts",
+        "Backend/src/modules/proposals/artifact.worker.ts",
+        "Backend/src/modules/proposals/proposals.controller.ts",
+        "Backend/src/modules/proposals/proposals.module.ts",
+        "Backend/src/modules/proposals/__tests__/artifact.spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/src/modules/proposals/proposals.controller.ts",
+        "Backend/src/modules/proposals/proposals.module.ts"
+      ]
+    },
+    {
+      "id": "PROP-009",
+      "title": "Add review release and download UI",
+      "path": "Pending/PROP-009-add-review-release-and-download-ui.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P07", "A03"],
+      "dependsOn": ["PROP-008"],
+      "files": [
+        "Frontend/src/hooks/use-proposal-releases.ts",
+        "Frontend/src/components/proposals/ReleaseDialog.tsx",
+        "Frontend/src/app/(v2)/proposals/[id]/page.tsx",
+        "Frontend/e2e/proposal-release.spec.ts"
+      ],
+      "evidenceFiles": ["Frontend/src/app/(v2)/proposals/[id]/page.tsx"]
+    },
+    {
+      "id": "PROP-010",
+      "title": "Issue revoke and read scoped client share links",
+      "path": "Pending/PROP-010-issue-revoke-and-read-scoped-client-share-links.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P06"],
+      "dependsOn": ["PROP-006", "DEC-005"],
+      "files": [
+        "Backend/src/modules/proposals/proposal-share.service.ts",
+        "Backend/src/modules/proposals/proposal-share.controller.ts",
+        "Backend/src/modules/proposals/proposals.module.ts",
+        "Backend/src/modules/proposals/dto/proposal-share.schema.ts",
+        "Backend/test/proposal-share.e2e-spec.ts"
+      ],
+      "evidenceFiles": ["Backend/src/modules/proposals/proposals.module.ts"]
+    },
+    {
+      "id": "PROP-011",
+      "title": "Build the client proposal feedback portal",
+      "path": "Pending/PROP-011-build-the-client-proposal-feedback-portal.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P06"],
+      "dependsOn": ["PROP-010"],
+      "files": [
+        "Frontend/src/app/public/proposals/[token]/page.tsx",
+        "Frontend/src/components/proposals/PublicProposal.tsx",
+        "Frontend/src/hooks/use-public-proposal.ts",
+        "Frontend/e2e/public-proposal.spec.ts"
+      ],
+      "evidenceFiles": ["docs/MARKET_AI_ASSESSMENT.md"]
+    },
+    {
+      "id": "PROP-012",
+      "title": "Version brand templates without changing old releases",
+      "path": "Pending/PROP-012-version-brand-templates-without-changing-old-releases.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P07"],
+      "dependsOn": ["PROP-006", "MEDIA-003"],
+      "files": [
+        "Backend/prisma/schema.prisma",
+        "Backend/prisma/migrations/20260915001200_brand_templates/migration.sql",
+        "Backend/src/modules/proposals/brand-template.service.ts",
+        "Backend/src/modules/proposals/__tests__/brand-template.spec.ts"
+      ],
+      "evidenceFiles": ["Backend/prisma/schema.prisma"]
+    },
+    {
+      "id": "AI-008",
+      "title": "Explain matching results using retrieved facts",
+      "path": "Pending/AI-008-explain-matching-results-using-retrieved-facts.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["A02"],
+      "dependsOn": ["MATCH-001", "AI-004", "AI-007"],
+      "files": [
+        "Backend/src/modules/ai/match-explanation.service.ts",
+        "Backend/src/modules/ai/dto/match-explanation.schema.ts",
+        "Backend/src/modules/ai/ai.controller.ts",
+        "Backend/src/modules/ai/ai.module.ts",
+        "Backend/src/modules/ai/__tests__/match-explanation.spec.ts",
+        "Backend/src/modules/ai/command-registry.ts",
+        "Backend/evals/ai-fixtures.jsonl"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "AI-009",
+      "title": "Draft proposal rationale from approved public facts",
+      "path": "Pending/AI-009-draft-proposal-rationale-from-approved-public-facts.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["A03"],
+      "dependsOn": ["AI-004", "AI-007", "PROP-006"],
+      "files": [
+        "Backend/src/modules/ai/proposal-narrative.service.ts",
+        "Backend/src/modules/ai/dto/proposal-narrative.schema.ts",
+        "Backend/src/modules/ai/ai.controller.ts",
+        "Backend/src/modules/ai/ai.module.ts",
+        "Backend/src/modules/ai/__tests__/proposal-narrative.spec.ts",
+        "Backend/src/modules/ai/command-registry.ts",
+        "Backend/evals/ai-fixtures.jsonl"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "AI-010",
+      "title": "Extract brochure fields with page level evidence",
+      "path": "Pending/AI-010-extract-brochure-fields-with-page-level-evidence.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["A04"],
+      "dependsOn": [
+        "AI-004",
+        "AI-007",
+        "MEDIA-002",
+        "MEDIA-003",
+        "INV-003",
+        "DEC-003"
+      ],
+      "files": [
+        "Backend/src/modules/ai/inventory-document.service.ts",
+        "Backend/src/modules/ai/dto/inventory-document.schema.ts",
+        "Backend/src/modules/ai/ai.controller.ts",
+        "Backend/src/modules/ai/ai.module.ts",
+        "Backend/src/modules/ai/__tests__/inventory-document.spec.ts",
+        "Backend/src/modules/ai/command-registry.ts",
+        "Backend/evals/ai-fixtures.jsonl"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "AI-011",
+      "title": "Apply reviewed inventory drafts through existing intake",
+      "path": "Pending/AI-011-apply-reviewed-inventory-drafts-through-existing-intake.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["A04"],
+      "dependsOn": ["AI-010", "DATA-010", "TEN-004", "AI-006"],
+      "files": [
+        "Backend/src/modules/ai/inventory-review.service.ts",
+        "Backend/src/modules/ai/ai.controller.ts",
+        "Backend/src/modules/ai/ai.module.ts",
+        "Backend/src/modules/ai/__tests__/inventory-review.spec.ts",
+        "Frontend/src/components/ai/InventoryDraftReview.tsx",
+        "Frontend/src/app/(v2)/ai-intakes/[id]/page.tsx"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "AI-012",
+      "title": "Suggest CSV mappings without applying imported rows",
+      "path": "Pending/AI-012-suggest-csv-mappings-without-applying-imported-rows.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["A07"],
+      "dependsOn": ["AI-004", "DATA-005"],
+      "files": [
+        "Backend/src/modules/ai/csv-mapping.service.ts",
+        "Backend/src/modules/ai/dto/csv-mapping.schema.ts",
+        "Backend/src/modules/ai/ai.controller.ts",
+        "Backend/src/modules/ai/ai.module.ts",
+        "Backend/src/modules/ai/__tests__/csv-mapping.spec.ts",
+        "Backend/src/modules/ai/command-registry.ts",
+        "Backend/evals/ai-fixtures.jsonl"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "AI-013",
+      "title": "Transcribe consented voice notes into editable drafts",
+      "path": "Pending/AI-013-transcribe-consented-voice-notes-into-editable-drafts.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["A05"],
+      "dependsOn": ["AI-004", "MEDIA-002", "DEC-003", "DEC-005"],
+      "files": [
+        "Backend/src/modules/ai/voice-note.service.ts",
+        "Backend/src/modules/ai/dto/voice-note.schema.ts",
+        "Backend/src/modules/ai/ai.controller.ts",
+        "Backend/src/modules/ai/ai.module.ts",
+        "Backend/src/modules/ai/__tests__/voice-note.spec.ts",
+        "Backend/src/modules/ai/command-registry.ts",
+        "Backend/evals/ai-fixtures.jsonl"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "AI-014",
+      "title": "Draft site visit feedback and next actions",
+      "path": "Pending/AI-014-draft-site-visit-feedback-and-next-actions.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["A08"],
+      "dependsOn": ["AI-004", "TEN-008", "CRM-002"],
+      "files": [
+        "Backend/src/modules/ai/visit-debrief.service.ts",
+        "Backend/src/modules/ai/dto/visit-debrief.schema.ts",
+        "Backend/src/modules/ai/ai.controller.ts",
+        "Backend/src/modules/ai/ai.module.ts",
+        "Backend/src/modules/ai/__tests__/visit-debrief.spec.ts",
+        "Backend/src/modules/ai/command-registry.ts",
+        "Backend/evals/ai-fixtures.jsonl"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "AI-015",
+      "title": "Draft contextual follow ups with suppression checks",
+      "path": "Pending/AI-015-draft-contextual-follow-ups-with-suppression-checks.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["A09"],
+      "dependsOn": ["AI-004", "CRM-002", "OPS-004"],
+      "files": [
+        "Backend/src/modules/ai/followup.service.ts",
+        "Backend/src/modules/ai/dto/followup.schema.ts",
+        "Backend/src/modules/ai/ai.controller.ts",
+        "Backend/src/modules/ai/ai.module.ts",
+        "Backend/src/modules/ai/__tests__/followup.spec.ts",
+        "Backend/src/modules/ai/command-registry.ts",
+        "Backend/evals/ai-fixtures.jsonl"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "AI-016",
+      "title": "Summarize a deterministic daily work briefing",
+      "path": "Pending/AI-016-summarize-a-deterministic-daily-work-briefing.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["A10"],
+      "dependsOn": ["AI-004", "TEN-006", "INV-001"],
+      "files": [
+        "Backend/src/modules/ai/work-briefing.service.ts",
+        "Backend/src/modules/ai/dto/work-briefing.schema.ts",
+        "Backend/src/modules/ai/ai.controller.ts",
+        "Backend/src/modules/ai/ai.module.ts",
+        "Backend/src/modules/ai/__tests__/work-briefing.spec.ts",
+        "Backend/src/modules/ai/command-registry.ts",
+        "Backend/evals/ai-fixtures.jsonl"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "INV-003",
+      "title": "Preview duplicate inventory candidates without merging",
+      "path": "Pending/INV-003-preview-duplicate-inventory-candidates-without-merging.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P03", "A04"],
+      "dependsOn": ["TEN-004", "DATA-009"],
+      "files": [
+        "Backend/src/modules/buildings/duplicate-review.service.ts",
+        "Backend/src/modules/buildings/buildings.controller.ts",
+        "Backend/src/modules/buildings/buildings.module.ts",
+        "Backend/src/modules/buildings/__tests__/duplicate-review.spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/src/modules/buildings/buildings.controller.ts",
+        "Backend/src/modules/buildings/buildings.module.ts"
+      ]
+    },
+    {
+      "id": "INV-004",
+      "title": "Merge reviewed building duplicates transactionally",
+      "path": "Pending/INV-004-merge-reviewed-building-duplicates-transactionally.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P03"],
+      "dependsOn": ["INV-003", "DATA-006", "PROP-004", "TEN-005"],
+      "files": [
+        "Backend/prisma/schema.prisma",
+        "Backend/prisma/migrations/20260915001300_building_merges/migration.sql",
+        "Backend/src/modules/buildings/building-merge.service.ts",
+        "Backend/src/modules/buildings/buildings.controller.ts",
+        "Backend/src/modules/buildings/__tests__/building-merge.integration.spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/modules/buildings/buildings.controller.ts"
+      ]
+    },
+    {
+      "id": "CRM-001",
+      "title": "Capture explicit lost deal and rejected property reasons",
+      "path": "Pending/CRM-001-capture-explicit-lost-deal-and-rejected-property-reasons.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P09", "A18"],
+      "dependsOn": ["TEN-007", "DATA-002", "DATA-006"],
+      "files": [
+        "Backend/prisma/schema.prisma",
+        "Backend/prisma/migrations/20260915001400_outcome_events/migration.sql",
+        "Backend/src/modules/deals/outcome.service.ts",
+        "Backend/src/modules/deals/deals.controller.ts",
+        "Backend/src/modules/deals/__tests__/outcome.spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/modules/deals/deals.controller.ts"
+      ]
+    },
+    {
+      "id": "CRM-002",
+      "title": "Record authorized interaction history and corrections",
+      "path": "Pending/CRM-002-record-authorized-interaction-history-and-corrections.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P10", "A08", "A09"],
+      "dependsOn": ["TEN-003", "TEN-007", "TEN-008"],
+      "files": [
+        "Backend/prisma/schema.prisma",
+        "Backend/prisma/migrations/20260915001500_interactions/migration.sql",
+        "Backend/src/modules/interactions/interactions.service.ts",
+        "Backend/src/modules/interactions/interactions.controller.ts",
+        "Backend/src/modules/interactions/interactions.module.ts",
+        "Backend/test/interactions.e2e-spec.ts",
+        "Backend/src/app.module.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "CRM-003",
+      "title": "Schedule visits with conflict and reminder semantics",
+      "path": "Pending/CRM-003-schedule-visits-with-conflict-and-reminder-semantics.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P08"],
+      "dependsOn": ["TEN-008", "OPS-004"],
+      "files": [
+        "Backend/prisma/schema.prisma",
+        "Backend/prisma/migrations/20260915001600_visit_schedules/migration.sql",
+        "Backend/src/modules/site-visits/site-visits.service.ts",
+        "Backend/src/modules/site-visits/site-visits.controller.ts",
+        "Backend/src/modules/site-visits/dto/site-visits.schema.ts",
+        "Backend/test/visit-scheduling.e2e-spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/modules/site-visits/site-visits.service.ts",
+        "Backend/src/modules/site-visits/site-visits.controller.ts",
+        "Backend/src/modules/site-visits/dto/site-visits.schema.ts"
+      ]
+    },
+    {
+      "id": "CRM-004",
+      "title": "Assign leads with explicit response deadlines",
+      "path": "Pending/CRM-004-assign-leads-with-explicit-response-deadlines.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P11"],
+      "dependsOn": ["CRM-002", "TEN-003", "OPS-004"],
+      "files": [
+        "Backend/src/modules/lead-routing/lead-routing.service.ts",
+        "Backend/src/modules/lead-routing/lead-routing.controller.ts",
+        "Backend/src/modules/lead-routing/lead-routing.module.ts",
+        "Backend/src/modules/lead-routing/lead-routing.schema.ts",
+        "Backend/src/modules/lead-routing/lead-routing.spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "CRM-005",
+      "title": "Save and evaluate access scoped searches",
+      "path": "Pending/CRM-005-save-and-evaluate-access-scoped-searches.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P14"],
+      "dependsOn": ["SEARCH-002", "TEN-005", "OPS-004", "INV-001"],
+      "files": [
+        "Backend/prisma/schema.prisma",
+        "Backend/prisma/migrations/20260915001800_saved_searches/migration.sql",
+        "Backend/src/modules/search/saved-search.service.ts",
+        "Backend/src/modules/search/search.controller.ts",
+        "Backend/src/modules/search/search.module.ts",
+        "Backend/src/modules/search/__tests__/saved-search.spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/modules/search/search.controller.ts",
+        "Backend/src/modules/search/search.module.ts"
+      ]
+    },
+    {
+      "id": "CRM-006",
+      "title": "Show timelines visit calendar and saved searches",
+      "path": "Pending/CRM-006-show-timelines-visit-calendar-and-saved-searches.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P08", "P10", "P11", "P14"],
+      "dependsOn": ["CRM-002", "CRM-003", "CRM-004", "CRM-005"],
+      "files": [
+        "Frontend/src/hooks/use-client-workflows.ts",
+        "Frontend/src/components/clients/InteractionTimeline.tsx",
+        "Frontend/src/components/clients/VisitCalendar.tsx",
+        "Frontend/src/components/search/SavedSearchControls.tsx",
+        "Frontend/src/app/(v2)/clients/[id]/page.tsx",
+        "Frontend/e2e/client-workflows.spec.ts"
+      ],
+      "evidenceFiles": ["Frontend/src/app/(v2)/clients/[id]/page.tsx"]
+    },
+    {
+      "id": "CRM-007",
+      "title": "Add outcome forms to deal and shortlist views",
+      "path": "Pending/CRM-007-add-outcome-forms-to-deal-and-shortlist-views.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P09"],
+      "dependsOn": ["CRM-001"],
+      "files": [
+        "Frontend/src/hooks/use-outcomes.ts",
+        "Frontend/src/components/deals/OutcomeDialog.tsx",
+        "Frontend/src/app/(v2)/deals/[id]/page.tsx",
+        "Frontend/src/app/(v2)/clients/[id]/page.tsx",
+        "Frontend/e2e/outcomes.spec.ts"
+      ],
+      "evidenceFiles": [
+        "Frontend/src/app/(v2)/deals/[id]/page.tsx",
+        "Frontend/src/app/(v2)/clients/[id]/page.tsx"
+      ]
+    },
+    {
+      "id": "FIELD-001",
+      "title": "Resume interrupted mobile intake uploads",
+      "path": "Pending/FIELD-001-resume-interrupted-mobile-intake-uploads.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P12"],
+      "dependsOn": ["MEDIA-004", "MEDIA-005", "TEN-004"],
+      "files": [
+        "Frontend/src/components/media/FileUpload.tsx",
+        "Frontend/src/hooks/use-media.ts",
+        "Frontend/src/components/properties/MobileCapture.tsx",
+        "Frontend/src/app/(dashboard)/properties/new/page.tsx",
+        "Frontend/e2e/mobile-capture.spec.ts"
+      ],
+      "evidenceFiles": [
+        "Frontend/src/hooks/use-media.ts",
+        "Frontend/src/app/(dashboard)/properties/new/page.tsx"
+      ]
+    },
+    {
+      "id": "DEC-006",
+      "title": "Approve offline data and synchronization boundaries",
+      "path": "Pending/DEC-006-approve-offline-data-and-synchronization-boundaries.md",
+      "status": "Pending",
+      "type": "Decision",
+      "priority": "P1",
+      "sources": ["P13"],
+      "dependsOn": ["TEN-001", "DEC-005"],
+      "files": [
+        "Frontend/src/hooks/use-properties.ts",
+        "Frontend/src/hooks/use-media.ts",
+        "docs/MARKET_AI_ASSESSMENT.md",
+        "docs/new-features/decisions/offline-synchronization.md"
+      ],
+      "evidenceFiles": [
+        "Frontend/src/hooks/use-properties.ts",
+        "Frontend/src/hooks/use-media.ts",
+        "docs/MARKET_AI_ASSESSMENT.md"
+      ]
+    },
+    {
+      "id": "FIELD-002",
+      "title": "Save offline text drafts with explicit conflict review",
+      "path": "Pending/FIELD-002-save-offline-text-drafts-with-explicit-conflict-review.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P13"],
+      "dependsOn": ["DEC-006", "FIELD-001"],
+      "files": [
+        "Frontend/src/lib/offline-drafts.ts",
+        "Frontend/src/hooks/use-offline-draft.ts",
+        "Frontend/src/components/properties/DraftConflictReview.tsx",
+        "Frontend/src/components/properties/MobileCapture.tsx",
+        "Frontend/e2e/offline-drafts.spec.ts"
+      ],
+      "evidenceFiles": ["docs/MARKET_AI_ASSESSMENT.md"]
+    },
+    {
+      "id": "LEASE-001",
+      "title": "Create the lease register and immutable term versions",
+      "path": "Pending/LEASE-001-create-the-lease-register-and-immutable-term-versions.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P17", "A11", "A12"],
+      "dependsOn": ["AI-001", "DATA-007", "TEN-005", "DEC-007"],
+      "files": [
+        "Backend/prisma/schema.prisma",
+        "Backend/prisma/migrations/20260915001900_leases/migration.sql",
+        "Backend/src/modules/leases/leases.service.ts",
+        "Backend/src/modules/leases/leases.module.ts",
+        "Backend/src/app.module.ts",
+        "Backend/test/lease-schema.e2e-spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "DEC-007",
+      "title": "Approve owner roles and asset grant policy",
+      "path": "Pending/DEC-007-approve-owner-roles-and-asset-grant-policy.md",
+      "status": "Pending",
+      "type": "Decision",
+      "priority": "P1",
+      "sources": ["P15", "P16", "P17", "P22", "P27"],
+      "dependsOn": ["DEC-002"],
+      "files": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/modules/buildings/buildings.service.ts",
+        "docs/MARKET_AI_ASSESSMENT.md",
+        "docs/new-features/decisions/owner-asset-policy.md"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/modules/buildings/buildings.service.ts",
+        "docs/MARKET_AI_ASSESSMENT.md"
+      ]
+    },
+    {
+      "id": "OWNER-001",
+      "title": "Enforce explicit same tenant asset capability grants",
+      "path": "Pending/OWNER-001-enforce-explicit-same-tenant-asset-capability-grants.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P22", "P15", "P17"],
+      "dependsOn": ["DEC-007", "TEN-001", "TEN-004", "AUTH-006"],
+      "files": [
+        "Backend/prisma/schema.prisma",
+        "Backend/prisma/migrations/20260915002000_asset_grants/migration.sql",
+        "Backend/src/modules/asset-grants/asset-grants.service.ts",
+        "Backend/src/modules/asset-grants/asset-grants.controller.ts",
+        "Backend/src/modules/asset-grants/asset-grants.module.ts",
+        "Backend/src/app.module.ts",
+        "Backend/test/asset-grants.e2e-spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "LEASE-002",
+      "title": "Review and activate lease versions atomically",
+      "path": "Pending/LEASE-002-review-and-activate-lease-versions-atomically.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P17", "P18", "A11", "A12"],
+      "dependsOn": ["LEASE-001", "OWNER-001", "OPS-002"],
+      "files": [
+        "Backend/src/modules/leases/lease-review.service.ts",
+        "Backend/src/modules/leases/leases.controller.ts",
+        "Backend/src/modules/leases/dto/leases.schema.ts",
+        "Backend/src/modules/leases/leases.module.ts",
+        "Backend/src/modules/leases/__tests__/lease-review.integration.spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "LEASE-003",
+      "title": "Generate and complete reviewed lease obligations",
+      "path": "Pending/LEASE-003-generate-and-complete-reviewed-lease-obligations.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P18", "A13"],
+      "dependsOn": ["LEASE-002", "OPS-004"],
+      "files": [
+        "Backend/src/modules/leases/obligation.service.ts",
+        "Backend/src/modules/leases/obligation.worker.ts",
+        "Backend/src/modules/leases/leases.controller.ts",
+        "Backend/src/modules/leases/leases.module.ts",
+        "Backend/src/modules/leases/__tests__/obligations.integration.spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "OWNER-002",
+      "title": "Let granted owners propose availability corrections",
+      "path": "Pending/OWNER-002-let-granted-owners-propose-availability-corrections.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P15"],
+      "dependsOn": ["OWNER-001", "INV-002", "DATA-010"],
+      "files": [
+        "Backend/src/modules/asset-grants/owner-availability.controller.ts",
+        "Backend/src/modules/asset-grants/asset-grants.module.ts",
+        "Frontend/src/hooks/use-owner-assets.ts",
+        "Frontend/src/app/(v2)/owner/assets/page.tsx",
+        "Frontend/e2e/owner-availability.spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "OWNER-003",
+      "title": "Display lease register obligations and occupancy",
+      "path": "Pending/OWNER-003-display-lease-register-obligations-and-occupancy.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P16", "P17", "P18"],
+      "dependsOn": ["LEASE-003", "OWNER-001", "MEDIA-003"],
+      "files": [
+        "Backend/src/modules/leases/owner-dashboard.service.ts",
+        "Backend/src/modules/leases/leases.controller.ts",
+        "Frontend/src/hooks/use-leases.ts",
+        "Frontend/src/app/(v2)/owner/leases/page.tsx",
+        "Frontend/src/app/(v2)/owner/leases/[id]/page.tsx",
+        "Frontend/src/app/(v2)/owner/dashboard/page.tsx",
+        "Frontend/e2e/owner-leases.spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "AI-017",
+      "title": "Extract lease clauses into evidence linked drafts",
+      "path": "Pending/AI-017-extract-lease-clauses-into-evidence-linked-drafts.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["A11"],
+      "dependsOn": ["AI-004", "AI-007", "LEASE-002", "OWNER-001", "MEDIA-002"],
+      "files": [
+        "Backend/src/modules/ai/lease-abstraction.service.ts",
+        "Backend/src/modules/ai/dto/lease-abstraction.schema.ts",
+        "Backend/src/modules/ai/ai.controller.ts",
+        "Backend/src/modules/ai/ai.module.ts",
+        "Backend/src/modules/ai/__tests__/lease-abstraction.spec.ts",
+        "Backend/src/modules/ai/command-registry.ts",
+        "Backend/evals/ai-fixtures.jsonl"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "AI-018",
+      "title": "Compare lease amendment clauses without activating them",
+      "path": "Pending/AI-018-compare-lease-amendment-clauses-without-activating-them.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["A12"],
+      "dependsOn": ["AI-017", "LEASE-002"],
+      "files": [
+        "Backend/src/modules/ai/lease-comparison.service.ts",
+        "Backend/src/modules/ai/dto/lease-comparison.schema.ts",
+        "Backend/src/modules/ai/ai.controller.ts",
+        "Backend/src/modules/ai/ai.module.ts",
+        "Backend/src/modules/ai/__tests__/lease-comparison.spec.ts",
+        "Backend/src/modules/ai/command-registry.ts",
+        "Backend/evals/ai-fixtures.jsonl"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "AI-019",
+      "title": "Summarize renewal preparation from reviewed obligations",
+      "path": "Pending/AI-019-summarize-renewal-preparation-from-reviewed-obligations.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["A13"],
+      "dependsOn": ["AI-017", "LEASE-003"],
+      "files": [
+        "Backend/src/modules/ai/renewal-briefing.service.ts",
+        "Backend/src/modules/ai/dto/renewal-briefing.schema.ts",
+        "Backend/src/modules/ai/ai.controller.ts",
+        "Backend/src/modules/ai/ai.module.ts",
+        "Backend/src/modules/ai/__tests__/renewal-briefing.spec.ts",
+        "Backend/src/modules/ai/command-registry.ts",
+        "Backend/evals/ai-fixtures.jsonl"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "DEC-008",
+      "title": "Choose lease offer approval and accounting boundaries",
+      "path": "Pending/DEC-008-choose-lease-offer-approval-and-accounting-boundaries.md",
+      "status": "Pending",
+      "type": "Decision",
+      "priority": "P1",
+      "sources": ["P19", "P20", "P21", "A20"],
+      "dependsOn": ["DEC-004", "DEC-007"],
+      "files": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/modules/deals/deals.service.ts",
+        "docs/MARKET_AI_ASSESSMENT.md",
+        "docs/new-features/decisions/financial-workflows.md"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/modules/deals/deals.service.ts",
+        "docs/MARKET_AI_ASSESSMENT.md"
+      ]
+    },
+    {
+      "id": "FIN-001",
+      "title": "Version leasing offers and enforce approval limits",
+      "path": "Pending/FIN-001-version-leasing-offers-and-enforce-approval-limits.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P19"],
+      "dependsOn": ["DEC-008", "LEASE-002", "DATA-008"],
+      "files": [
+        "Backend/prisma/schema.prisma",
+        "Backend/prisma/migrations/20260915002100_lease_offers/migration.sql",
+        "Backend/src/modules/leases/offer.service.ts",
+        "Backend/src/modules/leases/leases.controller.ts",
+        "Backend/src/modules/leases/__tests__/offers.integration.spec.ts"
+      ],
+      "evidenceFiles": ["Backend/prisma/schema.prisma"]
+    },
+    {
+      "id": "FIN-002",
+      "title": "Export reconciled rent rolls with source identities",
+      "path": "Pending/FIN-002-export-reconciled-rent-rolls-with-source-identities.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P20", "A20"],
+      "dependsOn": ["DEC-008", "LEASE-002", "OWNER-001"],
+      "files": [
+        "Backend/src/modules/leases/rent-roll.service.ts",
+        "Backend/src/modules/leases/leases.controller.ts",
+        "Backend/src/modules/leases/leases.module.ts",
+        "Backend/src/modules/leases/__tests__/rent-roll.spec.ts",
+        "docs/new-features/contracts/rent-roll-v1.md"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "FIN-003",
+      "title": "Track approved commission splits and receipt reversals",
+      "path": "Pending/FIN-003-track-approved-commission-splits-and-receipt-reversals.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P21"],
+      "dependsOn": ["DEC-008", "DATA-008", "TEN-007"],
+      "files": [
+        "Backend/prisma/schema.prisma",
+        "Backend/prisma/migrations/20260915002200_commission_ledger/migration.sql",
+        "Backend/src/modules/deals/commission-ledger.service.ts",
+        "Backend/src/modules/deals/deals.controller.ts",
+        "Backend/src/modules/deals/__tests__/commission-ledger.integration.spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/modules/deals/deals.controller.ts"
+      ]
+    },
+    {
+      "id": "FIN-004",
+      "title": "Show offer approvals rent roll and commission balances",
+      "path": "Pending/FIN-004-show-offer-approvals-rent-roll-and-commission-balances.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P19", "P20", "P21"],
+      "dependsOn": ["FIN-001", "FIN-002", "FIN-003", "OWNER-003"],
+      "files": [
+        "Frontend/src/hooks/use-financial-workflows.ts",
+        "Frontend/src/components/leases/OfferComparison.tsx",
+        "Frontend/src/app/(v2)/owner/leases/[id]/page.tsx",
+        "Frontend/src/components/deals/CommissionLedger.tsx",
+        "Frontend/src/app/(v2)/deals/[id]/page.tsx",
+        "Frontend/e2e/financial-workflows.spec.ts"
+      ],
+      "evidenceFiles": ["Frontend/src/app/(v2)/deals/[id]/page.tsx"]
+    },
+    {
+      "id": "DEC-009",
+      "title": "Choose paid pilot entitlement and billing policy",
+      "path": "Pending/DEC-009-choose-paid-pilot-entitlement-and-billing-policy.md",
+      "status": "Pending",
+      "type": "Decision",
+      "priority": "P1",
+      "sources": ["P24"],
+      "dependsOn": ["DEC-001", "DEC-003"],
+      "files": [
+        "Backend/prisma/schema.prisma",
+        "docs/MARKET_AI_ASSESSMENT.md",
+        "docs/new-features/decisions/pilot-billing.md"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "docs/MARKET_AI_ASSESSMENT.md"
+      ]
+    },
+    {
+      "id": "SAAS-001",
+      "title": "Invite and offboard organization members explicitly",
+      "path": "Pending/SAAS-001-invite-and-offboard-organization-members-explicitly.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P23"],
+      "dependsOn": [
+        "TEN-001",
+        "AUTH-002",
+        "AUTH-004",
+        "AUTH-006",
+        "AUTH-009",
+        "AUTH-010",
+        "AUTH-011",
+        "AUTH-012",
+        "OPS-004"
+      ],
+      "files": [
+        "Backend/prisma/schema.prisma",
+        "Backend/prisma/migrations/20260915002300_membership_invites/migration.sql",
+        "Backend/src/modules/organizations/membership.service.ts",
+        "Backend/src/modules/organizations/organizations.controller.ts",
+        "Backend/src/modules/organizations/organizations.module.ts",
+        "Backend/test/membership.e2e-spec.ts",
+        "Backend/src/app.module.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "SAAS-002",
+      "title": "Enforce pilot entitlements and durable usage limits",
+      "path": "Pending/SAAS-002-enforce-pilot-entitlements-and-durable-usage-limits.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P24"],
+      "dependsOn": ["DEC-009", "AI-004", "SAAS-001"],
+      "files": [
+        "Backend/prisma/schema.prisma",
+        "Backend/prisma/migrations/20260915002400_usage_entitlements/migration.sql",
+        "Backend/src/modules/entitlements/entitlements.service.ts",
+        "Backend/src/modules/entitlements/entitlements.module.ts",
+        "Backend/src/app.module.ts",
+        "Backend/test/entitlements.integration.e2e-spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "SAAS-003",
+      "title": "Wire plan limits into jobs uploads and admin screens",
+      "path": "Pending/SAAS-003-wire-plan-limits-into-jobs-uploads-and-admin-screens.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P24", "P01"],
+      "dependsOn": ["SAAS-002", "MEDIA-005", "AI-003", "SAAS-001"],
+      "files": [
+        "Backend/src/modules/ai/intake.service.ts",
+        "Backend/src/modules/media/media.service.ts",
+        "Backend/src/modules/organizations/membership.service.ts",
+        "Backend/src/modules/entitlements/entitlements.controller.ts",
+        "Frontend/src/app/(v2)/settings/usage/page.tsx",
+        "Frontend/e2e/usage-limits.spec.ts"
+      ],
+      "evidenceFiles": ["Backend/src/modules/media/media.service.ts"]
+    },
+    {
+      "id": "SAAS-004",
+      "title": "Export tenant data and execute account closure safely",
+      "path": "Pending/SAAS-004-export-tenant-data-and-execute-account-closure-safely.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P25"],
+      "dependsOn": ["DEC-005", "SAAS-001", "OPS-003", "MEDIA-005", "AI-001"],
+      "files": [
+        "Backend/prisma/schema.prisma",
+        "Backend/prisma/migrations/20260915002500_account_lifecycle/migration.sql",
+        "Backend/src/modules/organizations/data-lifecycle.service.ts",
+        "Backend/src/modules/organizations/data-lifecycle.worker.ts",
+        "Backend/src/modules/organizations/organizations.controller.ts",
+        "Backend/test/data-lifecycle.integration.e2e-spec.ts"
+      ],
+      "evidenceFiles": ["Backend/prisma/schema.prisma"]
+    },
+    {
+      "id": "OPS-005",
+      "title": "Replace superficial search and proposal acceptance checks",
+      "path": "Pending/OPS-005-replace-superficial-search-and-proposal-acceptance-checks.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["D14", "D17"],
+      "dependsOn": [
+        "SEARCH-002",
+        "PROP-003",
+        "PROP-004",
+        "AUTH-015",
+        "AUTH-017"
+      ],
+      "files": [
+        "Backend/test/search-access.e2e-spec.ts",
+        "Backend/test/proposal-export.e2e-spec.ts",
+        "Frontend/e2e/proposals.spec.ts",
+        "Frontend/playwright.config.ts",
+        "Backend/test/jest-e2e.json"
+      ],
+      "evidenceFiles": [
+        "Frontend/e2e/proposals.spec.ts",
+        "Frontend/playwright.config.ts",
+        "Backend/test/jest-e2e.json"
+      ]
+    },
+    {
+      "id": "OPS-006",
+      "title": "Gate deployment with lint build and database checks",
+      "path": "Pending/OPS-006-gate-deployment-with-lint-build-and-database-checks.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["D15"],
+      "dependsOn": ["OPS-005"],
+      "files": [
+        ".github/workflows/ci.yml",
+        "Backend/package.json",
+        "Frontend/package.json",
+        "render.yaml",
+        "docs/new-features/runbooks/release-gates.md"
+      ],
+      "evidenceFiles": [
+        ".github/workflows/ci.yml",
+        "Backend/package.json",
+        "Frontend/package.json",
+        "render.yaml"
+      ]
+    },
+    {
+      "id": "OPS-007",
+      "title": "Expose safe job diagnostics and rehearse restore",
+      "path": "Pending/OPS-007-expose-safe-job-diagnostics-and-rehearse-restore.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P26", "D13"],
+      "dependsOn": ["OPS-004", "AI-004", "MEDIA-003"],
+      "files": [
+        "Backend/src/health/health.controller.ts",
+        "Backend/src/health/health.service.ts",
+        "docs/new-features/runbooks/support-triage.md",
+        "docs/new-features/runbooks/restore-rehearsal.md",
+        "Backend/test/health-redaction.e2e-spec.ts",
+        "Backend/src/health/health.module.ts",
+        "Backend/src/health/admin-health.controller.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/src/health/health.controller.ts",
+        "Backend/src/health/health.module.ts"
+      ]
+    },
+    {
+      "id": "TYPE-001",
+      "title": "Validate transport contracts at risky frontend boundaries",
+      "path": "Pending/TYPE-001-validate-transport-contracts-at-risky-frontend-boundaries.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["D18"],
+      "dependsOn": ["REQ-002", "MEDIA-003"],
+      "files": [
+        "Frontend/src/hooks/use-clients.ts",
+        "Frontend/src/hooks/use-properties.ts",
+        "Frontend/src/hooks/use-media.ts",
+        "Frontend/src/lib/api-contracts.ts",
+        "Frontend/e2e/api-contracts.spec.ts"
+      ],
+      "evidenceFiles": [
+        "Frontend/src/hooks/use-clients.ts",
+        "Frontend/src/hooks/use-properties.ts",
+        "Frontend/src/hooks/use-media.ts"
+      ]
+    },
+    {
+      "id": "PRODUCT-001",
+      "title": "Guide onboarding to the first useful shortlist",
+      "path": "Pending/PRODUCT-001-guide-onboarding-to-the-first-useful-shortlist.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P01", "P30"],
+      "dependsOn": [
+        "DATA-005",
+        "REQ-003",
+        "MATCH-002",
+        "DEC-001",
+        "METRIC-001",
+        "SAAS-001"
+      ],
+      "files": [
+        "Frontend/src/hooks/use-onboarding.ts",
+        "Frontend/src/app/(v2)/onboarding/page.tsx",
+        "Backend/src/modules/organizations/onboarding.service.ts",
+        "Backend/src/modules/organizations/organizations.controller.ts",
+        "Frontend/e2e/onboarding.spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "METRIC-001",
+      "title": "Measure the intake to visit funnel without private payloads",
+      "path": "Pending/METRIC-001-measure-the-intake-to-visit-funnel-without-private-payloads.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["P30", "A18"],
+      "dependsOn": ["DEC-001", "OPS-002", "PROP-006", "CRM-002"],
+      "files": [
+        "Backend/prisma/schema.prisma",
+        "Backend/prisma/migrations/20260915002600_product_events/migration.sql",
+        "Backend/src/modules/analytics/product-events.service.ts",
+        "Backend/src/modules/analytics/analytics.module.ts",
+        "Backend/src/app.module.ts",
+        "Backend/test/product-events.e2e-spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "SHARE-002",
+      "title": "Design cross organization broker owner exchange contracts",
+      "path": "Pending/SHARE-002-design-cross-organization-broker-owner-exchange-contracts.md",
+      "status": "Pending",
+      "type": "Decision",
+      "priority": "P1",
+      "sources": ["P27"],
+      "dependsOn": ["OWNER-001", "DEC-005"],
+      "files": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/modules/asset-grants/asset-grants.service.ts",
+        "docs/MARKET_AI_ASSESSMENT.md",
+        "docs/new-features/decisions/cross-organization-sharing.md"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "docs/MARKET_AI_ASSESSMENT.md"
+      ]
+    },
+    {
+      "id": "WORKFLOW-001",
+      "title": "Specify versioned broker and owner workflow templates",
+      "path": "Pending/WORKFLOW-001-specify-versioned-broker-and-owner-workflow-templates.md",
+      "status": "Pending",
+      "type": "Decision",
+      "priority": "P1",
+      "sources": ["P28"],
+      "dependsOn": ["CRM-002", "LEASE-003", "OPS-004"],
+      "files": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/modules/tasks/tasks.service.ts",
+        "docs/MARKET_AI_ASSESSMENT.md",
+        "docs/new-features/decisions/workflow-templates.md"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/modules/tasks/tasks.service.ts",
+        "docs/MARKET_AI_ASSESSMENT.md"
+      ]
+    },
+    {
+      "id": "INTEGRATION-001",
+      "title": "Specify scoped integration API and webhook delivery",
+      "path": "Pending/INTEGRATION-001-specify-scoped-integration-api-and-webhook-delivery.md",
+      "status": "Pending",
+      "type": "Decision",
+      "priority": "P1",
+      "sources": ["P29", "P20"],
+      "dependsOn": ["OPS-004", "SAAS-002", "DEC-008"],
+      "files": [
+        "Backend/src/main.ts",
+        "Backend/prisma/schema.prisma",
+        "docs/MARKET_AI_ASSESSMENT.md",
+        "docs/new-features/decisions/integration-v1.md"
+      ],
+      "evidenceFiles": [
+        "Backend/src/main.ts",
+        "Backend/prisma/schema.prisma",
+        "docs/MARKET_AI_ASSESSMENT.md"
+      ]
+    },
+    {
+      "id": "AI-020",
+      "title": "Index authorized source chunks for cited retrieval",
+      "path": "Pending/AI-020-index-authorized-source-chunks-for-cited-retrieval.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["A14"],
+      "dependsOn": ["AI-001", "OWNER-001", "OPS-003"],
+      "files": [
+        "Backend/prisma/schema.prisma",
+        "Backend/prisma/migrations/20260915002700_source_chunks/migration.sql",
+        "Backend/src/modules/ai/source-retrieval.service.ts",
+        "Backend/src/modules/ai/ai.module.ts",
+        "Backend/src/modules/ai/__tests__/source-retrieval.integration.spec.ts"
+      ],
+      "evidenceFiles": ["Backend/prisma/schema.prisma"]
+    },
+    {
+      "id": "AI-021",
+      "title": "Answer document questions with verifiable citations",
+      "path": "Pending/AI-021-answer-document-questions-with-verifiable-citations.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["A14"],
+      "dependsOn": ["AI-020", "AI-004", "AI-007"],
+      "files": [
+        "Backend/src/modules/ai/document-question.service.ts",
+        "Backend/src/modules/ai/dto/document-question.schema.ts",
+        "Backend/src/modules/ai/ai.controller.ts",
+        "Backend/src/modules/ai/ai.module.ts",
+        "Backend/src/modules/ai/__tests__/document-question.spec.ts",
+        "Backend/src/modules/ai/command-registry.ts",
+        "Backend/evals/ai-fixtures.jsonl"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "REPORT-001",
+      "title": "Compute allowlisted portfolio reports",
+      "path": "Pending/REPORT-001-compute-allowlisted-portfolio-reports.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["A15", "A17", "A20", "P16", "P30"],
+      "dependsOn": ["FIN-002", "OWNER-003", "METRIC-001"],
+      "files": [
+        "Backend/src/modules/analytics/report.service.ts",
+        "Backend/src/modules/analytics/report.controller.ts",
+        "Backend/src/modules/analytics/analytics.module.ts",
+        "Backend/src/modules/analytics/report.schema.ts",
+        "Backend/src/modules/analytics/__tests__/reports.integration.spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "AI-022",
+      "title": "Translate report questions into approved definitions",
+      "path": "Pending/AI-022-translate-report-questions-into-approved-definitions.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["A15"],
+      "dependsOn": ["REPORT-001", "AI-004"],
+      "files": [
+        "Backend/src/modules/ai/report-intent.service.ts",
+        "Backend/src/modules/ai/dto/report-intent.schema.ts",
+        "Backend/src/modules/ai/ai.controller.ts",
+        "Backend/src/modules/ai/ai.module.ts",
+        "Backend/src/modules/ai/__tests__/report-intent.spec.ts",
+        "Backend/src/modules/ai/command-registry.ts",
+        "Backend/evals/ai-fixtures.jsonl"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "AI-023",
+      "title": "Suggest photo categories and quality issues",
+      "path": "Pending/AI-023-suggest-photo-categories-and-quality-issues.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["A16"],
+      "dependsOn": ["AI-004", "MEDIA-002", "MEDIA-003"],
+      "files": [
+        "Backend/src/modules/ai/photo-review.service.ts",
+        "Backend/src/modules/ai/dto/photo-review.schema.ts",
+        "Backend/src/modules/ai/ai.controller.ts",
+        "Backend/src/modules/ai/ai.module.ts",
+        "Backend/src/modules/ai/__tests__/photo-review.spec.ts",
+        "Backend/src/modules/ai/command-registry.ts",
+        "Backend/evals/ai-fixtures.jsonl"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "AI-024",
+      "title": "Validate permissioned comparable data before summaries",
+      "path": "Pending/AI-024-validate-permissioned-comparable-data-before-summaries.md",
+      "status": "Pending",
+      "type": "Decision",
+      "priority": "P1",
+      "sources": ["A17"],
+      "dependsOn": ["DATA-009", "COST-001", "REPORT-001"],
+      "files": [
+        "Backend/src/modules/search/search.service.ts",
+        "docs/MARKET_AI_ASSESSMENT.md",
+        "docs/new-features/decisions/comparables-pilot.md"
+      ],
+      "evidenceFiles": [
+        "Backend/src/modules/search/search.service.ts",
+        "docs/MARKET_AI_ASSESSMENT.md"
+      ]
+    },
+    {
+      "id": "AI-025",
+      "title": "Run a rules baseline for deal prioritization",
+      "path": "Pending/AI-025-run-a-rules-baseline-for-deal-prioritization.md",
+      "status": "Pending",
+      "type": "Decision",
+      "priority": "P1",
+      "sources": ["A18"],
+      "dependsOn": ["CRM-001", "METRIC-001", "DEC-001"],
+      "files": [
+        "Backend/src/modules/deals/deals.service.ts",
+        "docs/MARKET_AI_ASSESSMENT.md",
+        "docs/new-features/decisions/deal-priority-experiment.md"
+      ],
+      "evidenceFiles": [
+        "Backend/src/modules/deals/deals.service.ts",
+        "docs/MARKET_AI_ASSESSMENT.md"
+      ]
+    },
+    {
+      "id": "AI-026",
+      "title": "Evaluate floor plan extraction on a bounded test set",
+      "path": "Pending/AI-026-evaluate-floor-plan-extraction-on-a-bounded-test-set.md",
+      "status": "Pending",
+      "type": "Decision",
+      "priority": "P1",
+      "sources": ["A19"],
+      "dependsOn": ["AI-023", "DEC-003"],
+      "files": [
+        "docs/MARKET_AI_ASSESSMENT.md",
+        "Backend/src/modules/media/media.service.ts",
+        "docs/new-features/decisions/floorplan-experiment.md"
+      ],
+      "evidenceFiles": [
+        "docs/MARKET_AI_ASSESSMENT.md",
+        "Backend/src/modules/media/media.service.ts"
+      ]
+    },
+    {
+      "id": "AI-027",
+      "title": "Explain deterministic portfolio anomalies with source evidence",
+      "path": "Pending/AI-027-explain-deterministic-portfolio-anomalies-with-source-evidence.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["A20"],
+      "dependsOn": ["REPORT-001", "FIN-002", "AI-021"],
+      "files": [
+        "Backend/src/modules/ai/portfolio-anomalies.service.ts",
+        "Backend/src/modules/ai/dto/portfolio-anomalies.schema.ts",
+        "Backend/src/modules/ai/ai.controller.ts",
+        "Backend/src/modules/ai/ai.module.ts",
+        "Backend/src/modules/ai/__tests__/portfolio-anomalies.spec.ts",
+        "Backend/src/modules/ai/command-registry.ts",
+        "Backend/evals/ai-fixtures.jsonl"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "AI-028",
+      "title": "Launch and review advanced AI commands in a typed console",
+      "path": "Pending/AI-028-launch-and-review-advanced-ai-commands-in-a-typed-console.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": [
+        "A03",
+        "A04",
+        "A05",
+        "A07",
+        "A08",
+        "A09",
+        "A10",
+        "A11",
+        "A12",
+        "A13",
+        "A14",
+        "A15",
+        "A16",
+        "A20"
+      ],
+      "dependsOn": [
+        "AI-006",
+        "AI-008",
+        "AI-009",
+        "AI-010",
+        "AI-011",
+        "AI-012",
+        "AI-013",
+        "AI-014",
+        "AI-015",
+        "AI-016",
+        "AI-017",
+        "AI-018",
+        "AI-019",
+        "AI-021",
+        "AI-022",
+        "AI-023",
+        "AI-027",
+        "AI-029",
+        "AI-030",
+        "LEASE-002",
+        "REPORT-001"
+      ],
+      "files": [
+        "Frontend/src/hooks/use-ai-commands.ts",
+        "Frontend/src/components/ai/CommandDraftPanel.tsx",
+        "Frontend/src/app/(v2)/ai-intakes/[id]/page.tsx",
+        "Frontend/e2e/ai-command-drafts.spec.ts",
+        "Frontend/src/app/(v2)/ai-commands/page.tsx"
+      ],
+      "evidenceFiles": ["docs/MARKET_AI_ASSESSMENT.md"]
+    },
+    {
+      "id": "AI-029",
+      "title": "Apply reviewed visit and voice action drafts once",
+      "path": "Pending/AI-029-apply-reviewed-visit-and-voice-action-drafts-once.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["A05", "A08"],
+      "dependsOn": ["AI-013", "AI-014", "CRM-002", "TEN-006"],
+      "files": [
+        "Backend/src/modules/ai/action-review.service.ts",
+        "Backend/src/modules/ai/ai.controller.ts",
+        "Backend/src/modules/ai/ai.module.ts",
+        "Backend/src/modules/ai/__tests__/action-review.integration.spec.ts"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    },
+    {
+      "id": "AI-030",
+      "title": "Summarize stale inventory facts and draft verification requests",
+      "path": "Pending/AI-030-summarize-stale-inventory-facts-and-draft-verification-requests.md",
+      "status": "Pending",
+      "type": "Implementation",
+      "priority": "P1",
+      "sources": ["A06"],
+      "dependsOn": ["INV-002", "AI-004", "AI-007"],
+      "files": [
+        "Backend/src/modules/ai/freshness-summary.service.ts",
+        "Backend/src/modules/ai/dto/freshness-summary.schema.ts",
+        "Backend/src/modules/ai/ai.controller.ts",
+        "Backend/src/modules/ai/ai.module.ts",
+        "Backend/src/modules/ai/__tests__/freshness-summary.spec.ts",
+        "Backend/src/modules/ai/command-registry.ts",
+        "Backend/evals/ai-fixtures.jsonl"
+      ],
+      "evidenceFiles": [
+        "Backend/prisma/schema.prisma",
+        "Backend/src/app.module.ts"
+      ]
+    }
+  ]
+}
