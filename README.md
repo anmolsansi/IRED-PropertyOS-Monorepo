@@ -5,7 +5,7 @@ IRED PropertyOS is now organized as one monorepo with two active apps:
 - `Backend/` - NestJS, Prisma, PostgreSQL, Redis, MinIO, JWT/OTP auth, Swagger.
 - `Frontend/` - Next.js, TypeScript, Tailwind, shadcn-style components, Playwright tests.
 
-The older `Backend/frontend/` folder is kept as legacy code and is not part of the root npm workspace. Use `Frontend/` for active frontend development.
+The older `Backend/  frontend/` folder is kept as legacy code and is not part of the root npm workspace. Use `Frontend/` for active frontend development.
 
 ## Local ports
 
